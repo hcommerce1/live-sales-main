@@ -100,7 +100,7 @@
           <!-- Register Link -->
           <p class="mt-6 text-center text-sm text-gray-600">
             Nie masz jeszcze konta?
-            <a href="/register.html" class="text-blue-600 hover:text-blue-700 font-medium">
+            <a href="/login.html" class="text-blue-600 hover:text-blue-700 font-medium">
               Zarejestruj się
             </a>
           </p>
