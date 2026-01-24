@@ -1,0 +1,426 @@
+// Prisma Schema for Live Sales Application
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// KROK 1: Company Model (PR 0.2)
+// Feature flag: company.enabled
+// ============================================
+
+// Company/Organization model
+model Company {
+  id                String    @id @default(uuid())
+  nip               String    @unique // Polish tax ID, immutable after creation
+  name              String
+  regon             String?   // Polish business registry number
+  krs               String?   // National Court Register number
+
+  // Address
+  addressStreet     String?
+  addressCity       String?
+  addressPostalCode String?
+  addressCountry    String    @default("PL")
+
+  // VAT status from GUS
+  vatStatus         String?   // 'active', 'exempt', 'inactive'
+
+  // Stripe integration (PR 0.3+)
+  stripeCustomerId  String?   @unique
+
+  // Trial tracking - CRITICAL: trial_used_at is set once, never reset
+  // NULL = trial available, NOT NULL = trial already used for this NIP
+  trialUsedAt       DateTime?
+
+  // Soft delete
+  deletedAt         DateTime?
+
+  // Metadata
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  members           CompanyMember[]
+  secrets           CompanySecret[]
+  exports           Export[]        @relation("CompanyExports")
+  subscription      Subscription?   // One active subscription per company
+
+  @@map("companies")
+  @@index([nip])
+  @@index([stripeCustomerId])
+  @@index([deletedAt])
+}
+
+// Company membership - links users to companies with roles
+model CompanyMember {
+  id                String    @id @default(uuid())
+  companyId         String
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Role within company
+  role              String    @default("member") // 'owner', 'admin', 'member'
+
+  // Invitation tracking
+  invitedBy         String?   // userId of inviter
+  invitedAt         DateTime?
+  joinedAt          DateTime?
+  invitationToken   String?   @unique
+  invitationExpires DateTime?
+
+  // Status
+  isActive          Boolean   @default(true)
+
+  // Metadata
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([companyId, userId])
+  @@map("company_members")
+  @@index([companyId])
+  @@index([userId])
+  @@index([invitationToken])
+}
+
+// Company secrets - encrypted storage for API tokens
+// Feature flag: company.secrets.enabled
+model CompanySecret {
+  id                String    @id @default(uuid())
+  companyId         String
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Secret type
+  secretType        String    // 'baselinker_token', 'google_credentials', etc.
+
+  // Encrypted value (AES-256-GCM)
+  encryptedValue    String
+  encryptionKeyId   String?   // For key rotation support
+
+  // Audit
+  createdBy         String?   // userId who created/updated
+
+  // Metadata
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastUsedAt        DateTime?
+
+  @@unique([companyId, secretType])
+  @@map("company_secrets")
+  @@index([companyId])
+}
+
+// ============================================
+// KROK 2: Billing / Stripe (PR 0.3)
+// Feature flag: billing.enabled
+// ============================================
+
+// Subscription model - one per company
+model Subscription {
+  id                    String    @id @default(uuid())
+  companyId             String    @unique
+  company               Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Plan info (plan definitions in code: config/plans.js)
+  planId                String    // 'free', 'basic', 'pro'
+
+  // Stripe subscription status
+  // See: https://stripe.com/docs/api/subscriptions/object#subscription_object-status
+  status                String    // 'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'incomplete', 'incomplete_expired'
+
+  // Stripe IDs
+  stripeSubscriptionId  String?   @unique
+  stripePriceId         String?
+
+  // Trial period
+  trialStart            DateTime?
+  trialEnd              DateTime?
+
+  // Billing period
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+
+  // Cancellation
+  cancelAtPeriodEnd     Boolean   @default(false)
+  canceledAt            DateTime?
+  endedAt               DateTime?
+
+  // Metadata
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("subscriptions")
+  @@index([status])
+  @@index([stripeSubscriptionId])
+}
+
+// Stripe webhook event - for idempotency (persist-first pattern)
+model StripeWebhookEvent {
+  id              String    @id @default(uuid())
+  stripeEventId   String    @unique  // Stripe event.id for idempotency
+  eventType       String               // e.g., 'customer.subscription.updated'
+
+  // Raw payload for debugging/replay
+  payload         Json
+
+  // Processing status
+  status          String    @default("received") // 'received', 'processing', 'processed', 'failed'
+  errorMessage    String?
+  retryCount      Int       @default(0)
+
+  // Timestamps
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@map("stripe_webhook_events")
+  @@index([stripeEventId])
+  @@index([status, receivedAt])
+}
+
+// Feature usage tracking
+model FeatureUsage {
+  id              String    @id @default(uuid())
+  companyId       String
+  featureId       String    // e.g., 'exports.create', 'team.invite'
+
+  // Usage counters
+  currentUsage    Int       @default(0)
+  periodStart     DateTime
+  periodEnd       DateTime
+
+  // Metadata
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([companyId, featureId, periodStart])
+  @@map("feature_usage")
+  @@index([companyId])
+  @@index([companyId, featureId])
+}
+
+// ============================================
+// Existing Models (with additive changes)
+// ============================================
+
+// User model for authentication
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  password        String   // Argon2id hashed
+  role            String   @default("user") // user, admin
+  isActive        Boolean  @default(true)
+  emailVerified   Boolean  @default(false)
+  twoFactorSecret String?  // TOTP secret
+  twoFactorEnabled Boolean @default(false)
+
+  // BaseLinker API token (encrypted with AES-256-GCM)
+  baselinkerToken String?
+
+  // Metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastLoginAt     DateTime?
+  lastActivityAt  DateTime? // Session timeout tracking
+
+  // Relations
+  exports         Export[]          @relation("UserExports")
+  auditLogs       AuditLog[]
+  refreshTokens   RefreshToken[]
+  companyMembers  CompanyMember[]   // User can belong to multiple companies
+
+  @@map("users")
+}
+
+// Refresh tokens for JWT rotation
+model RefreshToken {
+  id          String   @id @default(uuid())
+  token       String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  revoked     Boolean  @default(false)
+
+  @@map("refresh_tokens")
+  @@index([userId])
+  @@index([token])
+}
+
+// Export configuration model
+model Export {
+  id              String   @id @default(uuid())
+
+  // LEGACY: userId for backward compatibility
+  // When company.enabled=true, use companyId instead
+  userId          String
+  user            User     @relation("UserExports", fields: [userId], references: [id], onDelete: Cascade)
+
+  // NEW: Company ownership (nullable for migration period)
+  // When company.enabled=true, this becomes the primary owner
+  companyId       String?
+  company         Company? @relation("CompanyExports", fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       String?  // userId who created (when under company)
+
+  name            String
+  dataset         String   // 'orders', 'products', 'invoices', 'order_products'
+  status          String   @default("active") // active, paused, error
+
+  // Filters - NEW structure with groups and operators
+  // {
+  //   logic: 'AND' | 'OR',
+  //   groups: [
+  //     { logic: 'AND' | 'OR', conditions: [{ field, operator, value }] }
+  //   ]
+  // }
+  filters         Json?
+
+  // Selected fields (array of field keys)
+  selectedFields  Json
+
+  // BaseLinker API token (encrypted with AES-256-GCM)
+  // LEGACY: per-export token
+  // When company.secrets.enabled=true, use CompanySecret instead
+  baselinkerToken String
+
+  // LEGACY: Single sheet configuration (kept for backward compatibility)
+  sheetsUrl       String
+  sheetsWriteMode String   @default("append") // append, replace
+
+  // Scheduling
+  scheduleMinutes Int?
+  lastRun         DateTime?
+
+  // Metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations - NEW
+  sheets          ExportSheet[]
+  runs            ExportRun[]
+
+  @@map("exports")
+  @@index([userId])
+  @@index([companyId])
+  @@index([status])
+}
+
+// Export Sheet - multiple target sheets per export
+model ExportSheet {
+  id              String   @id @default(uuid())
+  exportId        String
+  export          Export   @relation(fields: [exportId], references: [id], onDelete: Cascade)
+
+  sheetUrl        String
+  sheetName       String?  // Optional: specific tab name
+  writeMode       String   @default("append") // append, replace
+
+  // Order for multiple sheets
+  sortOrder       Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("export_sheets")
+  @@index([exportId])
+}
+
+// Export Run - history of export executions
+model ExportRun {
+  id              String   @id @default(uuid())
+  exportId        String
+  export          Export   @relation(fields: [exportId], references: [id], onDelete: Cascade)
+
+  runAt           DateTime @default(now())
+  status          String   // success, partial_failure, failure
+  totalRecords    Int
+  durationMs      Int?
+
+  // Results per sheet
+  sheetResults    Json?    // Array of { sheetUrl, success, recordsWritten, error, attempts }
+
+  // Error info
+  errorMessage    String?
+
+  // Detailed metadata for debugging and analytics
+  // {
+  //   triggeredBy: 'manual' | 'scheduler',
+  //   recordsBeforeFilter: number,
+  //   recordsAfterFilter: number,
+  //   phases: { fetchFromBaseLinker: ms, applyFilters: ms, writeToSheets: ms },
+  //   filtersApplied: { apiFilters: {}, appFilters: {} }
+  // }
+  metadata        Json?
+
+  @@map("export_runs")
+  @@index([exportId, runAt])
+  @@index([status])
+  @@index([runAt])
+}
+
+// Audit log for security tracking (enhanced in PR 0.5)
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // NEW: Company context (PR 0.5)
+  companyId   String?
+
+  // Event classification (enhanced in PR 0.5)
+  action      String   // See AUDIT_ACTIONS in security-audit.service.js
+  category    String?  // AUTH, ACCESS, DATA, BILLING, SECURITY, ADMIN
+  severity    String?  // LOW, MEDIUM, HIGH, CRITICAL
+
+  // Target resource (renamed for clarity)
+  targetType  String?  // Resource type (export, subscription, etc.)
+  targetId    String?  // ID of affected resource
+
+  // LEGACY: keep for backward compatibility
+  resource    String?  // @deprecated - use targetType
+  resourceId  String?  // @deprecated - use targetId
+
+  // Request metadata
+  ip          String?  // renamed from ipAddress
+  ipAddress   String?  // @deprecated - use ip
+  userAgent   String?
+
+  // Additional context
+  metadata    Json?
+
+  // Outcome (legacy - now in metadata)
+  success     Boolean  @default(true)
+  errorMessage String?
+
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+  @@index([userId])
+  @@index([companyId])
+  @@index([action])
+  @@index([category])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+// API Keys for programmatic access (future feature)
+model ApiKey {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  keyHash     String   @unique // SHA-256 hash of the key
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  revoked     Boolean  @default(false)
+
+  @@map("api_keys")
+  @@index([userId])
+  @@index([keyHash])
+}

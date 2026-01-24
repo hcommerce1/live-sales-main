@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Sales - Logowanie</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 450px;
+        }
+
+        /* Hide content until Vue checks auth */
+        #app[v-cloak] {
+            display: none !important;
+        }
+        [v-cloak] {
+            display: none !important;
+        }
+
+        .auth-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+        }
+
+        .logo h1 {
+            color: #667eea;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .logo p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: #6b7280;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: -2px;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #374151;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-weight: 400;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group input.error {
+            border-color: #ef4444;
+        }
+
+        .form-group input:disabled {
+            background: #f9fafb;
+            cursor: not-allowed;
+        }
+
+        .form-group input.success {
+            border-color: #10b981;
+        }
+
+        .form-group .input-wrapper {
+            position: relative;
+        }
+
+        .form-group .input-spinner {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            border: 2px solid #e5e7eb;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .success-message {
+            color: #10b981;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .info-message {
+            color: #667eea;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            font-size: 14px;
+            color: #4b5563;
+            cursor: pointer;
+        }
+
+        .checkbox-group a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .checkbox-group a:hover {
+            text-decoration: underline;
+        }
+
+        .trial-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 6px;
+        }
+
+        .edit-btn {
+            background: none;
+            border: none;
+            color: #667eea;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+
+        .edit-btn:hover {
+            text-decoration: underline;
+        }
+
+        .password-strength {
+            margin-top: 8px;
+        }
+
+        .strength-bar {
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+
+        .strength-bar-fill {
+            height: 100%;
+            transition: width 0.3s, background-color 0.3s;
+        }
+
+        .strength-bar-fill.weak { width: 33%; background-color: #ef4444; }
+        .strength-bar-fill.medium { width: 66%; background-color: #f59e0b; }
+        .strength-bar-fill.strong { width: 100%; background-color: #10b981; }
+
+        .strength-text {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-height: 50px;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .footer-text {
+            text-align: center;
+            margin-top: 20px;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        .footer-text a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer-text a:hover {
+            text-decoration: underline;
+        }
+
+        /* Full screen loading overlay */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease-out;
+        }
+
+        .loading-overlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .loading-overlay .overlay-content {
+            text-align: center;
+        }
+
+        .loading-overlay .overlay-logo {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 24px;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .loading-overlay .overlay-spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+
+        .loading-overlay .overlay-text {
+            color: white;
+            font-size: 18px;
+            font-weight: 500;
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .loading-overlay .overlay-status {
+            color: rgba(255,255,255,0.8);
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.85; }
+        }
+
+        /* Progress dots animation */
+        .progress-dots {
+            display: inline-flex;
+            gap: 4px;
+            margin-left: 4px;
+        }
+
+        .progress-dots span {
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            animation: dotPulse 1.4s ease-in-out infinite;
+        }
+
+        .progress-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .progress-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes dotPulse {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <!-- Full screen loading overlay -->
+        <div class="loading-overlay" :class="{ visible: showOverlay }">
+            <div class="overlay-content">
+                <svg class="overlay-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <rect fill="white" width="100" height="100" rx="20"/>
+                    <text x="50" y="72" font-size="55" font-weight="bold" fill="#667eea" text-anchor="middle" font-family="Arial, sans-serif">LS</text>
+                </svg>
+                <div class="overlay-spinner"></div>
+                <div class="overlay-text">
+                    {{ overlayText }}
+                    <span class="progress-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </span>
+                </div>
+                <div class="overlay-status">{{ overlayStatus }}</div>
+            </div>
+        </div>
+
+        <div class="auth-container">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <rect fill="url(#logoGrad)" width="100" height="100" rx="20"/>
+                    <text x="50" y="72" font-size="55" font-weight="bold" fill="white" text-anchor="middle" font-family="Arial, sans-serif">LS</text>
+                </svg>
+                <h1>Live Sales</h1>
+                <p>Eksport danych z BaseLinker do Google Sheets</p>
+            </div>
+
+            <div class="tabs">
+                <button class="tab" :class="{ active: activeTab === 'login' }" @click="activeTab = 'login'" :disabled="loading">
+                    Logowanie
+                </button>
+                <button class="tab" :class="{ active: activeTab === 'register' }" @click="activeTab = 'register'" :disabled="loading">
+                    Rejestracja
+                </button>
+            </div>
+
+            <!-- Alerts -->
+            <div v-if="alert.show" :class="['alert', alert.type]">
+                <svg v-if="alert.type === 'success'" class="alert-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <svg v-else class="alert-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                {{ alert.message }}
+            </div>
+
+            <!-- Login Form -->
+            <form v-if="activeTab === 'login'" @submit.prevent="handleLogin">
+                <div class="form-group">
+                    <label for="login-email">Email</label>
+                    <input
+                        type="email"
+                        id="login-email"
+                        v-model="loginForm.email"
+                        required
+                        placeholder="twoj@email.com"
+                        :disabled="loading"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="login-password">Haslo</label>
+                    <input
+                        type="password"
+                        id="login-password"
+                        v-model="loginForm.password"
+                        required
+                        placeholder="Wprowadz haslo"
+                        :disabled="loading"
+                    >
+                </div>
+
+                <button type="submit" class="btn" :disabled="loading">
+                    <span v-if="loading" class="btn-spinner"></span>
+                    <span v-else>Zaloguj sie</span>
+                    <span v-if="loading">Sprawdzanie danych...</span>
+                </button>
+            </form>
+
+            <!-- Register Form -->
+            <form v-if="activeTab === 'register'" @submit.prevent="handleRegister">
+                <!-- NIP Field -->
+                <div class="form-group">
+                    <label for="register-nip">NIP firmy</label>
+                    <div class="input-wrapper">
+                        <input
+                            type="text"
+                            id="register-nip"
+                            v-model="registerForm.nip"
+                            @input="formatNip"
+                            required
+                            placeholder="123-456-78-90"
+                            maxlength="13"
+                            :class="{ error: registerErrors.nip, success: nipData && !registerErrors.nip }"
+                            :disabled="loading"
+                        >
+                        <span v-if="nipLoading" class="input-spinner"></span>
+                    </div>
+                    <div v-if="registerErrors.nip" class="error-message">
+                        {{ registerErrors.nip }}
+                    </div>
+                    <div v-if="nipData && !registerErrors.nip" class="success-message">
+                        Znaleziono: {{ nipData.name }}
+                        <span v-if="nipData.trialAvailable" class="trial-badge">7 dni PRO za darmo</span>
+                        <span v-else class="info-message">(trial wykorzystany)</span>
+                    </div>
+                </div>
+
+                <!-- Company Name Field -->
+                <div class="form-group">
+                    <label for="register-company">
+                        Nazwa firmy
+                        <button v-if="nipData && !editingCompanyName" type="button" class="edit-btn" @click="editingCompanyName = true">
+                            (edytuj)
+                        </button>
+                    </label>
+                    <input
+                        type="text"
+                        id="register-company"
+                        v-model="registerForm.companyName"
+                        required
+                        placeholder="Nazwa Twojej firmy"
+                        :class="{ error: registerErrors.companyName }"
+                        :disabled="loading || (nipData && !editingCompanyName)"
+                    >
+                    <div v-if="registerErrors.companyName" class="error-message">
+                        {{ registerErrors.companyName }}
+                    </div>
+                </div>
+
+                <!-- Email Field -->
+                <div class="form-group">
+                    <label for="register-email">Email</label>
+                    <input
+                        type="email"
+                        id="register-email"
+                        v-model="registerForm.email"
+                        required
+                        placeholder="twoj@email.com"
+                        :class="{ error: registerErrors.email }"
+                        :disabled="loading"
+                    >
+                    <div v-if="registerErrors.email" class="error-message">
+                        {{ registerErrors.email }}
+                    </div>
+                </div>
+
+                <!-- Password Field -->
+                <div class="form-group">
+                    <label for="register-password">Haslo</label>
+                    <input
+                        type="password"
+                        id="register-password"
+                        v-model="registerForm.password"
+                        required
+                        placeholder="Minimum 12 znakow"
+                        :class="{ error: registerErrors.password }"
+                        @input="checkPasswordStrength"
+                        :disabled="loading"
+                    >
+                    <div v-if="registerForm.password" class="password-strength">
+                        <div class="strength-bar">
+                            <div :class="['strength-bar-fill', passwordStrength.level]"></div>
+                        </div>
+                        <div class="strength-text">{{ passwordStrength.text }}</div>
+                    </div>
+                    <div v-if="registerErrors.password" class="error-message">
+                        {{ registerErrors.password }}
+                    </div>
+                </div>
+
+                <!-- Password Confirm Field -->
+                <div class="form-group">
+                    <label for="register-password-confirm">Powtorz haslo</label>
+                    <input
+                        type="password"
+                        id="register-password-confirm"
+                        v-model="registerForm.passwordConfirm"
+                        required
+                        placeholder="Powtorz haslo"
+                        :class="{ error: registerErrors.passwordConfirm }"
+                        :disabled="loading"
+                    >
+                    <div v-if="registerErrors.passwordConfirm" class="error-message">
+                        {{ registerErrors.passwordConfirm }}
+                    </div>
+                </div>
+
+                <!-- Terms Checkbox -->
+                <div class="checkbox-group">
+                    <input
+                        type="checkbox"
+                        id="register-terms"
+                        v-model="registerForm.acceptTerms"
+                        :disabled="loading"
+                    >
+                    <label for="register-terms">
+                        Akceptuje <a href="#" @click.prevent>regulamin</a> i <a href="#" @click.prevent>polityke prywatnosci</a>
+                    </label>
+                </div>
+                <div v-if="registerErrors.terms" class="error-message" style="margin-top: -15px; margin-bottom: 15px;">
+                    {{ registerErrors.terms }}
+                </div>
+
+                <button type="submit" class="btn" :disabled="loading || nipLoading">
+                    <span v-if="loading" class="btn-spinner"></span>
+                    <span v-else>Zarejestruj firme</span>
+                    <span v-if="loading">Tworzenie konta...</span>
+                </button>
+            </form>
+
+            <div class="footer-text">
+                Bezpieczne logowanie z szyfrowaniem end-to-end
+            </div>
+        </div>
+    </div>
+
+    <script src="frontend-api.js"></script>
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    activeTab: 'login',
+                    loading: false,
+                    showOverlay: false,
+                    overlayText: '',
+                    overlayStatus: '',
+                    alert: {
+                        show: false,
+                        type: 'success',
+                        message: ''
+                    },
+                    loginForm: {
+                        email: '',
+                        password: ''
+                    },
+                    registerForm: {
+                        nip: '',
+                        companyName: '',
+                        email: '',
+                        password: '',
+                        passwordConfirm: '',
+                        acceptTerms: false
+                    },
+                    registerErrors: {
+                        nip: '',
+                        companyName: '',
+                        email: '',
+                        password: '',
+                        passwordConfirm: '',
+                        terms: ''
+                    },
+                    passwordStrength: {
+                        level: '',
+                        text: ''
+                    },
+                    // NIP lookup state
+                    nipLoading: false,
+                    nipData: null,
+                    editingCompanyName: false,
+                    nipLookupTimeout: null
+                };
+            },
+            methods: {
+                async handleLogin() {
+                    this.loading = true;
+                    this.hideAlert();
+
+                    try {
+                        const response = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.loginForm)
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(data.error || 'Nieprawidlowy email lub haslo');
+                        }
+
+                        // Store tokens
+                        localStorage.setItem('accessToken', data.accessToken);
+                        localStorage.setItem('refreshToken', data.refreshToken);
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                        localStorage.setItem('lastLoginEmail', this.loginForm.email);
+
+                        // Show overlay with animation
+                        this.overlayText = 'Logowanie pomyslne';
+                        this.overlayStatus = 'Przygotowywanie aplikacji...';
+                        this.showOverlay = true;
+
+                        // Redirect after short delay
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 1200);
+
+                    } catch (error) {
+                        this.showAlert('error', error.message);
+                        this.loading = false;
+                    }
+                },
+
+                // Format NIP as XXX-XXX-XX-XX and trigger lookup
+                formatNip() {
+                    // Clear previous timeout
+                    if (this.nipLookupTimeout) {
+                        clearTimeout(this.nipLookupTimeout);
+                    }
+
+                    // Extract digits only
+                    let digits = this.registerForm.nip.replace(/\D/g, '');
+                    if (digits.length > 10) digits = digits.slice(0, 10);
+
+                    // Format: XXX-XXX-XX-XX
+                    let formatted = '';
+                    if (digits.length > 0) formatted = digits.slice(0, 3);
+                    if (digits.length > 3) formatted += '-' + digits.slice(3, 6);
+                    if (digits.length > 6) formatted += '-' + digits.slice(6, 8);
+                    if (digits.length > 8) formatted += '-' + digits.slice(8, 10);
+
+                    this.registerForm.nip = formatted;
+
+                    // Reset state when NIP changes
+                    if (digits.length < 10) {
+                        this.nipData = null;
+                        this.registerErrors.nip = '';
+                        this.editingCompanyName = false;
+                        this.registerForm.companyName = '';
+                    }
+
+                    // Auto-lookup when 10 digits (debounced)
+                    if (digits.length === 10) {
+                        this.nipLookupTimeout = setTimeout(() => {
+                            this.lookupNip(digits);
+                        }, 300);
+                    }
+                },
+
+                // Lookup NIP via backend API
+                async lookupNip(nip) {
+                    this.nipLoading = true;
+                    this.registerErrors.nip = '';
+
+                    try {
+                        const response = await fetch('/api/company/lookup-nip', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ nip })
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok && result.success) {
+                            this.nipData = result.data;
+
+                            // Auto-fill company name if available
+                            if (result.data.name) {
+                                this.registerForm.companyName = result.data.name;
+                                this.editingCompanyName = false;
+                            } else {
+                                // GUS didn't return name - user must enter manually
+                                this.editingCompanyName = true;
+                            }
+                        } else {
+                            // Handle specific error codes
+                            if (result.code === 'NIP_ALREADY_REGISTERED') {
+                                this.registerErrors.nip = 'Ta firma jest juz zarejestrowana. Zaloguj sie lub skontaktuj z administratorem.';
+                            } else if (result.code === 'INVALID_NIP') {
+                                this.registerErrors.nip = 'Nieprawidlowy numer NIP';
+                            } else {
+                                this.registerErrors.nip = result.error || 'Blad weryfikacji NIP';
+                            }
+                            this.nipData = null;
+                        }
+                    } catch (err) {
+                        this.registerErrors.nip = 'Blad polaczenia z serwerem';
+                        this.nipData = null;
+                    } finally {
+                        this.nipLoading = false;
+                    }
+                },
+
+                async handleRegister() {
+                    this.loading = true;
+                    this.hideAlert();
+                    this.registerErrors = {
+                        nip: '',
+                        companyName: '',
+                        email: '',
+                        password: '',
+                        passwordConfirm: '',
+                        terms: ''
+                    };
+
+                    // Validate NIP
+                    const nipDigits = this.registerForm.nip.replace(/\D/g, '');
+                    if (nipDigits.length !== 10) {
+                        this.registerErrors.nip = 'NIP musi miec 10 cyfr';
+                        this.loading = false;
+                        return;
+                    }
+
+                    // Validate company name
+                    if (!this.registerForm.companyName.trim()) {
+                        this.registerErrors.companyName = 'Nazwa firmy jest wymagana';
+                        this.loading = false;
+                        return;
+                    }
+
+                    // Validate terms
+                    if (!this.registerForm.acceptTerms) {
+                        this.registerErrors.terms = 'Musisz zaakceptowac regulamin';
+                        this.loading = false;
+                        return;
+                    }
+
+                    // Validate password match
+                    if (this.registerForm.password !== this.registerForm.passwordConfirm) {
+                        this.registerErrors.passwordConfirm = 'Hasla nie pasuja do siebie';
+                        this.loading = false;
+                        return;
+                    }
+
+                    // Validate password strength
+                    if (this.registerForm.password.length < 12) {
+                        this.registerErrors.password = 'Haslo musi miec minimum 12 znakow';
+                        this.loading = false;
+                        return;
+                    }
+
+                    try {
+                        // Register via /api/company/register (NOT /api/auth/register)
+                        const response = await fetch('/api/company/register', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                nip: nipDigits,
+                                name: this.registerForm.companyName.trim(),
+                                email: this.registerForm.email,
+                                password: this.registerForm.password,
+                                acceptTerms: true,
+                                startTrial: true
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            // Handle specific error codes
+                            if (data.code === 'NIP_ALREADY_REGISTERED') {
+                                this.registerErrors.nip = 'Ta firma jest juz zarejestrowana';
+                            } else if (data.code === 'EMAIL_ALREADY_REGISTERED') {
+                                this.registerErrors.email = 'Ten email jest juz zajety';
+                            } else if (data.details) {
+                                data.details.forEach(err => {
+                                    const field = err.field.split('.').pop();
+                                    if (this.registerErrors.hasOwnProperty(field)) {
+                                        this.registerErrors[field] = err.message;
+                                    }
+                                });
+                            }
+                            throw new Error(data.error || 'Blad rejestracji');
+                        }
+
+                        // Registration successful - now auto-login
+                        const loginResponse = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                email: this.registerForm.email,
+                                password: this.registerForm.password
+                            })
+                        });
+
+                        const loginData = await loginResponse.json();
+
+                        if (loginResponse.ok) {
+                            // Store tokens
+                            localStorage.setItem('accessToken', loginData.accessToken);
+                            localStorage.setItem('refreshToken', loginData.refreshToken);
+                            localStorage.setItem('user', JSON.stringify(loginData.user));
+
+                            // Store company ID for multi-company support
+                            if (data.data?.company?.id) {
+                                localStorage.setItem('activeCompanyId', data.data.company.id);
+                            }
+
+                            // Show overlay with trial info
+                            const isTrial = data.data?.subscription?.status === 'trialing';
+                            this.overlayText = isTrial ? 'Firma zarejestrowana!' : 'Konto utworzone';
+                            this.overlayStatus = isTrial
+                                ? 'Masz 7-dniowy trial PRO. Przygotowywanie aplikacji...'
+                                : 'Przygotowywanie aplikacji...';
+                            this.showOverlay = true;
+
+                            // Redirect after short delay
+                            setTimeout(() => {
+                                window.location.href = isTrial ? '/?welcome=trial' : '/';
+                            }, 1500);
+                        } else {
+                            // Registration OK but login failed - redirect to login tab
+                            this.showAlert('success', 'Konto utworzone! Zaloguj sie.');
+                            this.activeTab = 'login';
+                            this.loginForm.email = this.registerForm.email;
+                            this.loading = false;
+                        }
+
+                    } catch (error) {
+                        this.showAlert('error', error.message);
+                        this.loading = false;
+                    }
+                },
+
+                checkPasswordStrength() {
+                    const password = this.registerForm.password;
+                    let strength = 0;
+
+                    if (password.length >= 12) strength++;
+                    if (/[a-z]/.test(password)) strength++;
+                    if (/[A-Z]/.test(password)) strength++;
+                    if (/[0-9]/.test(password)) strength++;
+                    if (/[^a-zA-Z0-9]/.test(password)) strength++;
+
+                    if (strength <= 2) {
+                        this.passwordStrength = { level: 'weak', text: 'Slabe haslo' };
+                    } else if (strength <= 4) {
+                        this.passwordStrength = { level: 'medium', text: 'Srednie haslo' };
+                    } else {
+                        this.passwordStrength = { level: 'strong', text: 'Silne haslo' };
+                    }
+                },
+
+                showAlert(type, message) {
+                    this.alert = { show: true, type, message };
+                },
+
+                hideAlert() {
+                    this.alert.show = false;
+                }
+            },
+            mounted() {
+                // Check if already logged in
+                const accessToken = localStorage.getItem('accessToken');
+                const user = localStorage.getItem('user');
+                if (accessToken && user) {
+                    window.location.href = '/';
+                    return;
+                }
+
+                // Load cached email from localStorage
+                const cachedEmail = localStorage.getItem('lastLoginEmail');
+                if (cachedEmail) {
+                    this.loginForm.email = cachedEmail;
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
