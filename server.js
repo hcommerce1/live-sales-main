@@ -146,6 +146,11 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // Apply rate limiting to all routes
 app.use(publicLimiter);
 
+// Redirect /register.html to /login.html (registration is a tab in login page)
+app.get('/register.html', (req, res) => {
+  res.redirect(301, '/login.html');
+});
+
 // Request logging
 app.use((req, res, next) => {
   logger.debug('Incoming request', {
