@@ -325,7 +325,7 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
       }
 
       return res.status(401).json({
-        error: 'Invalid credentials',
+        error: 'Nieprawidłowy email lub hasło',
         code: 'INVALID_CREDENTIALS',
       });
     }
@@ -358,7 +358,7 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
       });
 
       return res.status(403).json({
-        error: 'Account deactivated',
+        error: 'Konto zostało dezaktywowane',
         code: 'ACCOUNT_DEACTIVATED',
       });
     }
@@ -470,7 +470,7 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
     });
 
     res.status(500).json({
-      error: 'Login failed',
+      error: 'Błąd logowania. Spróbuj ponownie.',
       code: 'LOGIN_ERROR',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
@@ -728,7 +728,7 @@ router.post('/refresh', async (req, res) => {
     if (!storedToken.user.isActive) {
       clearRefreshTokenCookie(res);
       return res.status(403).json({
-        error: 'Account deactivated',
+        error: 'Konto zostało dezaktywowane',
         code: 'ACCOUNT_DEACTIVATED',
       });
     }
