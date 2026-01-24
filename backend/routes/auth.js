@@ -462,7 +462,10 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
     });
   } catch (error) {
     logger.error('Login failed', {
-      error: error.message,
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      stack: error.stack,
       email: req.body.email,
     });
 

@@ -40,6 +40,9 @@ const featureFlags = require('./backend/utils/feature-flags');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy for Render.com (required for rate-limiter and correct IP detection)
+app.set('trust proxy', 1);
+
 // HTTPS Redirect in Production
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
