@@ -8,13 +8,28 @@ import emailjs from '@emailjs/browser'
 
 // Export Wizard components
 import ExportWizard from './components/ExportWizard.vue'
+// Auth components
+import LoginForm from './components/LoginForm.vue'
+
+// Pinia stores
+import { useAuthStore } from './stores/auth'
+import { useExportsStore } from './stores/exports'
+import { useIntegrationsStore } from './stores/integrations'
+import { useCompanyStore } from './stores/company'
+
+// Initialize stores
+const authStore = useAuthStore()
+const exportsStore = useExportsStore()
+const integrationsStore = useIntegrationsStore()
+const companyStore = useCompanyStore()
 
 // Initialize EmailJS
 emailjs.init("AJZSalcoaqOoF-Qxe")
 
-// Auth state - MUST be checked before showing any content
-const isAuthChecking = ref(true)
-const isAuthenticated = ref(false)
+// Auth state derived from store
+const isAuthChecking = computed(() => authStore.authState === 'CHECKING')
+const isAuthenticated = computed(() => authStore.authState === 'AUTHENTICATED')
+const requires2FA = computed(() => authStore.authState === '2FA_REQUIRED')
 
 // State
 const currentPage = ref('dashboard')
@@ -1029,12 +1044,25 @@ async function loadUserEmail() {
     }
 }
 
-function logout() {
+async function logout() {
+    try {
+        await authStore.logout()
+    } catch (error) {
+        console.error('Logout error:', error)
+    }
+
+    // Reset all stores
+    exportsStore.$reset()
+    integrationsStore.$reset()
+    companyStore.$reset()
+
+    // Clear local storage
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
     localStorage.removeItem('activeCompanyId')
-    window.location.href = '/login.html'
+
+    // Redirect is now handled by auth state change
 }
 
 // === PR F3: Company, Team, Billing Methods ===
@@ -1769,41 +1797,17 @@ watch(currentPage, (newPage) => {
 // Lifecycle
 onMounted(async () => {
     // Check authentication FIRST - before showing any content
-    isAuthChecking.value = true
+    await authStore.checkAuth()
 
-    try {
-        const user = JSON.parse(localStorage.getItem('user') || 'null')
-        const accessToken = localStorage.getItem('accessToken')
+    // Remove initial HTML loader
+    const initialLoader = document.getElementById('initial-loader')
+    if (initialLoader) {
+        initialLoader.classList.add('fade-out')
+        setTimeout(() => initialLoader.remove(), 300)
+    }
 
-        if (!user || !accessToken) {
-            // No credentials - redirect to login
-            window.location.href = '/login.html'
-            return
-        }
-
-        // Verify token is still valid by checking with server
-        try {
-            const health = await API.health()
-            console.log('Server health:', health)
-        } catch (error) {
-            console.error('Server health check failed:', error)
-            // Don't block auth for health check failure
-        }
-
-        // Authentication successful
-        isAuthenticated.value = true
-        isAuthChecking.value = false
-
-        // Remove initial HTML loader now that auth is confirmed
-        const initialLoader = document.getElementById('initial-loader')
-        if (initialLoader) {
-            initialLoader.classList.add('fade-out')
-            setTimeout(() => initialLoader.remove(), 300)
-        }
-
-    } catch (error) {
-        console.error('Auth check failed:', error)
-        window.location.href = '/login.html'
+    // If not authenticated, stop here - LoginForm will handle login
+    if (!isAuthenticated.value) {
         return
     }
 
@@ -1869,8 +1873,14 @@ onBeforeUnmount(() => {
             </div>
         </div>
 
+        <!-- Login Form - shown when not authenticated or 2FA required -->
+        <LoginForm
+            v-else-if="!isAuthenticated || requires2FA"
+            :initial-mode="requires2FA ? '2fa' : 'login'"
+        />
+
         <!-- Main App Content - only shown when authenticated -->
-        <template v-if="isAuthenticated && !isAuthChecking">
+        <template v-else-if="isAuthenticated && !isAuthChecking">
             <!-- Sidebar -->
             <div class="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm z-50">
             <div class="p-6">

@@ -217,8 +217,16 @@ model User {
   role            String   @default("user") // user, admin
   isActive        Boolean  @default(true)
   emailVerified   Boolean  @default(false)
-  twoFactorSecret String?  // TOTP secret
-  twoFactorEnabled Boolean @default(false)
+
+  // 2FA fields (Email-based verification)
+  twoFactorSecret   String?   // Hashed 2FA code (argon2)
+  twoFactorEnabled  Boolean   @default(false)
+  twoFactorExpiry   DateTime? // Code expiration time
+  twoFactorAttempts Int       @default(0) // Failed verification attempts
+
+  // Account security / lockout
+  accountLockedUntil  DateTime? // Account lockout expiry
+  failedLoginAttempts Int       @default(0) // Failed login counter
 
   // BaseLinker API token (encrypted with AES-256-GCM)
   baselinkerToken String?
@@ -331,15 +339,27 @@ model ExportSheet {
   @@index([exportId])
 }
 
+// Export Run Status - type-safe enum for export execution status
+enum ExportRunStatus {
+  pending
+  success
+  partial_failure
+  failure
+}
+
 // Export Run - history of export executions
 model ExportRun {
-  id              String   @id @default(uuid())
+  id              String          @id @default(uuid())
   exportId        String
-  export          Export   @relation(fields: [exportId], references: [id], onDelete: Cascade)
+  export          Export          @relation(fields: [exportId], references: [id], onDelete: Cascade)
 
-  runAt           DateTime @default(now())
-  status          String   // success, partial_failure, failure
-  totalRecords    Int
+  // IDEMPOTENCY KEY - NOT NULL for unique constraint to work!
+  // When client doesn't provide runId, service generates UUID
+  runId           String
+
+  runAt           DateTime        @default(now())
+  status          ExportRunStatus @default(pending)
+  totalRecords    Int             @default(0)
   durationMs      Int?
 
   // Results per sheet
@@ -351,6 +371,7 @@ model ExportRun {
   // Detailed metadata for debugging and analytics
   // {
   //   triggeredBy: 'manual' | 'scheduler',
+  //   providedRunId: string | null, // original runId from client
   //   recordsBeforeFilter: number,
   //   recordsAfterFilter: number,
   //   phases: { fetchFromBaseLinker: ms, applyFilters: ms, writeToSheets: ms },
@@ -358,10 +379,15 @@ model ExportRun {
   // }
   metadata        Json?
 
+  // UNIQUE CONSTRAINT - prevents duplicate runs with same runId per export
+  // runId is idempotency key PER EXPORT (not global)
+  @@unique([exportId, runId])
+
   @@map("export_runs")
   @@index([exportId, runAt])
   @@index([status])
   @@index([runAt])
+  @@index([runId])
 }
 
 // Audit log for security tracking (enhanced in PR 0.5)

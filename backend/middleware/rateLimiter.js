@@ -167,11 +167,76 @@ const passwordResetLimiter = createLimiter({
   useRedis: true,
 });
 
+/**
+ * STRICT: Login endpoint
+ * - 10 requests per 15 minutes per IP
+ * - Separate from general auth to allow more attempts
+ */
+const loginLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: 'Zbyt wiele prób logowania. Spróbuj za 15 minut.',
+  skipSuccessfulRequests: false, // Count all requests
+  prefix: 'login',
+  useRedis: true,
+});
+
+/**
+ * STRICT: 2FA verification endpoint
+ * - 5 requests per 5 minutes per IP
+ * - Very strict to prevent brute force on 6-digit codes
+ */
+const twoFactorLimiter = createLimiter({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 5,
+  message: 'Zbyt wiele prób weryfikacji. Spróbuj za 5 minut.',
+  prefix: '2fa',
+  useRedis: true,
+});
+
+/**
+ * STRICT: Password change endpoint
+ * - 3 requests per hour per user
+ * - Based on user ID (not IP)
+ */
+const passwordChangeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  message: {
+    error: 'Zbyt wiele zmian hasła. Spróbuj za godzinę.',
+    code: 'RATE_LIMIT_EXCEEDED',
+    retryAfter: 3600,
+  },
+  keyGenerator: (req) => {
+    // Use user ID instead of IP
+    return req.user?.id || req.ip;
+  },
+  handler: (req, res) => {
+    logger.warn('Password change rate limit exceeded', {
+      userId: req.user?.id,
+      ip: req.ip,
+    });
+
+    res.status(429).json({
+      error: 'Zbyt wiele zmian hasła. Spróbuj za godzinę.',
+      code: 'RATE_LIMIT_EXCEEDED',
+      retryAfter: 3600,
+    });
+  },
+  store: redisClient ? new RedisStore({
+    client: redisClient,
+    prefix: 'rate_limit:password_change:',
+  }) : undefined,
+});
+
 module.exports = {
   authLimiter,
   apiLimiter,
   publicLimiter,
   exportLimiter,
   passwordResetLimiter,
+  loginLimiter,
+  twoFactorLimiter,
+  passwordChangeLimiter,
   createLimiter,
 };

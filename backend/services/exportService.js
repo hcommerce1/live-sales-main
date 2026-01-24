@@ -12,6 +12,7 @@
  * - Pagination for large datasets (respects 100 req/min API limit)
  */
 
+const crypto = require('crypto');
 const { getClient } = require('./baselinker');
 const googleSheetsService = require('./googleSheetsService');
 const logger = require('../utils/logger');
@@ -19,6 +20,37 @@ const { PrismaClient } = require('@prisma/client');
 const exportFields = require('../config/export-fields');
 
 const prisma = new PrismaClient();
+
+// ============================================
+// IDEMPOTENCY HELPERS
+// ============================================
+
+/**
+ * Check if error is a unique constraint violation for ExportRun (exportId, runId)
+ * IMPORTANT: We check the constraint target to avoid catching other P2002 errors
+ *
+ * @param {Error} error - Prisma error
+ * @returns {boolean}
+ */
+function isExportRunDuplicateViolation(error) {
+  // Prisma P2002 = Unique constraint failed
+  if (error.code !== 'P2002') return false;
+
+  // Check if it's our specific constraint (exportId + runId)
+  const target = error.meta?.target;
+
+  // Prisma may return array ['exportId', 'runId'] or string
+  if (Array.isArray(target)) {
+    return target.includes('exportId') && target.includes('runId');
+  }
+
+  // Or constraint name (depends on Prisma version/config)
+  return target === 'ExportRun_exportId_runId_key' ||
+         target === 'export_runs_export_id_run_id_key';
+}
+
+// Stale threshold for pending exports (15 minutes)
+const STALE_THRESHOLD_MS = 15 * 60 * 1000;
 
 // In-memory storage for export configurations
 // TODO: Migrate to database in production
@@ -287,16 +319,31 @@ class ExportService {
    * Run export - fetch data from BaseLinker and write to Google Sheets
    * Now supports: orders, products, invoices, order_products
    *
+   * IDEMPOTENCY: Uses persist-first pattern with unique constraint on (exportId, runId)
+   * - If runId provided and already exists: returns cached result
+   * - If runId not provided: generates UUID (backward compatible, always new export)
+   *
    * @param {string} exportId - Export ID
    * @param {string} userId - User ID (to fetch BaseLinker token)
-   * @returns {Promise<object>} - Export result
+   * @param {object} options - Optional parameters
+   * @param {string} options.runId - Client-provided idempotency key
+   * @param {string} options.trigger - 'manual' or 'scheduler'
+   * @returns {Promise<object>} - Export result with cached/inProgress/stale flags
    */
-  async runExport(exportId, userId = null) {
+  async runExport(exportId, userId = null, options = {}) {
+    const { runId: providedRunId, trigger = 'manual' } = options;
     const startTime = Date.now();
+
+    // 1. BACKWARD COMPAT: If no runId provided, generate UUID
+    // (runId is NOT NULL in DB, so we always need a value)
+    const effectiveRunId = providedRunId?.trim() || crypto.randomUUID();
 
     logger.info('=== EXPORT RUN START ===', {
       exportId,
       userId,
+      providedRunId: providedRunId || null,
+      effectiveRunId,
+      trigger,
       timestamp: new Date().toISOString()
     });
 
@@ -336,6 +383,85 @@ class ExportService {
       throw new Error('Company ID not available for this export');
     }
 
+    // 2. TRY CREATE FIRST - let DB decide on duplicate (persist-first pattern)
+    let exportRun;
+
+    try {
+      exportRun = await prisma.exportRun.create({
+        data: {
+          exportId,
+          runId: effectiveRunId,
+          status: 'pending',
+          totalRecords: 0,
+          metadata: {
+            trigger,
+            providedRunId: providedRunId || null,
+            startedAt: new Date().toISOString()
+          }
+        }
+      });
+
+      logger.info('ExportRun record created', {
+        exportRunId: exportRun.id,
+        exportId,
+        runId: effectiveRunId
+      });
+    } catch (error) {
+      // 3. CATCH UNIQUE VIOLATION = duplicate runId for this export
+      if (isExportRunDuplicateViolation(error)) {
+        const existingRun = await prisma.exportRun.findUnique({
+          where: {
+            exportId_runId: { exportId, runId: effectiveRunId }
+          }
+        });
+
+        logger.info('Duplicate runId detected (unique constraint)', {
+          exportId,
+          clientRunId: effectiveRunId,
+          existingRunId: existingRun?.id,
+          existingStatus: existingRun?.status
+        });
+
+        // If still pending - may still be processing
+        if (existingRun?.status === 'pending') {
+          // D0.4: Stale detection (>15 min)
+          const isStale = existingRun.runAt &&
+            (Date.now() - new Date(existingRun.runAt).getTime()) > STALE_THRESHOLD_MS;
+
+          return {
+            success: false,
+            cached: true,
+            inProgress: true,
+            stale: isStale,
+            runId: existingRun.id,
+            clientRunId: effectiveRunId,
+            status: existingRun.status,
+            totalRecords: 0,
+            message: isStale
+              ? 'Export appears stale (pending > 15 min)'
+              : 'Export is currently in progress with this runId'
+          };
+        }
+
+        // Already completed (success, failure, or partial_failure)
+        return {
+          success: existingRun?.status === 'success',
+          cached: true,
+          inProgress: false,
+          stale: false,
+          runId: existingRun?.id,
+          clientRunId: effectiveRunId,
+          status: existingRun?.status,
+          totalRecords: existingRun?.totalRecords || 0,
+          message: 'Export already processed with this runId'
+        };
+      }
+
+      // Other error - rethrow
+      throw error;
+    }
+
+    // 4. EXECUTE EXPORT
     logger.info('Running export', {
       exportId,
       userId: effectiveUserId,
@@ -347,7 +473,9 @@ class ExportService {
     });
 
     const metadata = {
-      triggeredBy: userId ? 'manual' : 'scheduler',
+      trigger,
+      providedRunId: providedRunId || null,
+      startedAt: new Date().toISOString(),
       phases: {}
     };
 
@@ -413,9 +541,30 @@ class ExportService {
 
       if (data.length === 0) {
         logger.warn('No data to export', { exportId });
+
+        // 5. UPDATE SUCCESS (no data)
+        await prisma.exportRun.update({
+          where: { id: exportRun.id },
+          data: {
+            status: 'success',
+            totalRecords: 0,
+            durationMs: Date.now() - startTime,
+            metadata: {
+              ...metadata,
+              completedAt: new Date().toISOString()
+            }
+          }
+        });
+
         return {
           success: true,
-          recordCount: 0,
+          cached: false,
+          inProgress: false,
+          stale: false,
+          runId: exportRun.id,
+          clientRunId: effectiveRunId,
+          status: 'success',
+          totalRecords: 0,
           message: 'No data matched the filters',
           metadata
         };
@@ -433,27 +582,63 @@ class ExportService {
       // Determine overall status
       const allSuccess = writeResults.every(r => r.success);
       const someSuccess = writeResults.some(r => r.success);
+      const finalStatus = allSuccess ? 'success' : (someSuccess ? 'partial_failure' : 'failure');
 
       metadata.sheetsWritten = writeResults;
       metadata.durationMs = Date.now() - startTime;
+      metadata.completedAt = new Date().toISOString();
+
+      // 5. UPDATE SUCCESS/PARTIAL_FAILURE
+      await prisma.exportRun.update({
+        where: { id: exportRun.id },
+        data: {
+          status: finalStatus,
+          totalRecords: data.length,
+          durationMs: Date.now() - startTime,
+          sheetResults: writeResults,
+          metadata
+        }
+      });
 
       logger.info('Export completed', {
         exportId,
+        exportRunId: exportRun.id,
         recordCount: data.length,
-        status: allSuccess ? 'success' : (someSuccess ? 'partial_failure' : 'failure'),
+        status: finalStatus,
         durationMs: metadata.durationMs
       });
 
       return {
         success: allSuccess,
-        status: allSuccess ? 'success' : (someSuccess ? 'partial_failure' : 'failure'),
-        recordCount: data.length,
+        cached: false,
+        inProgress: false,
+        stale: false,
+        runId: exportRun.id,
+        clientRunId: effectiveRunId,
+        status: finalStatus,
+        totalRecords: data.length,
         writeResults,
         metadata
       };
     } catch (error) {
+      // 6. UPDATE FAILURE
+      await prisma.exportRun.update({
+        where: { id: exportRun.id },
+        data: {
+          status: 'failure',
+          errorMessage: error.message,
+          durationMs: Date.now() - startTime,
+          metadata: {
+            ...metadata,
+            failedAt: new Date().toISOString(),
+            error: error.message
+          }
+        }
+      });
+
       logger.error('Export failed', {
         exportId,
+        exportRunId: exportRun.id,
         error: error.message,
         durationMs: Date.now() - startTime
       });

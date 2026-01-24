@@ -11,18 +11,28 @@ export const API = {
   },
 
   /**
-   * Get refresh token from localStorage
+   * Get refresh token from localStorage (LEGACY - now in httpOnly cookie)
    */
   getRefreshToken() {
     return localStorage.getItem('refreshToken');
   },
 
   /**
-   * Set tokens in localStorage
+   * Set access token in localStorage (refresh token is in httpOnly cookie)
+   */
+  setAccessToken(accessToken) {
+    localStorage.setItem('accessToken', accessToken);
+  },
+
+  /**
+   * Set tokens in localStorage (for backward compatibility)
    */
   setTokens(accessToken, refreshToken) {
     localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
+    // refreshToken is now handled by httpOnly cookie
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken);
+    }
   },
 
   /**
@@ -54,19 +64,14 @@ export const API = {
   },
 
   /**
-   * Refresh access token
+   * Refresh access token (uses httpOnly cookie)
    */
   async refreshAccessToken() {
-    const refreshToken = this.getRefreshToken();
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken })
+        credentials: 'include', // IMPORTANT: Send httpOnly cookie
       });
 
       if (!response.ok) {
@@ -74,11 +79,11 @@ export const API = {
       }
 
       const data = await response.json();
-      this.setTokens(data.accessToken, data.refreshToken);
+      this.setAccessToken(data.accessToken);
       return data.accessToken;
     } catch (error) {
       this.clearAuth();
-      window.location.href = '/login.html';
+      // Don't redirect here - let the caller handle it
       throw error;
     }
   },
@@ -100,12 +105,11 @@ export const API = {
       ...options.headers,
     };
 
-    if (token && !endpoint.startsWith('/api/auth/')) {
+    if (token && !endpoint.startsWith('/api/auth/login') && !endpoint.startsWith('/api/auth/register')) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // WARUNEK 1 (P0): Add X-Company-Id header for multi-company support
-    // Required for: /api/team/*, /api/billing/*, /api/features/*, /api/exports/*
+    // Add X-Company-Id header for multi-company support
     const companyId = this.getActiveCompanyId();
     if (companyId && !endpoint.startsWith('/api/auth/') && !endpoint.startsWith('/api/company/register') && !endpoint.startsWith('/api/company/lookup')) {
       headers['X-Company-Id'] = companyId;
@@ -113,6 +117,7 @@ export const API = {
 
     const config = {
       headers,
+      credentials: 'include', // IMPORTANT: Send/receive cookies
       ...options,
     };
 
@@ -120,8 +125,8 @@ export const API = {
       const response = await fetch(url, config);
       const data = await response.json();
 
-      // If 401 and we have a refresh token, try to refresh
-      if (response.status === 401 && this.getRefreshToken()) {
+      // If 401 and not an auth endpoint, try to refresh
+      if (response.status === 401 && !endpoint.startsWith('/api/auth/')) {
         try {
           // Refresh token
           const newToken = await this.refreshAccessToken();
@@ -137,15 +142,18 @@ export const API = {
 
           return retryData;
         } catch (refreshError) {
-          // Refresh failed, redirect to login
+          // Refresh failed - clear auth but don't redirect (let Vue handle it)
           this.clearAuth();
-          window.location.href = '/login.html';
-          throw refreshError;
+          throw new Error('Session expired');
         }
       }
 
       if (!response.ok) {
-        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+        const error = new Error(data.error || `HTTP error! status: ${response.status}`);
+        error.code = data.code;
+        error.status = response.status;
+        error.data = data;
+        throw error;
       }
 
       return data;
@@ -159,14 +167,38 @@ export const API = {
    * Authentication
    */
   auth: {
-    // Login
+    // Login - handles 2FA flow
     async login(email, password) {
       const response = await API.request('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
 
-      API.setTokens(response.accessToken, response.refreshToken);
+      // Check if 2FA is required
+      if (response.requires2FA) {
+        return {
+          requires2FA: true,
+          tempToken: response.tempToken,
+          message: response.message,
+        };
+      }
+
+      // Normal login - store access token (refresh is in httpOnly cookie)
+      API.setAccessToken(response.accessToken);
+      localStorage.setItem('user', JSON.stringify(response.user));
+
+      return response;
+    },
+
+    // Verify 2FA code during login
+    async verify2FALogin(code, tempToken) {
+      const response = await API.request('/api/auth/2fa/verify-login', {
+        method: 'POST',
+        body: JSON.stringify({ code, tempToken }),
+      });
+
+      // Store tokens after successful 2FA
+      API.setAccessToken(response.accessToken);
       localStorage.setItem('user', JSON.stringify(response.user));
 
       return response;
@@ -179,7 +211,7 @@ export const API = {
         body: JSON.stringify({ email, password }),
       });
 
-      API.setTokens(response.accessToken, response.refreshToken);
+      API.setAccessToken(response.accessToken);
       localStorage.setItem('user', JSON.stringify(response.user));
 
       return response;
@@ -187,12 +219,9 @@ export const API = {
 
     // Logout
     async logout() {
-      const refreshToken = API.getRefreshToken();
-
       try {
         await API.request('/api/auth/logout', {
           method: 'POST',
-          body: JSON.stringify({ refreshToken }),
         });
       } catch (error) {
         console.error('Logout error:', error);
@@ -206,6 +235,55 @@ export const API = {
       const response = await API.request('/api/auth/me');
       localStorage.setItem('user', JSON.stringify(response.user));
       return response.user;
+    },
+
+    // Refresh token (explicit call)
+    async refresh() {
+      const response = await API.request('/api/auth/refresh', {
+        method: 'POST',
+      });
+      if (response.accessToken) {
+        API.setAccessToken(response.accessToken);
+      }
+      return response;
+    },
+
+    // Change password
+    async changePassword(currentPassword, newPassword) {
+      return API.request('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+    },
+
+    // Enable 2FA - step 1 (sends code to email)
+    async enable2FA() {
+      return API.request('/api/auth/2fa/enable', {
+        method: 'POST',
+      });
+    },
+
+    // Enable 2FA - step 2 (confirm with code)
+    async confirm2FAEnable(code) {
+      return API.request('/api/auth/2fa/confirm-enable', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      });
+    },
+
+    // Disable 2FA - step 1 (sends code to email)
+    async request2FADisable() {
+      return API.request('/api/auth/2fa/disable/request', {
+        method: 'POST',
+      });
+    },
+
+    // Disable 2FA - step 2 (confirm with code)
+    async confirm2FADisable(code) {
+      return API.request('/api/auth/2fa/disable/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      });
     },
 
     // Check if user is logged in
@@ -253,14 +331,19 @@ export const API = {
       return response;
     },
 
-    // Run export immediately
-    async run(id) {
-      console.log('[API.exports.run] Starting request for export ID:', id);
+    // Run export immediately with optional runId and trigger
+    // Returns full response with cached/inProgress/stale flags
+    async run(id, options = {}) {
+      console.log('[API.exports.run] Starting request for export ID:', id, 'options:', options);
       const response = await API.request(`/api/exports/${id}/run`, {
         method: 'POST',
+        body: JSON.stringify(options),
       });
       console.log('[API.exports.run] Response received:', response);
-      return response.result;
+
+      // Return full response with deduplication info
+      // { success, cached, inProgress, stale, message, result }
+      return response;
     },
 
     // Toggle export status
@@ -277,16 +360,60 @@ export const API = {
       return response.data;
     },
 
-    // Get field definitions for export wizard (NEW)
+    // Get field definitions for export wizard
     async getFieldDefinitions() {
       const response = await API.request('/api/exports/field-definitions');
       return response.data;
     },
 
-    // Get export run history (NEW)
+    // Get export run history
     async getRunHistory(id, limit = 10) {
       const response = await API.request(`/api/exports/${id}/runs?limit=${limit}`);
       return response.data || [];
+    },
+  },
+
+  /**
+   * Integrations Management
+   */
+  integrations: {
+    // Get all integrations status
+    async getAll() {
+      return API.request('/api/integrations');
+    },
+
+    // Get detailed status (for dashboard)
+    async getStatus() {
+      return API.request('/api/integrations/status');
+    },
+
+    // Get BaseLinker integration status
+    async getBaselinker() {
+      return API.request('/api/integrations/baselinker');
+    },
+
+    // Save BaseLinker token
+    async saveBaselinkerToken(token) {
+      return API.request('/api/integrations/baselinker', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      });
+    },
+
+    // Remove BaseLinker integration
+    async removeBaselinker() {
+      return API.request('/api/integrations/baselinker', {
+        method: 'DELETE',
+      });
+    },
+
+    // Test BaseLinker connection
+    async testBaselinker(token = null) {
+      const body = token ? JSON.stringify({ token }) : undefined;
+      return API.request('/api/integrations/baselinker/test', {
+        method: 'POST',
+        body,
+      });
     },
   },
 
@@ -314,7 +441,7 @@ export const API = {
       return response.data || [];
     },
 
-    // Get order sources (NEW)
+    // Get order sources
     async getOrderSources() {
       const response = await API.request('/api/baselinker/order-sources');
       return response.data || {};
@@ -326,14 +453,14 @@ export const API = {
       return response.data || [];
     },
 
-    // Get invoices (NEW)
+    // Get invoices
     async getInvoices(filters = {}) {
       const params = new URLSearchParams(filters);
       const response = await API.request(`/api/baselinker/invoices?${params}`);
       return response.data || [];
     },
 
-    // Get invoice file (NEW)
+    // Get invoice file
     async getInvoiceFile(invoiceId) {
       const response = await API.request(`/api/baselinker/invoice/${invoiceId}/file`);
       return response.data;
@@ -384,7 +511,6 @@ export const API = {
   company: {
     /**
      * Lookup NIP (public - no auth required)
-     * POST /api/company/lookup-nip
      */
     async lookupNip(nip) {
       return API.request('/api/company/lookup-nip', {
@@ -395,7 +521,6 @@ export const API = {
 
     /**
      * Register company with owner account (public)
-     * POST /api/company/register
      */
     async register(data) {
       return API.request('/api/company/register', {
@@ -406,7 +531,6 @@ export const API = {
 
     /**
      * Check if NIP exists (public)
-     * GET /api/company/check-nip/:nip
      */
     async checkNip(nip) {
       return API.request(`/api/company/check-nip/${nip}`);
@@ -414,7 +538,6 @@ export const API = {
 
     /**
      * Get all companies user belongs to
-     * GET /api/company/my-companies
      */
     async getMyCompanies() {
       return API.request('/api/company/my-companies');
@@ -422,7 +545,6 @@ export const API = {
 
     /**
      * Get company details
-     * GET /api/company/:id
      */
     async get(companyId) {
       return API.request(`/api/company/${companyId}`);
@@ -430,7 +552,6 @@ export const API = {
 
     /**
      * Update company
-     * PATCH /api/company/:id
      */
     async update(companyId, data) {
       return API.request(`/api/company/${companyId}`, {
@@ -441,7 +562,6 @@ export const API = {
 
     /**
      * Delete company (soft delete)
-     * DELETE /api/company/:id
      */
     async delete(companyId) {
       return API.request(`/api/company/${companyId}`, {
@@ -456,7 +576,6 @@ export const API = {
   team: {
     /**
      * Get team members
-     * GET /api/team
      */
     async getMembers() {
       return API.request('/api/team');
@@ -464,7 +583,6 @@ export const API = {
 
     /**
      * Get pending invitations
-     * GET /api/team/pending
      */
     async getPending() {
       return API.request('/api/team/pending');
@@ -472,7 +590,6 @@ export const API = {
 
     /**
      * Invite member
-     * POST /api/team/invite
      */
     async invite(email, role = 'member') {
       return API.request('/api/team/invite', {
@@ -483,7 +600,6 @@ export const API = {
 
     /**
      * Accept invitation
-     * POST /api/team/invitations/:token/accept
      */
     async acceptInvitation(token) {
       return API.request(`/api/team/invitations/${token}/accept`, {
@@ -493,7 +609,6 @@ export const API = {
 
     /**
      * Cancel invitation
-     * DELETE /api/team/invitations/:token
      */
     async cancelInvitation(token) {
       return API.request(`/api/team/invitations/${token}`, {
@@ -503,7 +618,6 @@ export const API = {
 
     /**
      * Resend invitation
-     * POST /api/team/invitations/:token/resend
      */
     async resendInvitation(token) {
       return API.request(`/api/team/invitations/${token}/resend`, {
@@ -513,7 +627,6 @@ export const API = {
 
     /**
      * Remove member
-     * DELETE /api/team/:memberId
      */
     async remove(memberId) {
       return API.request(`/api/team/${memberId}`, {
@@ -523,8 +636,6 @@ export const API = {
 
     /**
      * Change member role
-     * PATCH /api/team/:memberId/role
-     * WARUNEK 2 (P0): Backend expects { newRole: 'admin'|'member' }
      */
     async changeRole(memberId, newRole) {
       return API.request(`/api/team/${memberId}/role`, {
@@ -535,7 +646,6 @@ export const API = {
 
     /**
      * Transfer ownership
-     * POST /api/team/transfer-ownership
      */
     async transferOwnership(newOwnerId) {
       return API.request('/api/team/transfer-ownership', {
@@ -546,7 +656,6 @@ export const API = {
 
     /**
      * Leave company
-     * POST /api/team/leave
      */
     async leave() {
       return API.request('/api/team/leave', {
@@ -556,7 +665,6 @@ export const API = {
 
     /**
      * Get my role in current company
-     * GET /api/team/my-role
      */
     async getMyRole() {
       return API.request('/api/team/my-role');
@@ -569,7 +677,6 @@ export const API = {
   billing: {
     /**
      * Get available plans (public)
-     * GET /api/billing/plans
      */
     async getPlans() {
       return API.request('/api/billing/plans');
@@ -577,7 +684,6 @@ export const API = {
 
     /**
      * Get current subscription
-     * GET /api/billing/subscription
      */
     async getSubscription() {
       return API.request('/api/billing/subscription');
@@ -585,7 +691,6 @@ export const API = {
 
     /**
      * Get trial status
-     * GET /api/billing/trial-status
      */
     async getTrialStatus() {
       return API.request('/api/billing/trial-status');
@@ -593,7 +698,6 @@ export const API = {
 
     /**
      * Start trial (if eligible)
-     * POST /api/billing/start-trial
      */
     async startTrial() {
       return API.request('/api/billing/start-trial', {
@@ -603,7 +707,6 @@ export const API = {
 
     /**
      * Create Stripe checkout session
-     * POST /api/billing/checkout
      */
     async checkout(planId, interval = 'monthly') {
       return API.request('/api/billing/checkout', {
@@ -614,7 +717,6 @@ export const API = {
 
     /**
      * Get Stripe customer portal URL
-     * POST /api/billing/portal
      */
     async getPortal() {
       return API.request('/api/billing/portal', {
@@ -624,7 +726,6 @@ export const API = {
 
     /**
      * Cancel subscription at period end
-     * POST /api/billing/cancel
      */
     async cancel() {
       return API.request('/api/billing/cancel', {
@@ -634,7 +735,6 @@ export const API = {
 
     /**
      * Reactivate canceled subscription
-     * POST /api/billing/reactivate
      */
     async reactivate() {
       return API.request('/api/billing/reactivate', {
@@ -649,7 +749,6 @@ export const API = {
   features: {
     /**
      * Get capabilities (limits, permissions) for current company
-     * GET /api/features/capabilities
      */
     async getCapabilities() {
       return API.request('/api/features/capabilities');
@@ -657,7 +756,6 @@ export const API = {
 
     /**
      * Get plans with features
-     * GET /api/features/plans
      */
     async getPlans() {
       return API.request('/api/features/plans');
@@ -665,7 +763,6 @@ export const API = {
 
     /**
      * Get usage summary
-     * GET /api/features/usage
      */
     async getUsage() {
       return API.request('/api/features/usage');
@@ -673,7 +770,6 @@ export const API = {
 
     /**
      * Check specific feature access
-     * GET /api/features/check/:featureId
      */
     async check(featureId) {
       return API.request(`/api/features/check/${featureId}`);
@@ -681,7 +777,6 @@ export const API = {
 
     /**
      * Get feature definitions
-     * GET /api/features/definitions
      */
     async getDefinitions() {
       return API.request('/api/features/definitions');
@@ -689,7 +784,6 @@ export const API = {
 
     /**
      * Validate selected fields for plan
-     * POST /api/features/validate-fields
      */
     async validateFields(selectedFields, fieldDefinitions) {
       return API.request('/api/features/validate-fields', {

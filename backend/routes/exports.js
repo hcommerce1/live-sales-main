@@ -273,16 +273,31 @@ router.delete('/:id', (req, res) => {
 /**
  * POST /api/exports/:id/run
  * Run export immediately
+ *
+ * Request body (optional):
+ * - runId: Client-provided idempotency key. If same runId is sent again,
+ *          returns cached result instead of re-running export.
+ * - trigger: 'manual' or 'scheduler' (default: 'manual')
+ *
+ * Response includes:
+ * - cached: true if this was a duplicate request (same runId)
+ * - inProgress: true if export is still running (status=pending)
+ * - stale: true if pending > 15 min (alert signal)
+ * - runId: Database record ID
+ * - clientRunId: The idempotency key (provided or auto-generated)
  */
 router.post('/:id/run', async (req, res) => {
   const exportId = req.params.id;
   const userId = req.user?.id;
   const companyId = req.company?.id;
+  const { runId, trigger } = req.body || {};
 
   logger.info('=== EXPORT RUN REQUEST ===', {
     exportId,
     userId,
     companyId,
+    runId: runId || '(auto-generated)',
+    trigger: trigger || 'manual',
     companyName: req.company?.name,
     headers: {
       'x-company-id': req.headers['x-company-id'],
@@ -292,18 +307,38 @@ router.post('/:id/run', async (req, res) => {
   });
 
   try {
-    logger.info('Calling exportService.runExport', { exportId, userId });
-    const result = await exportService.runExport(exportId, userId);
+    logger.info('Calling exportService.runExport', { exportId, userId, runId, trigger });
 
-    logger.info('Export completed successfully', {
+    // Pass runId and trigger to service for deduplication
+    const result = await exportService.runExport(exportId, userId, { runId, trigger });
+
+    // Log with cached/inProgress info
+    logger.info('Export request completed', {
       exportId,
       userId,
-      result: JSON.stringify(result)
+      cached: result.cached || false,
+      inProgress: result.inProgress || false,
+      stale: result.stale || false,
+      status: result.status,
+      totalRecords: result.totalRecords
     });
 
+    // Return unified response structure
+    // HTTP 200 for all cases (including cached) per D0.2
     res.json({
-      success: true,
-      result
+      success: result.success,
+      cached: result.cached || false,
+      inProgress: result.inProgress || false,
+      stale: result.stale || false,
+      message: result.message,
+      result: {
+        runId: result.runId,
+        clientRunId: result.clientRunId,
+        status: result.status,
+        totalRecords: result.totalRecords,
+        writeResults: result.writeResults,
+        metadata: result.metadata
+      }
     });
   } catch (error) {
     logger.error('=== EXPORT FAILED ===', {
@@ -317,6 +352,9 @@ router.post('/:id/run', async (req, res) => {
     });
     res.status(500).json({
       success: false,
+      cached: false,
+      inProgress: false,
+      stale: false,
       error: error.message
     });
   }

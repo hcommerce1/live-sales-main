@@ -77,6 +77,56 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * GET /api/integrations/status
+ * Get detailed status of all integrations (for frontend dashboard)
+ * Includes connection status and error info
+ */
+router.get('/status', async (req, res) => {
+  try {
+    const secrets = await companySecretService.listSecrets(req.company.id);
+
+    const baselinkerSecret = secrets.find(
+      (s) => s.secretType === companySecretService.SECRET_TYPES.BASELINKER_TOKEN
+    );
+    const googleSecret = secrets.find(
+      (s) => s.secretType === companySecretService.SECRET_TYPES.GOOGLE_CREDENTIALS
+    );
+
+    // Build status response
+    const status = {
+      baselinker: {
+        configured: !!baselinkerSecret,
+        connected: null, // null = nie sprawdzano automatycznie
+        lastChecked: null,
+        lastUsedAt: baselinkerSecret?.lastUsedAt || null,
+        error: null,
+      },
+      googleSheets: {
+        configured: !!googleSecret,
+        connected: null,
+        lastChecked: null,
+        lastUsedAt: googleSecret?.lastUsedAt || null,
+        error: null,
+      },
+    };
+
+    res.json({
+      success: true,
+      data: status,
+    });
+  } catch (error) {
+    logger.error('Failed to get integrations status', {
+      error: error.message,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve integrations status',
+    });
+  }
+});
+
+/**
  * GET /api/integrations/baselinker
  * Get BaseLinker integration status
  */
