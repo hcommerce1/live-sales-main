@@ -3,7 +3,6 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { MOCK_DATA } from './data.js'
 import { API } from './api.js'
 import Sortable from 'sortablejs'
-import Chart from 'chart.js/auto'
 import emailjs from '@emailjs/browser'
 
 // Export Wizard components
@@ -80,8 +79,6 @@ const extractedSheetId = ref(null)
 // Live stats
 const currentTime = ref(new Date())
 const lastSyncTime = ref(new Date(Date.now() - 2 * 60 * 1000))
-const uptime = ref(99.8)
-let uptimeChart = null
 
 // Server data
 const exportsListServer = ref([])
@@ -296,27 +293,6 @@ const lastSyncText = computed(() => {
     return `${minutes} min ${seconds} sek temu`
 })
 
-const ordersToday = computed(() => {
-    const now = new Date()
-    const hour = now.getHours()
-    const minute = now.getMinutes()
-
-    if (hour < 7) {
-        return Math.floor((hour * 60 + minute) / (7 * 60) * 30)
-    }
-
-    const minutesSince7 = (hour - 7) * 60 + minute
-    const totalMinutesAfter7 = 17 * 60
-    return 30 + Math.floor((minutesSince7 / totalMinutesAfter7) * 253)
-})
-
-const runsToday = computed(() => {
-    const now = new Date()
-    const hour = now.getHours()
-    const minute = now.getMinutes()
-    const totalMinutes = hour * 60 + minute
-    return Math.floor(totalMinutes / 5)
-})
 
 // Methods
 async function loadExportsFromServer() {
@@ -331,7 +307,6 @@ async function loadExportsFromServer() {
             sheets_tab: 'Sheet1',
             status: exp.status || 'active',
             last_run: exp.last_run || new Date().toISOString().slice(0, 19).replace('T', ' '),
-            uptime: (99.5 + Math.random() * 0.5).toFixed(1),
             sheet_url: exp.sheets?.sheet_url || ''
         }))
     } catch (error) {
@@ -920,65 +895,6 @@ function initSortable() {
 
             const item = config.value.selected_fields.splice(oldIndex, 1)[0]
             config.value.selected_fields.splice(newIndex, 0, item)
-        }
-    })
-}
-
-function initUptimeChart() {
-    const canvas = document.getElementById('uptimeChart')
-    if (!canvas) return
-
-    const data = []
-    for (let i = 0; i < 30; i++) {
-        data.push(99.5 + Math.random() * 0.5)
-    }
-
-    const ctx = canvas.getContext('2d')
-
-    if (uptimeChart) {
-        uptimeChart.destroy()
-    }
-
-    uptimeChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: Array.from({length: 30}, (_, i) => `${i+1}`),
-            datasets: [{
-                label: 'Uptime %',
-                data: data,
-                borderColor: 'rgb(34, 197, 94)',
-                backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                tension: 0.4,
-                fill: true,
-                pointRadius: 0,
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        label: (context) => `Uptime: ${context.parsed.y.toFixed(2)}%`
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    min: 99,
-                    max: 100,
-                    ticks: {
-                        callback: (value) => value + '%'
-                    }
-                },
-                x: {
-                    display: false
-                }
-            }
         }
     })
 }
@@ -1773,10 +1689,6 @@ watch(currentPage, (newPage) => {
         nextTick(() => {
             initSortable()
         })
-    } else if (newPage === 'dashboard') {
-        nextTick(() => {
-            initUptimeChart()
-        })
     } else if (newPage === 'exports') {
         loadExportsFromServer()
     } else if (newPage === 'config') {
@@ -1815,13 +1727,6 @@ onMounted(async () => {
     setInterval(() => {
         updateTime()
     }, 1000)
-
-    // Init chart if on dashboard
-    if (currentPage.value === 'dashboard') {
-        nextTick(() => {
-            initUptimeChart()
-        })
-    }
 
     // Load companies (PR F3)
     await loadCompanies()
@@ -2027,7 +1932,6 @@ onBeforeUnmount(() => {
                                 <div class="text-xs md:text-sm text-purple-600">{{ lastSyncText }}</div>
                             </div>
                         </div>
-                        <p class="text-xs md:text-sm text-gray-600">Uruchomień dziś: <strong>{{ runsToday }}</strong></p>
                     </div>
                 </div>
 
@@ -2054,18 +1958,18 @@ onBeforeUnmount(() => {
                         <h3 class="text-base md:text-lg font-semibold mb-4">Statystyki</h3>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="text-center">
-                                <div class="text-2xl md:text-3xl font-bold text-blue-600">{{ ordersToday }}</div>
-                                <div class="text-xs md:text-sm text-gray-600 mt-1">Zamówień dziś</div>
-                            </div>
-                            <div class="text-center">
                                 <div class="text-2xl md:text-3xl font-bold text-blue-600">{{ activeExportsCount }}</div>
                                 <div class="text-xs md:text-sm text-gray-600 mt-1">Aktywne eksporty</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl md:text-3xl font-bold text-gray-600">{{ exportsList.length }}</div>
+                                <div class="text-xs md:text-sm text-gray-600 mt-1">Wszystkie eksporty</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Bottom row: Exports list + Uptime -->
+                <!-- Bottom row: Exports list + Integration status -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     <!-- Exports list -->
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
@@ -2083,13 +1987,33 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
 
-                    <!-- Mini uptime chart -->
+                    <!-- Integration status -->
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-                        <div class="flex items-center justify-between mb-3">
-                            <h3 class="text-base md:text-lg font-semibold">Uptime</h3>
-                            <span class="text-xl md:text-2xl font-bold text-green-600">{{ uptime }}%</span>
+                        <h3 class="text-base md:text-lg font-semibold mb-4">Status integracji</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium">BaseLinker</span>
+                                </div>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="integrationsStore.baselinker.configured ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'">
+                                    {{ integrationsStore.baselinkerStatus.text }}
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium">Google Sheets</span>
+                                </div>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Gotowe
+                                </span>
+                            </div>
                         </div>
-                        <canvas id="uptimeChart" height="100"></canvas>
                     </div>
                 </div>
             </div>
@@ -2116,7 +2040,6 @@ onBeforeUnmount(() => {
                                 <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nazwa</th>
                                 <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Typ</th>
                                 <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uptime</th>
                                 <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ostatnie uruchomienie</th>
                                 <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Arkusz</th>
                                 <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Akcje</th>
@@ -2137,9 +2060,6 @@ onBeforeUnmount(() => {
                                     <button @click="toggleExportStatus(exp)" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors" :class="exp.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'">
                                         {{ exp.status === 'active' ? 'Aktywny' : 'Wstrzymany' }}
                                     </button>
-                                </td>
-                                <td class="px-4 md:px-6 py-4">
-                                    <span class="text-sm font-medium text-green-600">{{ exp.uptime }}%</span>
                                 </td>
                                 <td class="px-4 md:px-6 py-4">
                                     <span class="text-sm text-gray-600">{{ formatLastRun(exp.last_run) }}</span>
