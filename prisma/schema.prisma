@@ -50,6 +50,7 @@ model Company {
   members           CompanyMember[]
   secrets           CompanySecret[]
   exports           Export[]        @relation("CompanyExports")
+  exportSheets      ExportSheet[]   // For unique constraint enforcement
   subscription      Subscription?   // One active subscription per company
 
   @@map("companies")
@@ -325,9 +326,17 @@ model ExportSheet {
   exportId        String
   export          Export   @relation(fields: [exportId], references: [id], onDelete: Cascade)
 
+  // Company ID for unique constraint (denormalized from Export for DB-level uniqueness)
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   sheetUrl        String
   sheetName       String?  // Optional: specific tab name
   writeMode       String   @default("append") // append, replace
+
+  // Normalized identifiers for unique constraint (extracted from sheetUrl)
+  spreadsheetId   String   // Google Sheets spreadsheet ID
+  gid             String   @default("0") // Sheet tab ID (gid parameter)
 
   // Order for multiple sheets
   sortOrder       Int      @default(0)
@@ -337,6 +346,9 @@ model ExportSheet {
 
   @@map("export_sheets")
   @@index([exportId])
+  @@index([companyId])
+  // Prevent duplicate sheet URLs within same company (DB-level protection)
+  @@unique([companyId, spreadsheetId, gid], name: "unique_sheet_per_company")
 }
 
 // Export Run Status - type-safe enum for export execution status

@@ -515,9 +515,9 @@ class ExportService {
       });
 
       if (existingSheet) {
-        // Check if GID also matches
+        // Check if both spreadsheetId AND gid match (exact match)
         const existingIdentifiers = this.extractSheetIdentifiers(existingSheet.sheetUrl);
-        if (existingIdentifiers.gid === gid) {
+        if (existingIdentifiers.spreadsheetId === spreadsheetId && existingIdentifiers.gid === gid) {
           return {
             isDuplicate: true,
             existingExportName: existingSheet.export.name,
@@ -539,8 +539,9 @@ class ExportService {
       });
 
       if (existingExport) {
+        // Check if both spreadsheetId AND gid match (exact match)
         const existingIdentifiers = this.extractSheetIdentifiers(existingExport.sheetsUrl);
-        if (existingIdentifiers.gid === gid) {
+        if (existingIdentifiers.spreadsheetId === spreadsheetId && existingIdentifiers.gid === gid) {
           return {
             isDuplicate: true,
             existingExportName: existingExport.name,
@@ -556,8 +557,10 @@ class ExportService {
         companyId,
         error: error.message
       });
-      // Fail-open: don't block export creation on validation error
-      return { isDuplicate: false, existingExportName: null };
+      // Fail-close: block export creation on validation error (security)
+      const validationError = new Error('Nie udało się zweryfikować unikalności arkusza. Spróbuj ponownie.');
+      validationError.code = 'DUPLICATE_CHECK_FAILED';
+      throw validationError;
     }
   }
 
@@ -676,13 +679,20 @@ class ExportService {
           });
 
           await prisma.exportSheet.createMany({
-            data: sheetsData.map((s, idx) => ({
-              exportId,
-              sheetUrl: s.sheet_url || s.sheetUrl,
-              sheetName: s.sheet_name || s.sheetName || null,
-              writeMode: s.write_mode || s.writeMode || 'append',
-              sortOrder: idx
-            }))
+            data: sheetsData.map((s, idx) => {
+              const url = s.sheet_url || s.sheetUrl;
+              const identifiers = this.extractSheetIdentifiers(url);
+              return {
+                exportId,
+                companyId, // For unique constraint
+                sheetUrl: url,
+                spreadsheetId: identifiers.spreadsheetId || '',
+                gid: identifiers.gid || '0',
+                sheetName: s.sheet_name || s.sheetName || null,
+                writeMode: s.write_mode || s.writeMode || 'append',
+                sortOrder: idx
+              };
+            })
           });
         }
       }

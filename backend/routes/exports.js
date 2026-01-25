@@ -274,8 +274,28 @@ router.post('/',
     } catch (error) {
       logger.error('Failed to save export', {
         error: error.message,
+        code: error.code,
         companyId: req.company?.id
       });
+
+      // Handle specific error codes
+      if (error.code === 'DUPLICATE_CHECK_FAILED') {
+        return res.status(503).json({
+          success: false,
+          error: error.message,
+          code: 'DUPLICATE_CHECK_FAILED'
+        });
+      }
+
+      // Handle Prisma unique constraint violation (race condition fallback)
+      if (error.code === 'P2002' && error.meta?.target?.includes('unique_sheet_per_company')) {
+        return res.status(400).json({
+          success: false,
+          error: 'Ten arkusz jest już używany przez inny eksport w Twojej firmie.',
+          code: 'DUPLICATE_SHEET_URL'
+        });
+      }
+
       res.status(500).json({
         success: false,
         error: error.message
