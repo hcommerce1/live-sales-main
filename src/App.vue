@@ -7,8 +7,7 @@ import emailjs from '@emailjs/browser'
 
 // Export Wizard components
 import ExportWizard from './components/ExportWizard.vue'
-// Auth components
-import LoginForm from './components/LoginForm.vue'
+// Auth components (LoginForm removed - using login.html instead)
 import SecurityTab from './components/SecurityTab.vue'
 
 // Plans component (single view - A/B test concluded, using Highlights variant)
@@ -32,7 +31,7 @@ emailjs.init("AJZSalcoaqOoF-Qxe")
 // Auth state derived from store
 const isAuthChecking = computed(() => authStore.authState === 'CHECKING')
 const isAuthenticated = computed(() => authStore.authState === 'AUTHENTICATED')
-const requires2FA = computed(() => authStore.authState === '2FA_REQUIRED')
+// requires2FA removed - 2FA now handled by login.html
 
 // State
 const currentPage = ref('dashboard')
@@ -1805,8 +1804,9 @@ onMounted(async () => {
         setTimeout(() => initialLoader.remove(), 300)
     }
 
-    // If not authenticated, stop here - LoginForm will handle login
+    // If not authenticated, redirect to login.html
     if (!isAuthenticated.value) {
+        window.location.href = '/login.html'
         return
     }
 
@@ -1865,13 +1865,7 @@ onBeforeUnmount(() => {
             </div>
         </div>
 
-        <!-- Login Form - shown when not authenticated or 2FA required -->
-        <LoginForm
-            v-else-if="!isAuthenticated || requires2FA"
-            :initial-mode="requires2FA ? '2fa' : 'login'"
-        />
-
-        <!-- Main App Content - only shown when authenticated -->
+        <!-- Main App Content - only shown when authenticated (login handled by /login.html) -->
         <template v-else-if="isAuthenticated && !isAuthChecking">
             <!-- Sidebar -->
             <div class="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm z-50">
