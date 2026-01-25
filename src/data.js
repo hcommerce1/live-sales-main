@@ -268,3 +268,69 @@ export const MOCK_DATA = {
         }
     ]
 };
+
+// Przykładowe konfiguracje eksportów do użycia jako szablony
+export const SAMPLE_EXPORTS = [
+    {
+        id: 'sample-1',
+        name: '[PRZYKŁADOWY] Zamówienia - podstawowe dane',
+        description: 'Podstawowe informacje o zamówieniach: numer, data, klient, kwota, status',
+        dataset: 'orders',
+        selectedFields: [
+            'order_id',
+            'date_add',
+            'order_status_id',
+            'total_price',
+            'currency',
+            'email',
+            'phone',
+            'delivery_fullname',
+            'delivery_address',
+            'delivery_city',
+            'delivery_postcode',
+            'payment_method',
+            'delivery_method'
+        ],
+        filters: {},
+        scheduleMinutes: 15
+    },
+    {
+        id: 'sample-2',
+        name: '[PRZYKŁADOWY] Zamówienia - dane do faktur',
+        description: 'Zamówienia z pełnymi danymi do fakturowania (NIP, adres firmy)',
+        dataset: 'orders',
+        selectedFields: [
+            'order_id',
+            'date_add',
+            'total_price',
+            'currency',
+            'invoice_fullname',
+            'invoice_nip',
+            'invoice_address',
+            'invoice_city',
+            'invoice_postcode',
+            'email',
+            'phone'
+        ],
+        filters: {},
+        scheduleMinutes: 60
+    },
+    {
+        id: 'sample-3',
+        name: '[PRZYKŁADOWY] Produkty - stan magazynowy',
+        description: 'Lista produktów ze stanem magazynowym i cenami',
+        dataset: 'products',
+        selectedFields: [
+            'product_id',
+            'name',
+            'sku',
+            'ean',
+            'quantity',
+            'price_brutto',
+            'stock',
+            'location'
+        ],
+        filters: {},
+        scheduleMinutes: 60
+    }
+];

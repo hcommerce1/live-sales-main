@@ -282,6 +282,10 @@ const props = defineProps({
     type: String,
     default: null
   },
+  templateData: {
+    type: Object,
+    default: null
+  },
   existingExports: {
     type: Array,
     default: () => []
@@ -607,6 +611,25 @@ async function loadOrderSources() {
 }
 
 async function loadExistingExport() {
+  // Load from template if provided (for sample exports)
+  if (props.templateData) {
+    config.value = {
+      id: null,
+      name: props.templateData.name || 'Nowy eksport',
+      description: '',
+      dataset: props.templateData.dataset || 'orders',
+      selected_fields: props.templateData.selectedFields || [],
+      filters: props.templateData.filters || {
+        logic: 'AND',
+        groups: [{ logic: 'AND', conditions: [{ field: '', operator: '', value: '' }] }]
+      },
+      sheets_config: [{ sheet_url: '', write_mode: 'replace' }],
+      schedule_minutes: props.templateData.scheduleMinutes || 15,
+      status: 'active'
+    }
+    return
+  }
+
   if (!props.exportId) return
 
   try {

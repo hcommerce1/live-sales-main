@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { MOCK_DATA } from './data.js'
+import { MOCK_DATA, SAMPLE_EXPORTS } from './data.js'
 import { API } from './api.js'
 import Sortable from 'sortablejs'
 import emailjs from '@emailjs/browser'
@@ -87,6 +87,7 @@ const isLoading = ref(false)
 
 // === Export Wizard State ===
 const wizardEditingExportId = ref(null)  // null = new export, string = editing existing
+const wizardTemplateData = ref(null)     // template data for prefilling wizard
 
 // Configuration page
 const baselinkerToken = ref('')
@@ -157,6 +158,49 @@ const exportsList = computed(() => {
 
 const activeExportsCount = computed(() => {
     return exportsList.value.filter(e => e.status === 'active').length
+})
+
+// Google Sheets status - based on whether any export has a sheets URL configured
+const googleSheetsConfigured = computed(() => {
+    return exportsList.value.some(e => e.sheetsUrl && e.sheetsUrl.trim() !== '')
+})
+
+// === Onboarding Checklist ===
+const onboardingChecklist = computed(() => [
+    {
+        id: 'token',
+        label: 'Dodaj token BaseLinker',
+        done: integrationsStore.baselinker.configured,
+        action: 'config'
+    },
+    {
+        id: 'export',
+        label: 'Utwórz pierwszy eksport',
+        done: exportsList.value.length > 0,
+        action: 'create-export'
+    },
+    {
+        id: 'sheets',
+        label: 'Podepnij arkusz Google Sheets',
+        done: googleSheetsConfigured.value,
+        action: null
+    },
+    {
+        id: 'run',
+        label: 'Uruchom pierwszy eksport',
+        done: exportsList.value.some(e => e.lastRun),
+        action: null
+    }
+])
+
+const onboardingProgress = computed(() => {
+    const done = onboardingChecklist.value.filter(item => item.done).length
+    const total = onboardingChecklist.value.length
+    return { done, total, percent: Math.round((done / total) * 100) }
+})
+
+const showOnboardingChecklist = computed(() => {
+    return onboardingChecklist.value.some(item => !item.done)
 })
 
 const availableFields = computed(() => {
@@ -596,6 +640,20 @@ async function saveConfig() {
 function createNewExport() {
     // Open the new export wizard instead of old configurator
     wizardEditingExportId.value = null
+    wizardTemplateData.value = null
+    currentPage.value = 'wizard'
+}
+
+function useTemplate(template) {
+    // Open wizard with template data prefilled
+    wizardEditingExportId.value = null
+    wizardTemplateData.value = {
+        name: template.name.replace('[PRZYKŁADOWY] ', ''),
+        dataset: template.dataset,
+        selectedFields: [...template.selectedFields],
+        filters: { ...template.filters },
+        scheduleMinutes: template.scheduleMinutes
+    }
     currentPage.value = 'wizard'
 }
 
@@ -1842,12 +1900,6 @@ onBeforeUnmount(() => {
                     <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Firma</span>
                 </div>
 
-                <a href="#" @click.prevent="currentPage = 'team'" :class="{'active': currentPage === 'team'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                    </svg>
-                    Zespół
-                </a>
                 <a href="#" @click.prevent="currentPage = 'subscription'" :class="{'active': currentPage === 'subscription'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
@@ -1896,48 +1948,51 @@ onBeforeUnmount(() => {
                 <h1 class="text-2xl md:text-3xl font-bold mb-2">Dashboard</h1>
                 <p class="text-gray-600 mb-6 md:mb-8">Przegląd integracji i synchronizacji</p>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-10 h-10 md:w-12 md:h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                                <svg class="w-5 h-5 md:w-6 md:h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                <!-- Onboarding Checklist -->
+                <div v-if="showOnboardingChecklist" class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-4 md:p-6 mb-6 md:mb-8">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
                                 </svg>
                             </div>
                             <div>
-                                <div class="font-semibold text-sm md:text-base">Integracja BaseLinker</div>
-                                <div class="text-xs md:text-sm text-green-600">Połączone</div>
+                                <h3 class="text-lg font-semibold text-gray-900">Rozpocznij konfigurację</h3>
+                                <p class="text-sm text-gray-600">{{ onboardingProgress.done }}/{{ onboardingProgress.total }} kroków ukończonych</p>
                             </div>
                         </div>
-                        <p class="text-xs md:text-sm text-gray-600">Status: <strong>OK</strong></p>
-                    </div>
-
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                <svg class="w-5 h-5 md:w-6 md:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                </svg>
-                            </div>
-                            <div>
-                                <div class="font-semibold text-sm md:text-base">Google Sheets</div>
-                                <div class="text-xs md:text-sm text-blue-600">Gotowe</div>
+                        <div class="hidden md:block">
+                            <div class="w-32 h-2 bg-blue-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-blue-600 rounded-full transition-all duration-500" :style="{ width: onboardingProgress.percent + '%' }"></div>
                             </div>
                         </div>
-                        <p class="text-xs md:text-sm text-gray-600">Arkuszy: <strong>3</strong></p>
                     </div>
 
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-10 h-10 md:w-12 md:h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                                <svg class="w-5 h-5 md:w-6 md:h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div v-for="item in onboardingChecklist" :key="item.id"
+                             class="flex items-center gap-3 p-3 rounded-lg transition-colors"
+                             :class="item.done ? 'bg-green-50' : 'bg-white'">
+                            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                                 :class="item.done ? 'bg-green-500' : 'bg-gray-200'">
+                                <svg v-if="item.done" class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                 </svg>
+                                <span v-else class="text-xs font-medium text-gray-500">{{ onboardingChecklist.indexOf(item) + 1 }}</span>
                             </div>
-                            <div>
-                                <div class="font-semibold text-sm md:text-base">Ostatnia synchronizacja</div>
-                                <div class="text-xs md:text-sm text-purple-600">{{ lastSyncText }}</div>
-                            </div>
+                            <span class="flex-1 text-sm" :class="item.done ? 'text-green-700 line-through' : 'text-gray-700'">
+                                {{ item.label }}
+                            </span>
+                            <button v-if="!item.done && item.action === 'config'"
+                                    @click="currentPage = 'config'"
+                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                Konfiguruj →
+                            </button>
+                            <button v-if="!item.done && item.action === 'create-export'"
+                                    @click="createNewExport"
+                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                Utwórz →
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -2011,13 +2066,13 @@ onBeforeUnmount(() => {
                             </div>
                             <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                 <div class="flex items-center gap-2">
-                                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-5 h-5" :class="googleSheetsConfigured ? 'text-green-600' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                     </svg>
                                     <span class="text-sm font-medium">Google Sheets</span>
                                 </div>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Gotowe
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="googleSheetsConfigured ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'">
+                                    {{ googleSheetsConfigured ? 'Skonfigurowane' : 'Brak eksportów' }}
                                 </span>
                             </div>
                         </div>
@@ -2038,6 +2093,40 @@ onBeforeUnmount(() => {
                         </svg>
                         Nowy eksport
                     </button>
+                </div>
+
+                <!-- Przykładowe konfiguracje -->
+                <div v-if="exportsList.length === 0" class="mb-6 md:mb-8">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Przykładowe konfiguracje</h3>
+                    <p class="text-sm text-gray-600 mb-4">Wybierz gotowy szablon i dostosuj go do swoich potrzeb. Wystarczy podpiąć arkusz Google Sheets.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div v-for="template in SAMPLE_EXPORTS" :key="template.id"
+                             class="bg-white rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-400 p-4 transition-colors cursor-pointer group"
+                             @click="useTemplate(template)">
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                                     :class="template.dataset === 'orders' ? 'bg-blue-100' : 'bg-green-100'">
+                                    <svg class="w-5 h-5" :class="template.dataset === 'orders' ? 'text-blue-600' : 'text-green-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path v-if="template.dataset === 'orders'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                                        <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-medium text-gray-900 text-sm group-hover:text-blue-600 transition-colors">
+                                        {{ template.name.replace('[PRZYKŁADOWY] ', '') }}
+                                    </h4>
+                                    <p class="text-xs text-gray-500 mt-1">{{ template.description }}</p>
+                                    <div class="flex items-center gap-2 mt-2">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                                              :class="template.dataset === 'orders' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'">
+                                            {{ template.dataset === 'orders' ? 'Zamówienia' : 'Produkty' }}
+                                        </span>
+                                        <span class="text-xs text-gray-400">{{ template.selectedFields.length }} pól</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
@@ -2535,107 +2624,6 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <!-- ZESPÓŁ (PR F3) -->
-            <div v-if="currentPage === 'team'" class="p-4 md:p-8">
-                <div class="max-w-4xl mx-auto">
-                    <h1 class="text-2xl md:text-3xl font-bold mb-2">Zespół</h1>
-                    <p class="text-sm md:text-base text-gray-600 mb-8">Zarządzaj członkami zespołu i uprawnieniami</p>
-
-                    <!-- Invite Form -->
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-                        <h2 class="text-lg font-semibold mb-4">Zaproś nowego członka</h2>
-                        <div class="flex flex-col md:flex-row gap-4">
-                            <div class="flex-1">
-                                <input
-                                    v-model="teamInviteEmail"
-                                    type="email"
-                                    placeholder="Adres email"
-                                    class="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
-                                >
-                            </div>
-                            <div class="w-full md:w-48">
-                                <select
-                                    v-model="teamInviteRole"
-                                    class="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors bg-white"
-                                >
-                                    <option value="member">Członek</option>
-                                    <option value="admin">Administrator</option>
-                                </select>
-                            </div>
-                            <button
-                                @click="inviteTeamMember"
-                                :disabled="teamInviteLoading"
-                                class="w-full md:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                            >
-                                <svg v-if="teamInviteLoading" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                                </svg>
-                                <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                                </svg>
-                                Zaproś
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Team Members List -->
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div class="px-6 py-4 border-b border-gray-200">
-                            <h2 class="text-lg font-semibold">Członkowie zespołu ({{ teamMembers.length }})</h2>
-                        </div>
-
-                        <div v-if="teamMembers.length === 0" class="p-8 text-center text-gray-500">
-                            <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                            </svg>
-                            <p>Brak członków zespołu</p>
-                        </div>
-
-                        <div v-else class="divide-y divide-gray-200">
-                            <div v-for="member in teamMembers" :key="member.id" class="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
-                                <div class="flex items-center gap-4">
-                                    <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium">
-                                        {{ member.user?.email?.charAt(0).toUpperCase() || '?' }}
-                                    </div>
-                                    <div>
-                                        <p class="font-medium text-gray-900">{{ member.user?.email || 'Oczekuje' }}</p>
-                                        <p class="text-sm text-gray-500">Dołączył: {{ formatDate(member.joinedAt || member.invitedAt) }}</p>
-                                    </div>
-                                </div>
-
-                                <div class="flex items-center gap-4">
-                                    <span :class="getRoleBadgeClass(member.role)" class="px-3 py-1 rounded-full text-xs font-medium">
-                                        {{ getRoleLabel(member.role) }}
-                                    </span>
-
-                                    <div v-if="member.role !== 'owner'" class="flex items-center gap-2">
-                                        <select
-                                            :value="member.role"
-                                            @change="changeTeamMemberRole(member.id, $event.target.value)"
-                                            class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none bg-white"
-                                        >
-                                            <option value="member">Członek</option>
-                                            <option value="admin">Administrator</option>
-                                        </select>
-
-                                        <button
-                                            @click="removeTeamMember(member.id)"
-                                            class="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded-lg transition-colors"
-                                            title="Usuń członka"
-                                        >
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                            </svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- SUBSKRYPCJA (PR F3.1 - Enhanced) -->
             <div v-if="currentPage === 'subscription'" class="p-4 md:p-8">
                 <div class="max-w-5xl mx-auto">
@@ -3000,6 +2988,7 @@ onBeforeUnmount(() => {
             <ExportWizard
                 v-if="currentPage === 'wizard'"
                 :export-id="wizardEditingExportId"
+                :template-data="wizardTemplateData"
                 :existing-exports="exportsListServer"
                 @save="handleWizardSave"
                 @save-draft="handleWizardSaveDraft"
