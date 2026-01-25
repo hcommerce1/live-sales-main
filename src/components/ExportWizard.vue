@@ -529,10 +529,21 @@ function checkDuplicateUrl() {
   const uniqueKeys = new Set(currentSheetKeys)
   duplicateInSameExport.value = uniqueKeys.size < currentSheetKeys.length
 
-  // Check for duplicates in other exports
+  // Check for duplicates in other exports (support both sheets[] and legacy sheetsUrl)
   const otherSheetKeys = props.existingExports
     .filter(e => e.id !== config.value.id)
-    .flatMap(e => e.sheets?.map(s => getSheetKey(s.sheet_url)) || [])
+    .flatMap(e => {
+      const keys = []
+      // New format: sheets array
+      if (e.sheets?.length) {
+        keys.push(...e.sheets.map(s => getSheetKey(s.sheet_url || s.sheetUrl)))
+      }
+      // Legacy format: single sheetsUrl
+      if (e.sheetsUrl) {
+        keys.push(getSheetKey(e.sheetsUrl))
+      }
+      return keys
+    })
     .filter(Boolean)
 
   const duplicateInOtherExport = currentSheetKeys.some(key => otherSheetKeys.includes(key))
