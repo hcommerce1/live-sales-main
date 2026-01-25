@@ -98,24 +98,8 @@
         </div>
       </div>
 
-      <!-- Step 2: Filters -->
+      <!-- Step 2: Target Sheets (was Step 3) -->
       <div v-else-if="currentStep === 1" class="h-full flex flex-col">
-        <p class="text-sm text-gray-500 mb-4 flex-shrink-0">
-          Opcjonalne - ustaw warunki filtrowania danych.
-        </p>
-        <div class="flex-1 overflow-auto">
-          <FilterBuilder
-            v-model="config.filters"
-            :fields="currentDatasetFields"
-            :operators="fieldDefinitions.operators || []"
-            :order-statuses="orderStatuses"
-            :order-sources="orderSources"
-          />
-        </div>
-      </div>
-
-      <!-- Step 3: Target Sheets -->
-      <div v-else-if="currentStep === 2" class="h-full flex flex-col">
         <p class="text-sm text-gray-500 mb-4 flex-shrink-0">
           Podaj link do arkusza Google Sheets.
         </p>
@@ -137,8 +121,8 @@
         </div>
       </div>
 
-      <!-- Step 4: Summary -->
-      <div v-else-if="currentStep === 3" class="h-full flex flex-col">
+      <!-- Step 3: Summary (was Step 4) -->
+      <div v-else-if="currentStep === 2" class="h-full flex flex-col">
         <div class="grid grid-cols-2 gap-6 flex-1">
           <!-- Left: Form -->
           <div class="flex flex-col gap-4">
@@ -342,10 +326,9 @@ const config = ref({
   status: 'active'
 })
 
-// Steps definition
+// Steps definition (Step 2 "Filtry" hidden - backend support preserved)
 const steps = [
   { label: 'Dane', description: 'Wybierz typ danych i pola' },
-  { label: 'Filtry', description: 'Filtrowanie (opcjonalne)' },
   { label: 'Arkusz', description: 'Konfiguracja arkusza' },
   { label: 'Zapisz', description: 'Nazwa i zapis' }
 ]
@@ -387,13 +370,11 @@ const currentDatasetFields = computed(() => {
 
 const canProceed = computed(() => {
   switch (currentStep.value) {
-    case 0:
+    case 0: // Dane
       return config.value.dataset && config.value.selected_fields.length > 0
-    case 1:
-      return true // Filters are optional
-    case 2:
+    case 1: // Arkusz (was case 2)
       return config.value.sheets_config?.some(s => s.sheet_url?.trim()) && !duplicateSheetWarning.value
-    default:
+    default: // Zapisz
       return true
   }
 })

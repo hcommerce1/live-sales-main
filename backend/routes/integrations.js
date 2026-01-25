@@ -17,6 +17,7 @@ const router = express.Router();
 const { z } = require('zod');
 
 const logger = require('../utils/logger');
+const authMiddleware = require('../middleware/auth');
 const { companyContextMiddleware, requireCompany, requireCompanyRole } = require('../middleware/companyContext');
 const { featureFlagMiddleware } = require('../middleware/featureFlag');
 const companySecretService = require('../services/companySecret.service');
@@ -34,6 +35,7 @@ const baselinkerTokenSchema = z.object({
 // Middleware
 // ============================================
 
+router.use(authMiddleware.authenticate());
 router.use(companyContextMiddleware);
 router.use(requireCompany);
 

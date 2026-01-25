@@ -11,6 +11,13 @@ import ExportWizard from './components/ExportWizard.vue'
 import LoginForm from './components/LoginForm.vue'
 import SecurityTab from './components/SecurityTab.vue'
 
+// Plans A/B Test Variants
+import PlansVariantA from './components/plans/PlansVariantA.vue'
+import PlansVariantB from './components/plans/PlansVariantB.vue'
+import PlansVariantC from './components/plans/PlansVariantC.vue'
+import PlansVariantD from './components/plans/PlansVariantD.vue'
+import PlansVariantE from './components/plans/PlansVariantE.vue'
+
 // Pinia stores
 import { useAuthStore } from './stores/auth'
 import { useExportsStore } from './stores/exports'
@@ -137,6 +144,21 @@ const portalLoading = ref(false)
 
 // Billing interval toggle
 const selectedInterval = ref('monthly')
+
+// Plans A/B Test variant switcher
+const plansVariant = ref(localStorage.getItem('plansVariant') || 'A')
+const plansVariants = {
+  A: { component: PlansVariantA, name: 'Klasyczny' },
+  B: { component: PlansVariantB, name: 'Tabela' },
+  C: { component: PlansVariantC, name: 'Kategorie' },
+  D: { component: PlansVariantD, name: 'Minimalistyczny' },
+  E: { component: PlansVariantE, name: 'Highlights' }
+}
+const currentPlansVariantComponent = computed(() => plansVariants[plansVariant.value]?.component || PlansVariantA)
+function setPlansVariant(variant) {
+  plansVariant.value = variant
+  localStorage.setItem('plansVariant', variant)
+}
 
 // Error handling with recovery (type + payload pattern)
 const billingError = ref(null) // { message, action?: { type, ...payload } }
@@ -986,6 +1008,9 @@ async function saveBaselinkerToken() {
             })
         })
 
+        // Refresh integrations status to update onboarding checklist
+        await integrationsStore.fetchStatus()
+
         tokenSaved.value = true
         setTimeout(() => {
             tokenSaved.value = false
@@ -1671,9 +1696,10 @@ function getOriginalYearlyPrice(plan) {
     const monthlyRaw = plan?.price?.monthlyRaw
     if (!monthlyRaw || monthlyRaw <= 0) return null
 
-    const originalYearly = monthlyRaw * 12
-    // Format as PLN
-    return `${originalYearly} zł`
+    // monthlyRaw is in grosze, convert to PLN
+    const originalYearly = (monthlyRaw * 12) / 100
+    // Format as PLN with comma decimal separator
+    return `${originalYearly.toFixed(2).replace('.', ',')} zł`
 }
 
 // === Helper: Calculate trial days remaining (null-safe) ===
@@ -2907,77 +2933,42 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
 
-                    <!-- Plans -->
-                    <h2 class="text-xl font-semibold mb-4">Dostępne plany</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div v-for="plan in plans" :key="plan.id"
-                             class="bg-white rounded-xl shadow-sm border-2 p-6 flex flex-col"
-                             :class="plan.id === subscription?.planId ? 'border-blue-500' : 'border-gray-200'">
-                            <div v-if="plan.id === subscription?.planId" class="text-xs text-blue-600 font-medium mb-2">AKTUALNY PLAN</div>
-                            <h3 class="text-lg font-bold mb-2">{{ plan.name }}</h3>
-                            <!-- Przekreślona cena oryginalna (przy rocznym) -->
-                            <div v-if="selectedInterval === 'yearly' && plan.price?.yearlyRaw > 0 && getSavingsPercent(plan)" class="mb-1">
-                                <span class="text-lg text-gray-400 line-through">{{ getOriginalYearlyPrice(plan) }}</span>
-                            </div>
-                            <div class="text-3xl font-bold mb-1" :class="plan.price?.monthlyRaw === 0 ? 'text-gray-600' : 'text-blue-600'">
-                                {{ getPlanPrice(plan) }}
-                                <span v-if="plan.price?.monthlyRaw > 0" class="text-sm text-gray-600">/{{ selectedInterval === 'monthly' ? 'mies' : 'rok' }}</span>
-                            </div>
-                            <p v-if="selectedInterval === 'yearly' && plan.price?.yearlyRaw > 0 && getSavingsPercent(plan)"
-                               class="text-sm text-green-600 mb-4">
-                                Oszczędzasz {{ getSavingsPercent(plan) }}% rocznie
-                            </p>
-                            <div v-else class="mb-4"></div>
-
-                            <ul class="text-sm space-y-2 mb-6 flex-1">
-                                <li v-for="(value, feature) in plan.features" :key="feature" class="flex items-start gap-2">
-                                    <svg v-if="value === true || (typeof value === 'number' && value > 0)" class="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                    <svg v-else class="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                                    </svg>
-                                    <span>{{ feature.replace(/\./g, ' ').replace(/_/g, ' ') }}: {{ typeof value === 'boolean' ? (value ? 'Tak' : 'Nie') : value }}</span>
-                                </li>
-                            </ul>
-
-                            <button
-                                v-if="plan.id !== 'free' && plan.id !== subscription?.planId"
-                                @click="requestPlanChange(plan.id)"
-                                :disabled="isAnyBillingLoading() || !isPlanAvailableForInterval(plan)"
-                                :title="!isPlanAvailableForInterval(plan) ? 'Niedostępne w tym interwale rozliczeniowym' : ''"
-                                class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    <!-- Plans Header with Variant Switcher -->
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold">Dostępne plany</h2>
+                        <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg">
+                            <span class="text-xs text-gray-500">Widok:</span>
+                            <select
+                                :value="plansVariant"
+                                @change="setPlansVariant($event.target.value)"
+                                class="text-xs font-medium text-gray-700 bg-transparent border-0 focus:ring-0 cursor-pointer pr-6 outline-none"
                             >
-                                {{ !isPlanAvailableForInterval(plan) ? 'Niedostępne' : (subscription?.planId && subscription.planId !== 'free' ? 'Zmień plan' : 'Wybierz plan') }}
-                            </button>
-                            <div v-else-if="plan.id === subscription?.planId" class="w-full bg-gray-100 text-gray-600 px-6 py-3 rounded-lg text-center font-medium">
-                                Twój plan
-                            </div>
-                            <div v-else class="w-full bg-gray-50 text-gray-500 px-6 py-3 rounded-lg text-center font-medium">
-                                Plan darmowy
-                            </div>
+                                <option v-for="(variant, key) in plansVariants" :key="key" :value="key">
+                                    {{ variant.name }}
+                                </option>
+                            </select>
                         </div>
                     </div>
+
+                    <!-- Dynamic Plans Variant Component -->
+                    <component
+                        :is="currentPlansVariantComponent"
+                        :plans="plans"
+                        :current-plan-id="subscription?.planId"
+                        :selected-interval="selectedInterval"
+                        :is-loading="isAnyBillingLoading()"
+                        @select-plan="requestPlanChange"
+                    />
 
                     <!-- Capabilities -->
                     <div v-if="capabilities?.limits" class="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <h2 class="text-lg font-semibold mb-4">Twoje limity</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div v-if="capabilities.limits.exports" class="p-4 bg-gray-50 rounded-lg">
-                                <p class="text-sm text-gray-600">Eksporty</p>
-                                <p class="text-xl font-bold">{{ capabilities.limits.exports.used || 0 }} / {{ capabilities.limits.exports.max || 0 }}</p>
-                                <div class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div class="h-full bg-blue-600 rounded-full transition-all"
-                                         :style="{ width: `${capabilities.limits.exports.max ? Math.min(100, ((capabilities.limits.exports.used || 0) / capabilities.limits.exports.max) * 100) : 0}%` }"></div>
-                                </div>
-                            </div>
-                            <div v-if="capabilities.limits.teamMembers" class="p-4 bg-gray-50 rounded-lg">
-                                <p class="text-sm text-gray-600">Członkowie zespołu</p>
-                                <p class="text-xl font-bold">{{ capabilities.limits.teamMembers.used || 0 }} / {{ capabilities.limits.teamMembers.max || 0 }}</p>
-                                <div class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div class="h-full bg-blue-600 rounded-full transition-all"
-                                         :style="{ width: `${capabilities.limits.teamMembers.max ? Math.min(100, ((capabilities.limits.teamMembers.used || 0) / capabilities.limits.teamMembers.max) * 100) : 0}%` }"></div>
-                                </div>
+                        <div v-if="capabilities.limits.exports" class="p-4 bg-gray-50 rounded-lg">
+                            <p class="text-sm text-gray-600">Eksporty</p>
+                            <p class="text-xl font-bold">{{ capabilities.limits.exports.used || 0 }} / {{ capabilities.limits.exports.max || 0 }}</p>
+                            <div class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-blue-600 rounded-full transition-all"
+                                     :style="{ width: `${capabilities.limits.exports.max ? Math.min(100, ((capabilities.limits.exports.used || 0) / capabilities.limits.exports.max) * 100) : 0}%` }"></div>
                             </div>
                         </div>
                     </div>

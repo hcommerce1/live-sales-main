@@ -283,7 +283,9 @@ function getAllPlanIds() {
  * @returns {boolean}
  */
 function isValidPlan(planId) {
-  return Object.prototype.hasOwnProperty.call(PLANS, planId);
+  // Use whitelist to prevent prototype pollution
+  const VALID_PLAN_IDS = ['free', 'basic', 'pro'];
+  return VALID_PLAN_IDS.includes(planId);
 }
 
 /**

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const authMiddleware = require('../middleware/auth');
-const { companyContextMiddleware } = require('../middleware/companyContext');
+const { companyContextMiddleware, requireCompanyRole } = require('../middleware/companyContext');
 const crypto = require('../utils/crypto');
 const logger = require('../utils/logger');
 
@@ -16,7 +16,7 @@ const prisma = new PrismaClient();
  * - CompanySecret (for multi-company support) - primary
  * - User.baselinkerToken (legacy compatibility) - secondary
  */
-router.post('/baselinker-token', authMiddleware.authenticate(), companyContextMiddleware, async (req, res) => {
+router.post('/baselinker-token', authMiddleware.authenticate(), companyContextMiddleware, requireCompanyRole('owner', 'admin'), async (req, res) => {
   try {
     logger.info('BaseLinker token save request received', {
       userId: req.user?.id,
