@@ -1072,7 +1072,7 @@ async function logout() {
 async function loadCompanies() {
     try {
         const result = await API.company.getMyCompanies()
-        companies.value = result.companies || []
+        companies.value = result.data?.companies || result.companies || []
 
         // Set active company if not set
         const activeId = API.getActiveCompanyId()
@@ -1115,6 +1115,10 @@ function selectCompany(companyId) {
 
 // --- Team Methods ---
 async function loadTeamMembers() {
+    if (!API.getActiveCompanyId()) {
+        teamMembers.value = []
+        return
+    }
     try {
         const result = await API.team.getMembers()
         teamMembers.value = result.members || []
@@ -1188,6 +1192,11 @@ async function loadPlans() {
 }
 
 async function loadSubscription() {
+    if (!API.getActiveCompanyId()) {
+        subscription.value = null
+        hasStripeCustomer.value = false
+        return
+    }
     try {
         const result = await API.billing.getSubscription()
         subscription.value = result.subscription
@@ -1200,6 +1209,10 @@ async function loadSubscription() {
 }
 
 async function loadCapabilities() {
+    if (!API.getActiveCompanyId()) {
+        capabilities.value = null
+        return
+    }
     try {
         const result = await API.features.getCapabilities()
         capabilities.value = result
@@ -1210,6 +1223,10 @@ async function loadCapabilities() {
 }
 
 async function loadTrialStatus() {
+    if (!API.getActiveCompanyId()) {
+        trialStatus.value = null
+        return
+    }
     try {
         const result = await API.billing.getTrialStatus()
         trialStatus.value = result
@@ -1289,6 +1306,11 @@ async function refreshBillingDataSafe() {
 
 // Load member role for current user
 async function loadMemberRole() {
+    if (!API.getActiveCompanyId()) {
+        memberRole.value = null
+        memberRoleLoading.value = false
+        return
+    }
     // Nie ustawiaj true tutaj - już jest true na start
     try {
         const result = await API.team.getMembers()
