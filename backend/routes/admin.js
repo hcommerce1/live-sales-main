@@ -12,6 +12,8 @@ const router = express.Router();
 const featureFlags = require('../utils/feature-flags');
 const logger = require('../utils/logger');
 const { isValidFlag, getAllFlagNames } = require('../config/feature-flags.config');
+const webhookService = require('../services/webhook.service');
+const webhookQueue = require('../services/queue');
 
 /**
  * Check if user has admin access
@@ -292,6 +294,141 @@ router.get('/feature-flags/:flagName/check', requireAdminAccess, async (req, res
     res.status(500).json({
       error: 'Failed to check feature flag',
       code: 'CHECK_FAILED',
+    });
+  }
+});
+
+// ============================================
+// Webhook Management Endpoints
+// ============================================
+
+/**
+ * POST /api/admin/webhooks/retry
+ * Retry failed webhook events
+ *
+ * Body:
+ *   - stripeEventId: string (optional) - retry specific event
+ *   - maxEvents: number (optional) - max events to retry (default: 10)
+ */
+router.post('/webhooks/retry', requireAdminAccess, async (req, res) => {
+  try {
+    const { stripeEventId, maxEvents = 10 } = req.body;
+
+    // Audit log
+    logger.info('Admin webhook retry requested', {
+      level: 'SECURITY',
+      action: 'WEBHOOK_MANUAL_RETRY',
+      userId: req.user.id,
+      userEmail: req.user.email,
+      stripeEventId: stripeEventId || 'batch',
+      maxEvents,
+      ip: req.ip,
+    });
+
+    if (stripeEventId) {
+      // Retry specific event
+      await webhookService.processWebhookEvent(stripeEventId);
+
+      return res.json({
+        success: true,
+        retried: 1,
+        stripeEventId,
+      });
+    }
+
+    // Retry batch of failed events
+    const count = await webhookService.retryFailedEvents(maxEvents);
+
+    res.json({
+      success: true,
+      retried: count,
+      maxEvents,
+    });
+  } catch (error) {
+    logger.error('Failed to retry webhooks', {
+      error: error.message,
+      userId: req.user.id,
+      body: req.body,
+    });
+
+    res.status(500).json({
+      error: 'Failed to retry webhook events',
+      code: 'RETRY_FAILED',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/admin/webhooks/queue
+ * Get webhook queue metrics
+ */
+router.get('/webhooks/queue', requireAdminAccess, async (req, res) => {
+  try {
+    const metrics = await webhookQueue.getQueueMetrics();
+
+    res.json({
+      success: true,
+      ...metrics,
+    });
+  } catch (error) {
+    logger.error('Failed to get queue metrics', {
+      error: error.message,
+      userId: req.user.id,
+    });
+
+    res.status(500).json({
+      error: 'Failed to get queue metrics',
+      code: 'METRICS_FAILED',
+    });
+  }
+});
+
+/**
+ * GET /api/admin/webhooks/failed
+ * Get list of failed webhook events
+ *
+ * Query params:
+ *   - limit: number (default: 20)
+ */
+router.get('/webhooks/failed', requireAdminAccess, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 20;
+
+    // Lazy load Prisma
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+
+    const failedEvents = await prisma.stripeWebhookEvent.findMany({
+      where: { status: 'failed' },
+      orderBy: { receivedAt: 'desc' },
+      take: Math.min(limit, 100),
+      select: {
+        id: true,
+        stripeEventId: true,
+        eventType: true,
+        status: true,
+        errorMessage: true,
+        retryCount: true,
+        receivedAt: true,
+        processedAt: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      count: failedEvents.length,
+      events: failedEvents,
+    });
+  } catch (error) {
+    logger.error('Failed to get failed webhooks', {
+      error: error.message,
+      userId: req.user.id,
+    });
+
+    res.status(500).json({
+      error: 'Failed to get failed webhook events',
+      code: 'QUERY_FAILED',
     });
   }
 });

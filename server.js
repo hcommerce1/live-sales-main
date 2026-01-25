@@ -36,6 +36,13 @@ const logger = require('./backend/utils/logger');
 // Import feature flags
 const featureFlags = require('./backend/utils/feature-flags');
 
+// Import Stripe validation
+const stripeValidation = require('./backend/config/stripe.validation');
+
+// Import queue services
+const webhookQueue = require('./backend/services/queue');
+const webhookWorker = require('./backend/services/queue/webhook.worker');
+
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -234,6 +241,32 @@ app.listen(PORT, async () => {
   featureFlags.init();
   logger.info('Feature flags initialized');
 
+  // Validate Stripe configuration
+  // In production: throws if invalid (fail-fast)
+  // In development: logs warnings only
+  try {
+    stripeValidation.validateStripeConfiguration();
+  } catch (error) {
+    logger.error('Stripe configuration validation failed - server cannot start', {
+      error: error.message,
+    });
+    process.exit(1);
+  }
+
+  // Initialize webhook queue and worker (requires Redis)
+  try {
+    const queueInitialized = await webhookQueue.initQueue();
+    if (queueInitialized) {
+      await webhookWorker.initWorker();
+      logger.info('Webhook queue and worker initialized');
+    } else {
+      logger.warn('Webhook queue not available - using fallback processing');
+    }
+  } catch (error) {
+    logger.error('Failed to initialize webhook queue', { error: error.message });
+    // Continue without queue - fallback will be used
+  }
+
   // Start scheduler (MIG-1: now async - loads from database)
   try {
     await scheduler.init();
@@ -244,14 +277,22 @@ app.listen(PORT, async () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  scheduler.stop();
-  process.exit(0);
-});
+async function gracefulShutdown(signal) {
+  logger.info(`${signal} received, shutting down gracefully`);
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully');
+  // Stop scheduler
   scheduler.stop();
+
+  // Close webhook queue and worker
+  try {
+    await webhookWorker.closeWorker();
+    await webhookQueue.closeQueue();
+  } catch (error) {
+    logger.error('Error closing webhook services', { error: error.message });
+  }
+
   process.exit(0);
-});
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

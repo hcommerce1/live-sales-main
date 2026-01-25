@@ -15,6 +15,9 @@
 const logger = require('../utils/logger');
 const { constructWebhookEvent } = require('./stripe.service');
 const { SUBSCRIPTION_STATUS } = require('../config/plans');
+const { addWebhookJob, isQueueAvailable } = require('./queue');
+const alertingService = require('./alerting.service');
+const { isIgnoredEvent, isUnknownEvent } = require('../config/stripe-events.config');
 
 // Lazy load Prisma
 let prisma = null;
@@ -85,15 +88,25 @@ async function handleWebhook(rawBody, signature) {
   });
 
   // 4. Process async (don't block response)
-  // Using setImmediate to process after response is sent
-  setImmediate(() => {
-    processWebhookEvent(event.id).catch((err) => {
-      logger.error('Async webhook processing failed', {
-        stripeEventId: event.id,
-        error: err.message,
+  // Use BullMQ queue if available, otherwise fallback to setImmediate
+  if (isQueueAvailable()) {
+    const { queued, jobId } = await addWebhookJob(event.id);
+    logger.debug('Webhook job queued', {
+      stripeEventId: event.id,
+      queued,
+      jobId,
+    });
+  } else {
+    // Fallback: process in-memory (not crash-safe)
+    setImmediate(() => {
+      processWebhookEvent(event.id).catch((err) => {
+        logger.error('Async webhook processing failed', {
+          stripeEventId: event.id,
+          error: err.message,
+        });
       });
     });
-  });
+  }
 
   return {
     received: true,
@@ -162,11 +175,43 @@ async function processWebhookEvent(stripeEventId) {
     });
 
     // Requeue for retry if under limit
-    if (webhookEvent.retryCount < 3) {
-      // In production, use a proper job queue (Bull)
-      setTimeout(() => {
-        processWebhookEvent(stripeEventId).catch(() => {});
-      }, 60000 * webhookEvent.retryCount); // 1min, 2min, 3min
+    const maxRetries = parseInt(process.env.WEBHOOK_MAX_RETRIES, 10) || 6;
+    if (webhookEvent.retryCount < maxRetries) {
+      // Use queue if available, otherwise use setTimeout fallback
+      if (isQueueAvailable()) {
+        // Queue will handle retries automatically via BullMQ
+        logger.debug('Webhook will be retried via queue', {
+          stripeEventId,
+          retryCount: webhookEvent.retryCount,
+          maxRetries,
+        });
+      } else {
+        // Fallback: setTimeout retry (not crash-safe)
+        const delay = 60000 * Math.min(webhookEvent.retryCount, 5); // max 5 min delay
+        setTimeout(() => {
+          processWebhookEvent(stripeEventId).catch(() => {});
+        }, delay);
+      }
+    } else {
+      // Max retries exhausted - alert
+      logger.error('Webhook max retries exhausted', {
+        stripeEventId,
+        retryCount: webhookEvent.retryCount,
+        maxRetries,
+      });
+
+      // Send alert for permanently failed webhook
+      const eventType = webhookEvent.payload?.type || 'unknown';
+      alertingService.sendWebhookFailureAlert(
+        stripeEventId,
+        eventType,
+        error.message,
+        webhookEvent.retryCount
+      ).catch((alertErr) => {
+        logger.error('Failed to send webhook failure alert', {
+          error: alertErr.message,
+        });
+      });
     }
   }
 }
@@ -211,7 +256,18 @@ async function routeEvent(event) {
       break;
 
     default:
-      logger.debug('Unhandled webhook event type', { type: event.type });
+      // Check if event is in ignored list or truly unknown
+      if (isIgnoredEvent(event.type)) {
+        logger.debug('Ignored webhook event type', { type: event.type });
+      } else if (isUnknownEvent(event.type)) {
+        // Unknown events should be logged as warnings for investigation
+        logger.warn('Unknown webhook event type received', {
+          type: event.type,
+          eventId: event.id,
+        });
+      } else {
+        logger.debug('Unhandled webhook event type', { type: event.type });
+      }
   }
 }
 
