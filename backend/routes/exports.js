@@ -233,6 +233,25 @@ router.post('/',
         sheetUrls.push(...config.sheets.map(s => s.sheet_url || s.sheetUrl).filter(Boolean));
       }
 
+      // Check for duplicates within the same export config
+      const seenSheets = new Map(); // key: "spreadsheetId:gid" -> url
+      for (const url of sheetUrls) {
+        const { spreadsheetId, gid } = exportService.extractSheetIdentifiers(url);
+        if (spreadsheetId) {
+          const key = `${spreadsheetId}:${gid}`;
+          if (seenSheets.has(key)) {
+            return res.status(400).json({
+              success: false,
+              error: 'Ten sam arkusz nie może być użyty wielokrotnie w jednym eksporcie.',
+              code: 'DUPLICATE_SHEET_IN_EXPORT',
+              duplicateUrl: url
+            });
+          }
+          seenSheets.set(key, url);
+        }
+      }
+
+      // Check for duplicates across other exports in the company
       for (const sheetUrl of sheetUrls) {
         const duplicateCheck = await exportService.checkDuplicateSheetUrl(
           sheetUrl,
