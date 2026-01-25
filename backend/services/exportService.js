@@ -266,8 +266,305 @@ function splitFilters(filterConfig, dataset) {
 // ============================================
 
 class ExportService {
+  // ============================================
+  // SEC-2 & SEC-3: SANITIZATION HELPERS
+  // ============================================
+
   /**
-   * Get all export configurations
+   * Mask Google Sheets URL for logging (SEC-3)
+   * Extracts only spreadsheetId to prevent URL leakage in logs
+   * @param {string} url - Full Google Sheets URL
+   * @returns {string} - Masked version showing only spreadsheetId
+   */
+  maskSheetUrl(url) {
+    if (!url) return '[no-url]';
+    try {
+      // Extract spreadsheet ID from URL
+      const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (match && match[1]) {
+        const id = match[1];
+        // Show first 8 and last 4 chars of ID
+        if (id.length > 12) {
+          return `sheets:${id.substring(0, 8)}...${id.substring(id.length - 4)}`;
+        }
+        return `sheets:${id}`;
+      }
+      return '[invalid-url]';
+    } catch {
+      return '[parse-error]';
+    }
+  }
+
+  /**
+   * Remove sensitive data from export before returning to client
+   * SEC-2: Prevents baselinkerToken and other secrets from leaking
+   * @param {object} exportConfig - Export configuration
+   * @returns {object} - Sanitized export (without sensitive fields)
+   */
+  sanitizeExport(exportConfig) {
+    if (!exportConfig) return null;
+
+    // List of sensitive fields to remove
+    const sensitiveFields = ['baselinkerToken', 'baselinker_token', 'apiToken', 'api_token'];
+
+    const sanitized = { ...exportConfig };
+    for (const field of sensitiveFields) {
+      if (field in sanitized) {
+        delete sanitized[field];
+      }
+    }
+
+    return sanitized;
+  }
+
+  // ============================================
+  // DATABASE METHODS (SEC-1 compliant)
+  // ============================================
+
+  /**
+   * Get all export configurations for a specific company
+   * SEC-1: Filters by companyId to prevent cross-company data access
+   * @param {string} companyId - Company ID
+   * @returns {Promise<Array>} - List of exports for this company
+   */
+  async getAllExportsByCompany(companyId) {
+    if (!companyId) {
+      logger.warn('getAllExportsByCompany called without companyId');
+      return [];
+    }
+
+    try {
+      const exports = await prisma.export.findMany({
+        where: { companyId },
+        include: {
+          sheets: true,
+          runs: {
+            take: 1,
+            orderBy: { runAt: 'desc' }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // Also update in-memory cache
+      for (const exp of exports) {
+        exportConfigs[exp.id] = this.dbExportToConfig(exp);
+      }
+
+      return exports.map(exp => this.dbExportToConfig(exp));
+    } catch (error) {
+      logger.error('Failed to get exports by company', { companyId, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Get export configuration by ID from database
+   * @param {string} exportId - Export ID
+   * @returns {Promise<object|null>} - Export configuration
+   */
+  async getExportById(exportId) {
+    try {
+      const exp = await prisma.export.findUnique({
+        where: { id: exportId },
+        include: {
+          sheets: true
+        }
+      });
+
+      if (!exp) return null;
+
+      const config = this.dbExportToConfig(exp);
+      // Update in-memory cache
+      exportConfigs[exportId] = config;
+
+      return config;
+    } catch (error) {
+      logger.error('Failed to get export by ID', { exportId, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Convert database Export model to config format used by service
+   * @param {object} dbExport - Prisma Export model
+   * @returns {object} - Config format
+   */
+  dbExportToConfig(dbExport) {
+    return {
+      id: dbExport.id,
+      name: dbExport.name,
+      dataset: dbExport.dataset,
+      status: dbExport.status,
+      filters: dbExport.filters,
+      selected_fields: dbExport.selectedFields,
+      selectedFields: dbExport.selectedFields,
+      baselinkerToken: dbExport.baselinkerToken, // Keep for internal use
+      sheetsUrl: dbExport.sheetsUrl,
+      sheetsWriteMode: dbExport.sheetsWriteMode,
+      schedule_minutes: dbExport.scheduleMinutes,
+      scheduleMinutes: dbExport.scheduleMinutes,
+      last_run: dbExport.lastRun?.toISOString(),
+      lastRun: dbExport.lastRun,
+      userId: dbExport.userId,
+      companyId: dbExport.companyId,
+      createdBy: dbExport.createdBy,
+      createdAt: dbExport.createdAt?.toISOString(),
+      updatedAt: dbExport.updatedAt?.toISOString(),
+      // Multiple sheets support
+      sheets: dbExport.sheets?.map(s => ({
+        sheet_url: s.sheetUrl,
+        sheet_name: s.sheetName,
+        write_mode: s.writeMode
+      })),
+      sheets_config: dbExport.sheets?.map(s => ({
+        sheet_url: s.sheetUrl,
+        sheet_name: s.sheetName,
+        write_mode: s.writeMode
+      }))
+    };
+  }
+
+  /**
+   * Extract spreadsheet ID and GID from Google Sheets URL
+   * Used for duplicate detection
+   * @param {string} url - Google Sheets URL
+   * @returns {object} - { spreadsheetId, gid }
+   */
+  extractSheetIdentifiers(url) {
+    if (!url) return { spreadsheetId: null, gid: null };
+
+    const spreadsheetMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    const gidMatch = url.match(/[#&?]gid=(\d+)/);
+
+    return {
+      spreadsheetId: spreadsheetMatch ? spreadsheetMatch[1] : null,
+      gid: gidMatch ? gidMatch[1] : '0' // Default to first sheet (gid=0)
+    };
+  }
+
+  /**
+   * Check if a sheet URL is already used by another export in the same company
+   * Validates both spreadsheetId + gid as unique key
+   * @param {string} sheetUrl - Sheet URL to check
+   * @param {string} companyId - Company ID
+   * @param {string} excludeExportId - Export ID to exclude (for updates)
+   * @returns {Promise<object>} - { isDuplicate, existingExportName }
+   */
+  async checkDuplicateSheetUrl(sheetUrl, companyId, excludeExportId = null) {
+    if (!sheetUrl || !companyId) {
+      return { isDuplicate: false, existingExportName: null };
+    }
+
+    const { spreadsheetId, gid } = this.extractSheetIdentifiers(sheetUrl);
+
+    if (!spreadsheetId) {
+      return { isDuplicate: false, existingExportName: null };
+    }
+
+    try {
+      // Check in ExportSheet table for existing usage
+      const existingSheet = await prisma.exportSheet.findFirst({
+        where: {
+          sheetUrl: {
+            contains: spreadsheetId
+          },
+          export: {
+            companyId,
+            id: excludeExportId ? { not: excludeExportId } : undefined
+          }
+        },
+        include: {
+          export: {
+            select: { id: true, name: true }
+          }
+        }
+      });
+
+      if (existingSheet) {
+        // Check if GID also matches
+        const existingIdentifiers = this.extractSheetIdentifiers(existingSheet.sheetUrl);
+        if (existingIdentifiers.gid === gid) {
+          return {
+            isDuplicate: true,
+            existingExportName: existingSheet.export.name,
+            existingExportId: existingSheet.export.id
+          };
+        }
+      }
+
+      // Also check legacy sheetsUrl field in Export table
+      const existingExport = await prisma.export.findFirst({
+        where: {
+          sheetsUrl: {
+            contains: spreadsheetId
+          },
+          companyId,
+          id: excludeExportId ? { not: excludeExportId } : undefined
+        },
+        select: { id: true, name: true, sheetsUrl: true }
+      });
+
+      if (existingExport) {
+        const existingIdentifiers = this.extractSheetIdentifiers(existingExport.sheetsUrl);
+        if (existingIdentifiers.gid === gid) {
+          return {
+            isDuplicate: true,
+            existingExportName: existingExport.name,
+            existingExportId: existingExport.id
+          };
+        }
+      }
+
+      return { isDuplicate: false, existingExportName: null };
+    } catch (error) {
+      logger.error('Failed to check duplicate sheet URL', {
+        sheetUrl: this.maskSheetUrl(sheetUrl),
+        companyId,
+        error: error.message
+      });
+      // Fail-open: don't block export creation on validation error
+      return { isDuplicate: false, existingExportName: null };
+    }
+  }
+
+  /**
+   * Update export status in database
+   * @param {string} exportId - Export ID
+   * @param {string} status - New status ('active', 'paused', 'error')
+   * @param {string} userId - User making the change
+   * @returns {Promise<object>} - Updated export config
+   */
+  async updateExportStatus(exportId, status, userId) {
+    try {
+      const updated = await prisma.export.update({
+        where: { id: exportId },
+        data: {
+          status,
+          updatedAt: new Date()
+        },
+        include: { sheets: true }
+      });
+
+      const config = this.dbExportToConfig(updated);
+      // Update in-memory cache
+      exportConfigs[exportId] = config;
+
+      logger.info('Export status updated', { exportId, status, userId });
+      return config;
+    } catch (error) {
+      logger.error('Failed to update export status', { exportId, status, error: error.message });
+      throw error;
+    }
+  }
+
+  // ============================================
+  // LEGACY IN-MEMORY METHODS (for backward compatibility)
+  // ============================================
+
+  /**
+   * Get all export configurations (LEGACY - from memory)
+   * @deprecated Use getAllExportsByCompany() instead
    * @returns {Array} - List of exports
    */
   getAllExports() {
@@ -275,7 +572,7 @@ class ExportService {
   }
 
   /**
-   * Get export configuration by ID
+   * Get export configuration by ID (LEGACY - from memory first, then DB)
    * @param {string} exportId - Export ID
    * @returns {object|null} - Export configuration
    */
@@ -284,35 +581,127 @@ class ExportService {
   }
 
   /**
-   * Save export configuration
+   * Save export configuration to database AND memory
+   * FAZA 1: Now saves to Prisma instead of just memory
    * @param {string} exportId - Export ID
    * @param {object} config - Export configuration
    * @param {string} userId - User ID (owner of the export)
-   * @returns {object} - Saved export configuration
+   * @returns {Promise<object>} - Saved export configuration
    */
-  saveExport(exportId, config, userId = null) {
-    exportConfigs[exportId] = {
-      ...config,
-      id: exportId,
-      userId: userId || config.userId,
-      updatedAt: new Date().toISOString(),
-    };
-    logger.info('Export configuration saved', { exportId, userId });
-    return exportConfigs[exportId];
+  async saveExport(exportId, config, userId = null) {
+    const effectiveUserId = userId || config.userId;
+    const companyId = config.companyId;
+
+    if (!companyId) {
+      logger.error('saveExport called without companyId', { exportId });
+      throw new Error('companyId is required to save export');
+    }
+
+    if (!effectiveUserId) {
+      logger.error('saveExport called without userId', { exportId });
+      throw new Error('userId is required to save export');
+    }
+
+    try {
+      // Prepare data for Prisma
+      const exportData = {
+        name: config.name || 'Nowy eksport',
+        dataset: config.dataset || 'orders',
+        status: config.status || 'active',
+        filters: config.filters || null,
+        selectedFields: config.selected_fields || config.selectedFields || [],
+        baselinkerToken: config.baselinkerToken || config.baselinker_token || '',
+        sheetsUrl: config.sheetsUrl || config.sheets_url || '',
+        sheetsWriteMode: config.sheetsWriteMode || config.sheets_write_mode || 'append',
+        scheduleMinutes: config.schedule_minutes || config.scheduleMinutes || null,
+        companyId,
+        createdBy: effectiveUserId
+      };
+
+      // Upsert to database
+      const saved = await prisma.export.upsert({
+        where: { id: exportId },
+        create: {
+          id: exportId,
+          userId: effectiveUserId,
+          ...exportData
+        },
+        update: {
+          ...exportData,
+          updatedAt: new Date()
+        },
+        include: { sheets: true }
+      });
+
+      // Handle multiple sheets if provided
+      if (config.sheets_config || config.sheets) {
+        const sheetsData = config.sheets_config || config.sheets;
+        if (Array.isArray(sheetsData) && sheetsData.length > 0) {
+          // Delete existing sheets and recreate
+          await prisma.exportSheet.deleteMany({
+            where: { exportId }
+          });
+
+          await prisma.exportSheet.createMany({
+            data: sheetsData.map((s, idx) => ({
+              exportId,
+              sheetUrl: s.sheet_url || s.sheetUrl,
+              sheetName: s.sheet_name || s.sheetName || null,
+              writeMode: s.write_mode || s.writeMode || 'append',
+              sortOrder: idx
+            }))
+          });
+        }
+      }
+
+      // Convert to config format and update memory cache
+      const savedConfig = this.dbExportToConfig(saved);
+      exportConfigs[exportId] = savedConfig;
+
+      logger.info('Export configuration saved to database', { exportId, userId: effectiveUserId, companyId });
+      return savedConfig;
+    } catch (error) {
+      logger.error('Failed to save export to database', {
+        exportId,
+        error: error.message,
+        code: error.code
+      });
+      throw error;
+    }
   }
 
   /**
-   * Delete export configuration
+   * Delete export configuration from database AND memory
    * @param {string} exportId - Export ID
-   * @returns {boolean} - True if deleted
+   * @returns {Promise<boolean>} - True if deleted
    */
-  deleteExport(exportId) {
-    if (exportConfigs[exportId]) {
-      delete exportConfigs[exportId];
+  async deleteExport(exportId) {
+    try {
+      // Delete from database (cascades to sheets and runs)
+      await prisma.export.delete({
+        where: { id: exportId }
+      });
+
+      // Remove from memory cache
+      if (exportConfigs[exportId]) {
+        delete exportConfigs[exportId];
+      }
+
       logger.info('Export configuration deleted', { exportId });
       return true;
+    } catch (error) {
+      if (error.code === 'P2025') {
+        // Record not found in DB, try memory only
+        if (exportConfigs[exportId]) {
+          delete exportConfigs[exportId];
+          logger.info('Export configuration deleted from memory', { exportId });
+          return true;
+        }
+        return false;
+      }
+      logger.error('Failed to delete export', { exportId, error: error.message });
+      throw error;
     }
-    return false;
   }
 
   /**
@@ -660,15 +1049,14 @@ class ExportService {
    * @returns {Promise<Array>} - Array of results per sheet
    */
   async writeToSheets(config, headers, data) {
-    // Debug: log all sheet-related config fields
+    // SEC-3: Debug log without full URLs - only structure info
     logger.info('[writeToSheets] Config fields', {
       hasSheets: !!config.sheets,
       hasSheetsConfig: !!config.sheets_config,
       hasSheetsUrl: !!config.sheetsUrl,
       sheetsType: config.sheets ? (Array.isArray(config.sheets) ? 'array' : typeof config.sheets) : 'undefined',
       sheetsConfigType: config.sheets_config ? (Array.isArray(config.sheets_config) ? 'array' : typeof config.sheets_config) : 'undefined',
-      sheetsContent: JSON.stringify(config.sheets),
-      sheetsConfigContent: JSON.stringify(config.sheets_config)
+      sheetsCount: config.sheets?.length || config.sheets_config?.length || (config.sheetsUrl ? 1 : 0)
     });
 
     // Support multiple naming conventions: sheets_config, sheets (array), sheets (object), sheetsUrl
@@ -692,9 +1080,10 @@ class ExportService {
       throw new Error('No Google Sheets URL configured');
     }
 
+    // SEC-3: Log masked URLs only
     logger.info('[writeToSheets] Resolved sheets config', {
       sheetsCount: sheets.length,
-      sheets: JSON.stringify(sheets)
+      sheets: sheets.map(s => ({ url: this.maskSheetUrl(s.sheet_url), mode: s.write_mode }))
     });
 
     const MAX_RETRIES = 3;
@@ -738,8 +1127,9 @@ class ExportService {
                                  sheetsConfig.serviceAccountEmail ||
                                  'live-sales-worker@livesales-483523.iam.gserviceaccount.com';
 
+            // SEC-3: Log masked URL only
             logger.error('Google Sheets auth error - not retrying', {
-              sheetUrl: sheet.sheet_url,
+              sheetUrl: this.maskSheetUrl(sheet.sheet_url),
               error: error.message,
               serviceAccountEmail: serviceEmail,
               hint: `Upewnij się że arkusz jest udostępniony dla: ${serviceEmail} z uprawnieniami Edytora`
@@ -755,8 +1145,9 @@ class ExportService {
           // Exponential backoff: 1s, 2s, 4s
           if (attempt < MAX_RETRIES) {
             const backoffMs = Math.pow(2, attempt - 1) * 1000;
+            // SEC-3: Log masked URL only
             logger.warn('Google Sheets write failed, retrying', {
-              sheetUrl: sheet.sheet_url,
+              sheetUrl: this.maskSheetUrl(sheet.sheet_url),
               attempt,
               backoffMs,
               error: error.message

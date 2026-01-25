@@ -11,12 +11,8 @@ import ExportWizard from './components/ExportWizard.vue'
 import LoginForm from './components/LoginForm.vue'
 import SecurityTab from './components/SecurityTab.vue'
 
-// Plans A/B Test Variants
-import PlansVariantA from './components/plans/PlansVariantA.vue'
-import PlansVariantB from './components/plans/PlansVariantB.vue'
-import PlansVariantC from './components/plans/PlansVariantC.vue'
-import PlansVariantD from './components/plans/PlansVariantD.vue'
-import PlansVariantE from './components/plans/PlansVariantE.vue'
+// Plans component (single view - A/B test concluded, using Highlights variant)
+import PlansView from './components/plans/PlansVariantE.vue'
 
 // Pinia stores
 import { useAuthStore } from './stores/auth'
@@ -145,20 +141,7 @@ const portalLoading = ref(false)
 // Billing interval toggle
 const selectedInterval = ref('monthly')
 
-// Plans A/B Test variant switcher
-const plansVariant = ref(localStorage.getItem('plansVariant') || 'A')
-const plansVariants = {
-  A: { component: PlansVariantA, name: 'Klasyczny' },
-  B: { component: PlansVariantB, name: 'Tabela' },
-  C: { component: PlansVariantC, name: 'Kategorie' },
-  D: { component: PlansVariantD, name: 'Minimalistyczny' },
-  E: { component: PlansVariantE, name: 'Highlights' }
-}
-const currentPlansVariantComponent = computed(() => plansVariants[plansVariant.value]?.component || PlansVariantA)
-function setPlansVariant(variant) {
-  plansVariant.value = variant
-  localStorage.setItem('plansVariant', variant)
-}
+// Plans component (A/B test concluded - using single "Highlights" variant)
 
 // Error handling with recovery (type + payload pattern)
 const billingError = ref(null) // { message, action?: { type, ...payload } }
@@ -183,8 +166,13 @@ const activeExportsCount = computed(() => {
 })
 
 // Google Sheets status - based on whether any export has a sheets URL configured
+// Supports legacy (sheetsUrl) and new structures (sheets_config[], sheets[])
 const googleSheetsConfigured = computed(() => {
-    return exportsList.value.some(e => e.sheetsUrl && e.sheetsUrl.trim() !== '')
+    return exportsList.value.some(e =>
+        (e.sheetsUrl && e.sheetsUrl.trim() !== '') ||
+        (e.sheets_config && Array.isArray(e.sheets_config) && e.sheets_config.some(s => s.sheet_url?.trim())) ||
+        (e.sheets && Array.isArray(e.sheets) && e.sheets.some(s => (s.sheet_url || s.sheetUrl)?.trim()))
+    )
 })
 
 // === Onboarding Checklist ===
@@ -837,6 +825,20 @@ async function handleWizardSaveDraft(draftConfig) {
 function editExportInWizard(exportId) {
     // Open wizard for editing existing export
     wizardEditingExportId.value = exportId
+    currentPage.value = 'wizard'
+}
+
+function duplicateExport(exp) {
+    // Open wizard with copied data but without ID and sheet URL
+    wizardEditingExportId.value = null
+    wizardTemplateData.value = {
+        name: `${exp.name} (kopia)`,
+        dataset: exp.dataset,
+        selectedFields: exp.selected_fields || exp.selectedFields || [],
+        filters: exp.filters ? { ...exp.filters } : null,
+        scheduleMinutes: exp.schedule_minutes || exp.scheduleMinutes
+        // Note: sheetsUrl is intentionally NOT copied - user must provide new URL
+    }
     currentPage.value = 'wizard'
 }
 
@@ -2203,6 +2205,12 @@ onBeforeUnmount(() => {
                                             </svg>
                                             Edytuj
                                         </button>
+                                        <button @click="duplicateExport(exp)" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                            </svg>
+                                            Duplikuj
+                                        </button>
                                         <button @click="confirmDelete(exp.id)" class="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -2935,24 +2943,11 @@ onBeforeUnmount(() => {
 
                     <!-- Plans Header with Variant Switcher -->
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl font-semibold">Dostępne plany</h2>
-                        <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg">
-                            <span class="text-xs text-gray-500">Widok:</span>
-                            <select
-                                :value="plansVariant"
-                                @change="setPlansVariant($event.target.value)"
-                                class="text-xs font-medium text-gray-700 bg-transparent border-0 focus:ring-0 cursor-pointer pr-6 outline-none"
-                            >
-                                <option v-for="(variant, key) in plansVariants" :key="key" :value="key">
-                                    {{ variant.name }}
-                                </option>
-                            </select>
-                        </div>
+                        <h2 class="text-xl font-semibold">Dostepne plany</h2>
                     </div>
 
-                    <!-- Dynamic Plans Variant Component -->
-                    <component
-                        :is="currentPlansVariantComponent"
+                    <!-- Plans Component -->
+                    <PlansView
                         :plans="plans"
                         :current-plan-id="subscription?.planId"
                         :selected-interval="selectedInterval"

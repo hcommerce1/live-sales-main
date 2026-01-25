@@ -12,6 +12,8 @@ const {
   validateScheduleInterval,
 } = require('../middleware/featureGate');
 const featureFlags = require('../utils/feature-flags');
+// SEC-1: Resource ownership middleware for authorization
+const { requireOwnership } = require('../middleware/resourceOwnership');
 
 // Export fields configuration (centralized in config file)
 const exportFields = require('../config/export-fields');
@@ -79,18 +81,24 @@ router.get('/field-definitions', requireCompany, async (req, res) => {
 
 /**
  * GET /api/exports
- * Get all export configurations
+ * Get all export configurations for current company
+ * SEC-1: Now filters by companyId to prevent cross-company data leak
  */
-router.get('/', (req, res) => {
+router.get('/', requireCompany, async (req, res) => {
   try {
-    const exports = exportService.getAllExports();
+    const companyId = req.company.id;
+    const exports = await exportService.getAllExportsByCompany(companyId);
+
+    // SEC-2: Sanitize exports before returning (remove sensitive data)
+    const sanitizedExports = exports.map(exp => exportService.sanitizeExport(exp));
+
     res.json({
       success: true,
-      count: exports.length,
-      data: exports
+      count: sanitizedExports.length,
+      data: sanitizedExports
     });
   } catch (error) {
-    logger.error('Failed to get exports', { error: error.message });
+    logger.error('Failed to get exports', { error: error.message, companyId: req.company?.id });
     res.status(500).json({
       success: false,
       error: error.message
@@ -101,10 +109,11 @@ router.get('/', (req, res) => {
 /**
  * GET /api/exports/:id
  * Get export configuration by ID
+ * SEC-1: requireOwnership validates company owns this export
  */
-router.get('/:id', (req, res) => {
+router.get('/:id', requireCompany, requireOwnership('export'), async (req, res) => {
   try {
-    const exportConfig = exportService.getExport(req.params.id);
+    const exportConfig = await exportService.getExportById(req.params.id);
 
     if (!exportConfig) {
       return res.status(404).json({
@@ -113,12 +122,15 @@ router.get('/:id', (req, res) => {
       });
     }
 
+    // SEC-2: Sanitize export before returning (remove sensitive data)
+    const sanitizedExport = exportService.sanitizeExport(exportConfig);
+
     res.json({
       success: true,
-      data: exportConfig
+      data: sanitizedExport
     });
   } catch (error) {
-    logger.error('Failed to get export', { error: error.message });
+    logger.error('Failed to get export', { error: error.message, exportId: req.params.id });
     res.status(500).json({
       success: false,
       error: error.message
@@ -209,8 +221,36 @@ router.post('/',
         }
       }
 
-      // Save export with company context
-      const savedConfig = exportService.saveExport(config.id, {
+      // Validate duplicate sheet URLs
+      const sheetUrls = [];
+      if (config.sheetsUrl) sheetUrls.push(config.sheetsUrl);
+      if (config.sheets_config && Array.isArray(config.sheets_config)) {
+        sheetUrls.push(...config.sheets_config.map(s => s.sheet_url).filter(Boolean));
+      }
+      if (config.sheets && Array.isArray(config.sheets)) {
+        sheetUrls.push(...config.sheets.map(s => s.sheet_url || s.sheetUrl).filter(Boolean));
+      }
+
+      for (const sheetUrl of sheetUrls) {
+        const duplicateCheck = await exportService.checkDuplicateSheetUrl(
+          sheetUrl,
+          companyId,
+          config.id // Exclude current export (for updates)
+        );
+
+        if (duplicateCheck.isDuplicate) {
+          return res.status(400).json({
+            success: false,
+            error: `Ten arkusz jest już używany przez inny eksport: "${duplicateCheck.existingExportName}"`,
+            code: 'DUPLICATE_SHEET_URL',
+            existingExportId: duplicateCheck.existingExportId,
+            existingExportName: duplicateCheck.existingExportName
+          });
+        }
+      }
+
+      // Save export with company context (now saves to database)
+      const savedConfig = await exportService.saveExport(config.id, {
         ...config,
         companyId // Add company context
       }, userId);
@@ -222,9 +262,12 @@ router.post('/',
         scheduler.stopExport(savedConfig.id);
       }
 
+      // SEC-2: Sanitize before returning
+      const sanitizedConfig = exportService.sanitizeExport(savedConfig);
+
       res.json({
         success: true,
-        data: savedConfig
+        data: sanitizedConfig
       });
     } catch (error) {
       logger.error('Failed to save export', {
@@ -242,10 +285,11 @@ router.post('/',
 /**
  * DELETE /api/exports/:id
  * Delete export configuration
+ * SEC-1: requireOwnership validates company owns this export
  */
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireCompany, requireOwnership('export'), async (req, res) => {
   try {
-    const deleted = exportService.deleteExport(req.params.id);
+    const deleted = await exportService.deleteExport(req.params.id);
 
     if (!deleted) {
       return res.status(404).json({
@@ -262,7 +306,7 @@ router.delete('/:id', (req, res) => {
       message: 'Export deleted successfully'
     });
   } catch (error) {
-    logger.error('Failed to delete export', { error: error.message });
+    logger.error('Failed to delete export', { error: error.message, exportId: req.params.id });
     res.status(500).json({
       success: false,
       error: error.message
@@ -273,6 +317,7 @@ router.delete('/:id', (req, res) => {
 /**
  * POST /api/exports/:id/run
  * Run export immediately
+ * SEC-1: requireOwnership validates company owns this export
  *
  * Request body (optional):
  * - runId: Client-provided idempotency key. If same runId is sent again,
@@ -286,7 +331,7 @@ router.delete('/:id', (req, res) => {
  * - runId: Database record ID
  * - clientRunId: The idempotency key (provided or auto-generated)
  */
-router.post('/:id/run', async (req, res) => {
+router.post('/:id/run', requireCompany, requireOwnership('export'), async (req, res) => {
   const exportId = req.params.id;
   const userId = req.user?.id;
   const companyId = req.company?.id;
@@ -363,10 +408,11 @@ router.post('/:id/run', async (req, res) => {
 /**
  * GET /api/exports/:id/stats
  * Get export statistics
+ * SEC-1: requireOwnership validates company owns this export
  */
-router.get('/:id/stats', (req, res) => {
+router.get('/:id/stats', requireCompany, requireOwnership('export'), async (req, res) => {
   try {
-    const stats = exportService.getExportStats(req.params.id);
+    const stats = await exportService.getExportStats(req.params.id);
 
     if (!stats) {
       return res.status(404).json({
@@ -383,7 +429,7 @@ router.get('/:id/stats', (req, res) => {
       data: stats
     });
   } catch (error) {
-    logger.error('Failed to get export stats', { error: error.message });
+    logger.error('Failed to get export stats', { error: error.message, exportId: req.params.id });
     res.status(500).json({
       success: false,
       error: error.message
@@ -394,11 +440,12 @@ router.get('/:id/stats', (req, res) => {
 /**
  * POST /api/exports/:id/toggle
  * Toggle export status (active/paused)
+ * SEC-1: requireOwnership validates company owns this export
  */
-router.post('/:id/toggle', (req, res) => {
+router.post('/:id/toggle', requireCompany, requireOwnership('export'), async (req, res) => {
   try {
     const userId = req.user.id; // From authMiddleware.authenticate()
-    const exportConfig = exportService.getExport(req.params.id);
+    const exportConfig = await exportService.getExportById(req.params.id);
 
     if (!exportConfig) {
       return res.status(404).json({
@@ -409,9 +456,11 @@ router.post('/:id/toggle', (req, res) => {
 
     // Toggle status
     const newStatus = exportConfig.status === 'active' ? 'paused' : 'active';
-    exportConfig.status = newStatus;
 
-    const savedConfig = exportService.saveExport(exportConfig.id, exportConfig, userId);
+    const savedConfig = await exportService.updateExportStatus(req.params.id, newStatus, userId);
+
+    // SEC-2: Sanitize before returning
+    const sanitizedConfig = exportService.sanitizeExport(savedConfig);
 
     // Update scheduler
     if (newStatus === 'active' && savedConfig.schedule_minutes) {
@@ -422,10 +471,10 @@ router.post('/:id/toggle', (req, res) => {
 
     res.json({
       success: true,
-      data: savedConfig
+      data: sanitizedConfig
     });
   } catch (error) {
-    logger.error('Failed to toggle export status', { error: error.message });
+    logger.error('Failed to toggle export status', { error: error.message, exportId: req.params.id });
     res.status(500).json({
       success: false,
       error: error.message

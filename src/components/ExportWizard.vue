@@ -66,21 +66,29 @@
 
       <!-- Step 1: Dataset & Fields - A/B TEST VARIANTS -->
       <div v-else-if="currentStep === 0" class="h-full flex flex-col">
-        <!-- Variant Switcher -->
+        <!-- Variant Toggle (Akordeony / Dual Panel) -->
         <div class="flex-shrink-0 mb-4 flex items-center justify-end">
-          <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg">
-            <span class="text-xs text-gray-500">Widok:</span>
-            <select
-              :value="activeVariant"
-              class="text-xs font-medium text-gray-700 bg-transparent border-0 focus:ring-0 cursor-pointer pr-6 outline-none"
-              @change="setVariant($event.target.value)"
+          <div class="flex border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              type="button"
+              @click="setVariant('C')"
+              class="px-4 py-2 text-sm font-medium transition-all duration-200"
+              :class="activeVariant === 'C'
+                ? 'bg-indigo-500 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'"
             >
-              <option v-for="(variant, key) in step1Variants" :key="key" :value="key">
-                {{ variant.name }}
-              </option>
-            </select>
-            <span class="text-xs text-gray-300">|</span>
-            <span class="text-xs text-gray-400">Wyprobuj inny widok</span>
+              Akordeony
+            </button>
+            <button
+              type="button"
+              @click="setVariant('D')"
+              class="px-4 py-2 text-sm font-medium transition-all duration-200 border-l border-gray-200"
+              :class="activeVariant === 'D'
+                ? 'bg-indigo-500 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'"
+            >
+              Dual Panel
+            </button>
           </div>
         </div>
 
@@ -246,19 +254,13 @@ import { API } from '../api.js'
 import FilterBuilder from './FilterBuilder.vue'
 import SheetConfig from './SheetConfig.vue'
 
-// Step 1 Variants for A/B Testing
-import WizardStep1VariantA from './wizard/WizardStep1VariantA.vue'
-import WizardStep1VariantB from './wizard/WizardStep1VariantB.vue'
+// Step 1 Variants (A/B test concluded - keeping Akordeony and Dual Panel)
 import WizardStep1VariantC from './wizard/WizardStep1VariantC.vue'
 import WizardStep1VariantD from './wizard/WizardStep1VariantD.vue'
-import WizardStep1VariantE from './wizard/WizardStep1VariantE.vue'
 
 const step1Variants = {
-  A: { component: WizardStep1VariantA, name: 'Klasyczny (Baseline)' },
-  B: { component: WizardStep1VariantB, name: 'Karty z ikonami' },
-  C: { component: WizardStep1VariantC, name: 'Akordeony + Szukaj' },
-  D: { component: WizardStep1VariantD, name: 'Dual Panel' },
-  E: { component: WizardStep1VariantE, name: 'Minimalistyczny' }
+  C: { component: WizardStep1VariantC, name: 'Akordeony' },
+  D: { component: WizardStep1VariantD, name: 'Dual Panel' }
 }
 
 const props = defineProps({
@@ -286,8 +288,14 @@ const draggedIndex = ref(null)
 const duplicateSheetWarning = ref(false)
 const fieldsPerDataset = ref({})  // Autozapis pól per dataset
 
-// A/B Testing: Step 1 Variant (A-E)
-const activeVariant = ref(localStorage.getItem('wizardStep1Variant') || 'A')
+// Step 1 Variant (C=Akordeony or D=Dual Panel)
+const activeVariant = ref(localStorage.getItem('wizardStep1Variant') || 'C')
+
+// Ensure valid variant (migrate from old A/B/E variants)
+if (!['C', 'D'].includes(activeVariant.value)) {
+  activeVariant.value = 'C'
+  localStorage.setItem('wizardStep1Variant', 'C')
+}
 
 // Save variant preference
 function setVariant(variant) {
@@ -295,7 +303,7 @@ function setVariant(variant) {
   localStorage.setItem('wizardStep1Variant', variant)
 }
 
-const currentVariantComponent = computed(() => step1Variants[activeVariant.value]?.component || WizardStep1VariantA)
+const currentVariantComponent = computed(() => step1Variants[activeVariant.value]?.component || WizardStep1VariantC)
 
 // Field definitions from backend
 const fieldDefinitions = ref({

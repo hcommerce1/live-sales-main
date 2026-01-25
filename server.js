@@ -225,7 +225,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`Frontend URL: ${process.env.FRONTEND_URL || 'not set'}`);
@@ -234,9 +234,13 @@ app.listen(PORT, () => {
   featureFlags.init();
   logger.info('Feature flags initialized');
 
-  // Start scheduler
-  scheduler.init();
-  logger.info('Scheduler initialized');
+  // Start scheduler (MIG-1: now async - loads from database)
+  try {
+    await scheduler.init();
+    logger.info('Scheduler initialized successfully');
+  } catch (error) {
+    logger.error('Scheduler initialization failed', { error: error.message });
+  }
 });
 
 // Graceful shutdown

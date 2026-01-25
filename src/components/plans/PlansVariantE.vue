@@ -30,11 +30,12 @@
 
       <!-- Price -->
       <div class="text-center my-5 py-4 border-y border-gray-100">
-        <div class="text-4xl font-bold" :class="plan.price?.monthlyRaw === 0 ? 'text-gray-600' : 'text-blue-600'">
+        <div class="text-4xl font-bold" :class="plan.price?.monthlyRaw === 0 ? 'text-gray-600' : 'text-gray-900'">
           {{ getPlanPrice(plan) }}
+          <span v-if="plan.price?.monthlyRaw > 0" class="text-base font-normal text-gray-500">brutto</span>
         </div>
         <div v-if="plan.price?.monthlyRaw > 0" class="text-sm text-gray-500 mt-1">
-          za {{ selectedInterval === 'monthly' ? 'miesiac' : 'rok' }}
+          {{ formatNettoPrice(plan) }} netto / {{ selectedInterval === 'monthly' ? 'miesiac' : 'rok' }}
         </div>
         <div v-if="selectedInterval === 'yearly' && plan.price?.monthlyRaw > 0" class="mt-2">
           <span class="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">
@@ -50,7 +51,7 @@
       <div class="flex-1 space-y-3">
         <div v-for="feature in getHighlightedFeatures(plan)" :key="feature.label"
              class="flex items-center gap-3 p-2 rounded-lg"
-             :class="feature.highlighted ? 'bg-blue-50' : ''">
+             :class="feature.highlighted ? 'bg-indigo-50' : ''">
           <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                :class="feature.available ? 'bg-green-100' : 'bg-gray-100'">
             <svg v-if="feature.available" class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
@@ -64,7 +65,7 @@
             <span class="text-sm" :class="feature.available ? 'text-gray-900' : 'text-gray-400'">
               {{ feature.label }}
             </span>
-            <span v-if="feature.value" class="ml-1 text-sm font-medium text-blue-600">{{ feature.value }}</span>
+            <span v-if="feature.value" class="ml-1 text-sm font-medium text-indigo-700">{{ feature.value }}</span>
           </div>
         </div>
       </div>
@@ -194,5 +195,21 @@ function getHighlightedFeatures(plan) {
 function getPlanPrice(plan) {
   if (!plan?.price) return '-'
   return props.selectedInterval === 'monthly' ? plan.price.monthly : plan.price.yearly
+}
+
+function formatNettoPrice(plan) {
+  if (!plan?.price) return '-'
+  // Get raw price in grosze (1/100 PLN)
+  const rawPrice = props.selectedInterval === 'monthly'
+    ? plan.price.monthlyRaw
+    : plan.price.yearlyRaw
+
+  if (!rawPrice || rawPrice === 0) return '-'
+
+  // Calculate netto (brutto / 1.23 for 23% VAT)
+  const nettoGrosze = Math.round(rawPrice / 1.23)
+  const nettoZloty = (nettoGrosze / 100).toFixed(2).replace('.', ',')
+
+  return `${nettoZloty} zl`
 }
 </script>

@@ -11,22 +11,61 @@ class Scheduler {
   }
 
   /**
-   * Initialize scheduler - load all active exports and schedule them
+   * Initialize scheduler - load all active exports from DATABASE and schedule them
+   * MIG-1 FIX: Now loads from Prisma instead of in-memory (which is empty after restart)
    */
-  init() {
-    logger.info('Initializing scheduler');
+  async init() {
+    logger.info('Initializing scheduler - loading exports from database');
 
-    const exports = exportService.getAllExports();
-    exports.forEach(exportConfig => {
-      if (exportConfig.status === 'active' && exportConfig.schedule_minutes > 0) {
-        this.scheduleExport(exportConfig.id, exportConfig.schedule_minutes);
+    try {
+      // Load active exports with schedule from database
+      const activeExports = await prisma.export.findMany({
+        where: {
+          status: 'active',
+          scheduleMinutes: { gt: 0 }
+        },
+        select: {
+          id: true,
+          name: true,
+          scheduleMinutes: true,
+          companyId: true
+        }
+      });
+
+      logger.info(`Found ${activeExports.length} active exports with schedules in database`);
+
+      // Schedule each export
+      for (const exportConfig of activeExports) {
+        this.scheduleExport(exportConfig.id, exportConfig.scheduleMinutes);
+        logger.debug('Scheduled export from database', {
+          exportId: exportConfig.id,
+          name: exportConfig.name,
+          interval: exportConfig.scheduleMinutes
+        });
       }
-    });
 
-    // Schedule maintenance tasks
-    this.scheduleMaintenanceTasks();
+      // Schedule maintenance tasks
+      this.scheduleMaintenanceTasks();
 
-    logger.info(`Scheduler initialized with ${this.jobs.size} scheduled exports`);
+      logger.info(`Scheduler initialized with ${this.jobs.size} scheduled exports`);
+    } catch (error) {
+      logger.error('Failed to initialize scheduler from database', {
+        error: error.message,
+        stack: error.stack
+      });
+
+      // Fallback to in-memory (for backward compatibility during migration)
+      logger.warn('Falling back to in-memory exports');
+      const exports = exportService.getAllExports();
+      exports.forEach(exportConfig => {
+        if (exportConfig.status === 'active' && exportConfig.schedule_minutes > 0) {
+          this.scheduleExport(exportConfig.id, exportConfig.schedule_minutes);
+        }
+      });
+
+      this.scheduleMaintenanceTasks();
+      logger.info(`Scheduler initialized (fallback) with ${this.jobs.size} scheduled exports`);
+    }
   }
 
   /**
