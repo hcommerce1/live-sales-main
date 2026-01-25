@@ -136,7 +136,11 @@ class Scheduler {
         logger.info(`Scheduled export ${exportId} completed successfully`);
       } catch (error) {
         logger.error(`Scheduled export ${exportId} failed`, {
-          error: error.message
+          error: error.message,
+          stack: error.stack,
+          code: error.code,
+          exportId,
+          timestamp: new Date().toISOString()
         });
       }
     });
