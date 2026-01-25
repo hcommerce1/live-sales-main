@@ -93,6 +93,7 @@ const wizardTemplateData = ref(null)     // template data for prefilling wizard
 
 // === Templates State ===
 const hiddenTemplates = ref(new Set())   // IDs of hidden sample templates
+const hideAllTemplates = ref(localStorage.getItem('hideAllTemplates') === 'true') // Hide all sample templates
 const showTokenRequiredModal = ref(false) // Modal for missing BaseLinker token
 
 // Computed: visible templates (excluding hidden ones)
@@ -173,9 +174,10 @@ const activeExportsCount = computed(() => {
 })
 
 // Google Sheets status - based on whether any export has a sheets URL configured
-// Supports legacy (sheetsUrl) and new structures (sheets_config[], sheets[])
+// Supports legacy (sheetsUrl) and new structures (sheet_url, sheets_config[], sheets[])
 const googleSheetsConfigured = computed(() => {
     return exportsList.value.some(e =>
+        (e.sheet_url && e.sheet_url.trim() !== '') ||
         (e.sheetsUrl && e.sheetsUrl.trim() !== '') ||
         (e.sheets_config && Array.isArray(e.sheets_config) && e.sheets_config.some(s => s.sheet_url?.trim())) ||
         (e.sheets && Array.isArray(e.sheets) && e.sheets.some(s => (s.sheet_url || s.sheetUrl)?.trim()))
@@ -205,7 +207,7 @@ const onboardingChecklist = computed(() => [
     {
         id: 'run',
         label: 'Uruchom pierwszy eksport',
-        done: exportsList.value.some(e => e.lastRun),
+        done: exportsList.value.some(e => e.last_run && e.last_run !== 'Nigdy'),
         action: null
     }
 ])
@@ -389,6 +391,7 @@ async function saveConfigToServer() {
         const savedConfig = await API.exports.save(config.value)
 
         await loadExportsFromServer()
+        await loadCapabilities()
 
         showToast(
             'Zapisano',
@@ -416,6 +419,7 @@ async function deleteExportFromServer(exportId) {
         await API.exports.delete(exportId)
 
         await loadExportsFromServer()
+        await loadCapabilities()
 
         deleteConfirm.value = null
         showToast(
@@ -474,6 +478,7 @@ async function toggleExportStatusOnServer(exp) {
         await API.exports.toggle(exp.id)
 
         await loadExportsFromServer()
+        await loadCapabilities()
     } catch (error) {
         console.error('Failed to toggle export status:', error)
         showToast(
@@ -690,6 +695,11 @@ function useTemplate(template) {
     currentPage.value = 'wizard'
 }
 
+function toggleHideAllTemplates() {
+    hideAllTemplates.value = !hideAllTemplates.value
+    localStorage.setItem('hideAllTemplates', hideAllTemplates.value.toString())
+}
+
 // Legacy function for old configurator (kept for backwards compatibility)
 function createNewExportLegacy() {
     const newId = 'export-' + Date.now()
@@ -750,6 +760,7 @@ async function handleWizardSave(exportConfig) {
 
         console.log('Calling loadExportsFromServer...')
         await loadExportsFromServer()
+        await loadCapabilities()
         console.log('loadExportsFromServer completed')
 
         // If this is a NEW export, run it immediately to populate data
@@ -831,6 +842,7 @@ async function handleWizardSaveDraft(draftConfig) {
 
         await API.exports.save(apiConfig)
         await loadExportsFromServer()
+        await loadCapabilities()
 
         showToast(
             'Szkic zapisany',
@@ -2103,8 +2115,13 @@ onBeforeUnmount(() => {
                 </div>
 
                 <!-- Przykładowe konfiguracje -->
-                <div v-if="visibleTemplates.length > 0" class="mb-6 md:mb-8">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Przykładowe konfiguracje</h3>
+                <div v-if="visibleTemplates.length > 0 && !hideAllTemplates" class="mb-6 md:mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Przykładowe konfiguracje</h3>
+                        <button @click="toggleHideAllTemplates" class="text-sm text-gray-500 hover:text-gray-700">
+                            Ukryj szablony
+                        </button>
+                    </div>
                     <p class="text-sm text-gray-600 mb-4">Wybierz gotowy szablon i dostosuj go do swoich potrzeb. Wystarczy podpiąć arkusz Google Sheets.</p>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div v-for="template in visibleTemplates" :key="template.id"
@@ -2149,6 +2166,16 @@ onBeforeUnmount(() => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
+                            <!-- Empty state -->
+                            <tr v-if="exportsList.length === 0">
+                                <td colspan="6" class="px-6 py-12 text-center">
+                                    <div class="text-gray-500 mb-2">Brak eksportów</div>
+                                    <p class="text-sm text-gray-400">Utwórz pierwszy eksport lub wybierz szablon powyżej</p>
+                                    <button v-if="hideAllTemplates" @click="toggleHideAllTemplates" class="mt-3 text-sm text-blue-600 hover:text-blue-800">
+                                        Pokaż przykładowe szablony
+                                    </button>
+                                </td>
+                            </tr>
                             <tr v-for="exp in exportsList" :key="exp.id" class="hover:bg-gray-50">
                                 <td class="px-4 md:px-6 py-4">
                                     <div class="font-medium text-sm">{{ exp.name }}</div>

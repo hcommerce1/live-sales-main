@@ -156,7 +156,7 @@ function getHighlightedFeatures(plan) {
       label: 'Eksporty',
       value: plan.features?.['exports.max_count'],
       available: true,
-      highlighted: plan.id === 'pro'
+      highlighted: false
     },
     {
       label: 'Min. interwal',
