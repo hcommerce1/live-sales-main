@@ -246,6 +246,12 @@ app.listen(PORT, async () => {
   // In development: logs warnings only
   try {
     stripeValidation.validateStripeConfiguration();
+
+    // Validate price IDs exist in Stripe (async, only in production)
+    if (process.env.NODE_ENV === 'production') {
+      await stripeValidation.validatePriceIdsWithStripe();
+      logger.info('Stripe price IDs validated successfully');
+    }
   } catch (error) {
     logger.error('Stripe configuration validation failed - server cannot start', {
       error: error.message,

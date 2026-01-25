@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const exportService = require('../services/exportService');
 const logger = require('../utils/logger');
 const { PrismaClient } = require('@prisma/client');
+const { reconcileStripeSubscriptions } = require('../services/reconciliation.service');
 
 const prisma = new PrismaClient();
 
@@ -100,7 +101,7 @@ class Scheduler {
   }
 
   /**
-   * Schedule maintenance tasks (audit log cleanup, etc.)
+   * Schedule maintenance tasks (audit log cleanup, reconciliation, etc.)
    */
   scheduleMaintenanceTasks() {
     // Audit log retention: Run daily at 3 AM
@@ -115,6 +116,25 @@ class Scheduler {
     });
 
     this.jobs.set('maintenance-audit-logs', auditLogCleanupJob);
+
+    // M1: Stripe subscription reconciliation - runs daily at 2 AM (Europe/Warsaw)
+    const reconciliationJob = cron.schedule('0 2 * * *', async () => {
+      logger.info('Running scheduled Stripe reconciliation');
+      try {
+        const stats = await reconcileStripeSubscriptions();
+        logger.info('Scheduled Stripe reconciliation completed', { stats });
+      } catch (error) {
+        logger.error('Scheduled Stripe reconciliation failed', {
+          error: error.message,
+        });
+        // TODO: Optionally send alert
+      }
+    }, {
+      timezone: 'Europe/Warsaw', // Polish timezone
+    });
+
+    this.jobs.set('maintenance-stripe-reconciliation', reconciliationJob);
+
     logger.info('Maintenance tasks scheduled');
   }
 

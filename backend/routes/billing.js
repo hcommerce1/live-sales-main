@@ -22,6 +22,7 @@ const featureFlags = require('../utils/feature-flags');
 const { featureFlagMiddleware } = require('../middleware/featureFlag');
 const authMiddleware = require('../middleware/auth');
 const { companyContextMiddleware, requireCompany, requireCompanyRole } = require('../middleware/companyContext');
+const { checkoutLimiter } = require('../middleware/rateLimiter');
 
 const stripeService = require('../services/stripe.service');
 const trialService = require('../services/trial.service');
@@ -96,13 +97,28 @@ router.post(
       const signature = req.headers['stripe-signature'];
 
       if (!signature) {
-        logger.warn('Webhook received without signature');
-        return res.status(400).json({ error: 'Missing signature' });
+        logger.warn('Webhook received without signature', { ip: req.ip });
+        return res.status(400).json({ error: 'Missing Stripe-Signature header' });
       }
 
       const result = await webhookService.handleWebhook(req.body, signature);
 
-      res.json(result);
+      // C3: Handle replay attack rejection
+      if (result.rejected && result.reason === 'signature_too_old') {
+        return res.status(401).json({
+          error: 'Webhook signature too old',
+          code: 'SIGNATURE_EXPIRED',
+        });
+      }
+
+      if (result.rejected) {
+        return res.status(400).json({
+          error: 'Webhook rejected',
+          code: result.reason?.toUpperCase() || 'REJECTED',
+        });
+      }
+
+      res.json({ received: true });
     } catch (error) {
       if (error.message === 'INVALID_SIGNATURE') {
         logger.warn('Invalid webhook signature');
@@ -130,6 +146,7 @@ router.use(companyContextMiddleware);
 router.get(
   '/subscription',
   requireCompany,
+  requireCompanyRole('owner', 'admin'), // H4: Role check - only owner/admin can view billing info
   featureFlagMiddleware('billing.enabled'),
   async (req, res) => {
     try {
@@ -290,6 +307,7 @@ router.post(
  */
 router.post(
   '/checkout',
+  checkoutLimiter, // H1: Rate limiter na checkout (5/15min)
   requireCompany,
   requireCompanyRole('owner', 'admin'),
   featureFlagMiddleware('billing.enabled'),

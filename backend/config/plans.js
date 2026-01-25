@@ -63,9 +63,8 @@ const PLANS = {
       yearly: 69000, // 690 PLN (2 miesiące gratis)
     },
     stripePriceId: {
-      // TODO: Replace with actual Stripe Price IDs after creating products
-      monthly: process.env.STRIPE_PRICE_BASIC_MONTHLY || 'price_basic_monthly_placeholder',
-      yearly: process.env.STRIPE_PRICE_BASIC_YEARLY || 'price_basic_yearly_placeholder',
+      monthly: process.env.STRIPE_PRICE_BASIC_MONTHLY,
+      yearly: process.env.STRIPE_PRICE_BASIC_YEARLY,
     },
     features: {
       // Exports
@@ -99,8 +98,8 @@ const PLANS = {
       yearly: 99000, // 990 PLN (2 miesiące gratis)
     },
     stripePriceId: {
-      monthly: process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthly_placeholder',
-      yearly: process.env.STRIPE_PRICE_PRO_YEARLY || 'price_pro_yearly_placeholder',
+      monthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
+      yearly: process.env.STRIPE_PRICE_PRO_YEARLY,
     },
     features: {
       // Exports

@@ -229,6 +229,44 @@ const passwordChangeLimiter = rateLimit({
   }) : undefined,
 });
 
+/**
+ * H1: Checkout rate limiter - prevents abuse of checkout session creation.
+ * Limit: 5 sessions per 15 minutes per company (or IP if no company).
+ */
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // max 5 checkout sessions
+  message: {
+    error: 'Too many checkout attempts',
+    code: 'CHECKOUT_RATE_LIMIT',
+    retryAfter: 900, // 15 minutes in seconds
+  },
+  keyGenerator: (req) => {
+    // Prefer company ID for authenticated requests
+    if (req.company?.id) {
+      return `company:${req.company.id}`;
+    }
+    // Fallback to IP
+    return `ip:${req.ip}`;
+  },
+  handler: (req, res) => {
+    logger.warn('Checkout rate limit exceeded', {
+      companyId: req.company?.id,
+      ip: req.ip,
+    });
+
+    res.status(429).json({
+      error: 'Too many checkout attempts',
+      code: 'CHECKOUT_RATE_LIMIT',
+      retryAfter: 900,
+    });
+  },
+  store: redisClient ? new RedisStore({
+    client: redisClient,
+    prefix: 'rate_limit:checkout:',
+  }) : undefined,
+});
+
 module.exports = {
   authLimiter,
   apiLimiter,
@@ -238,5 +276,6 @@ module.exports = {
   loginLimiter,
   twoFactorLimiter,
   passwordChangeLimiter,
+  checkoutLimiter,
   createLimiter,
 };

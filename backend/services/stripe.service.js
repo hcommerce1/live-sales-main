@@ -14,6 +14,54 @@
 const logger = require('../utils/logger');
 const { getPlan, getStripePriceId, TRIAL_CONFIG } = require('../config/plans');
 
+// H3: Sanitization helpers for Stripe API
+
+/**
+ * Sanitizes a value for Stripe API.
+ * - Converts to string
+ * - Trims whitespace
+ * - Truncates to maxLength
+ * - Returns undefined for empty values
+ *
+ * @param {any} value - Value to sanitize
+ * @param {number} maxLength - Maximum length (default 500, Stripe metadata limit)
+ * @returns {string|undefined}
+ */
+function sanitizeForStripe(value, maxLength = 500) {
+  if (value === null || value === undefined || value === '') {
+    return undefined;
+  }
+
+  const stringValue = String(value).trim();
+
+  if (stringValue.length === 0) {
+    return undefined;
+  }
+
+  return stringValue.slice(0, maxLength);
+}
+
+/**
+ * Sanitizes an email address.
+ * @param {string} email
+ * @returns {string|undefined}
+ */
+function sanitizeEmail(email) {
+  return sanitizeForStripe(email, 254); // RFC 5321 limit
+}
+
+/**
+ * Sanitizes a NIP (Polish tax ID).
+ * Removes non-digits and validates length.
+ * @param {string} nip
+ * @returns {string|undefined}
+ */
+function sanitizeNip(nip) {
+  if (!nip) return undefined;
+  const digitsOnly = String(nip).replace(/\D/g, '');
+  return digitsOnly.length === 10 ? digitsOnly : undefined;
+}
+
 // Lazy load Stripe to avoid startup errors if not configured
 let stripe = null;
 function getStripe() {
@@ -61,24 +109,25 @@ async function getOrCreateCustomer(company, user) {
     return company.stripeCustomerId;
   }
 
-  // Create new customer
+  // Create new customer with sanitized data (H3)
   const stripeClient = getStripe();
 
   const customer = await stripeClient.customers.create({
-    email: user.email,
-    name: company.name,
+    email: sanitizeEmail(user.email),
+    name: sanitizeForStripe(company.name, 256), // Stripe name limit
     metadata: {
       companyId: company.id,
-      nip: company.nip,
+      nip: sanitizeNip(company.nip),
     },
-    address: company.addressCity
-      ? {
-          line1: company.addressStreet || '',
-          city: company.addressCity,
-          postal_code: company.addressPostalCode || '',
-          country: company.addressCountry || 'PL',
-        }
-      : undefined,
+    // Only include address if we have city (required field)
+    ...(company.addressCity && {
+      address: {
+        line1: sanitizeForStripe(company.addressStreet, 200) || '',
+        city: sanitizeForStripe(company.addressCity, 100),
+        postal_code: sanitizeForStripe(company.addressPostalCode, 20) || '',
+        country: company.addressCountry || 'PL',
+      },
+    }),
   });
 
   // Save customer ID to company
@@ -123,7 +172,12 @@ async function createCheckoutSession({ company, user, planId, interval, trialEli
   // Get or create customer
   const customerId = await getOrCreateCustomer(company, user);
 
-  // Build checkout session config
+  // H2: Generate idempotency key
+  // Format: checkout-{companyId}-{priceId}-{minuteTimestamp}
+  // Valid for ~1 minute (same minute = same key)
+  const idempotencyKey = `checkout-${company.id}-${priceId}-${Math.floor(Date.now() / 60000)}`;
+
+  // Build checkout session config with sanitized metadata (H3)
   const sessionConfig = {
     customer: customerId,
     mode: 'subscription',
@@ -136,16 +190,16 @@ async function createCheckoutSession({ company, user, planId, interval, trialEli
     ],
     subscription_data: {
       metadata: {
-        companyId: company.id,
-        planId: planId,
-        createdBy: user.id,
+        companyId: company.id, // UUID - safe
+        planId: sanitizeForStripe(planId, 50),
+        createdBy: user.id, // UUID - safe
       },
     },
     success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/billing/canceled`,
     metadata: {
       companyId: company.id,
-      planId: planId,
+      planId: sanitizeForStripe(planId, 50),
     },
     // Polish locale
     locale: 'pl',
@@ -163,7 +217,13 @@ async function createCheckoutSession({ company, user, planId, interval, trialEli
     });
   }
 
-  const session = await stripeClient.checkout.sessions.create(sessionConfig);
+  // H2: Use idempotency key to prevent duplicates on retry
+  const session = await stripeClient.checkout.sessions.create(
+    sessionConfig,
+    {
+      idempotencyKey,
+    }
+  );
 
   logger.info('Created checkout session', {
     companyId: company.id,
@@ -171,6 +231,7 @@ async function createCheckoutSession({ company, user, planId, interval, trialEli
     planId,
     interval,
     trialEligible,
+    idempotencyKey, // H2: Log idempotency key for debugging
   });
 
   return {
@@ -292,4 +353,5 @@ module.exports = {
   getSubscription,
   constructWebhookEvent,
   isStripeConfigured,
+  getStripe, // Export for use in other services (e.g., webhook.service.js for SCA)
 };

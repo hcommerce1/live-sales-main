@@ -13,11 +13,67 @@
  */
 
 const logger = require('../utils/logger');
-const { constructWebhookEvent } = require('./stripe.service');
+const { constructWebhookEvent, getStripe } = require('./stripe.service');
 const { SUBSCRIPTION_STATUS } = require('../config/plans');
 const { addWebhookJob, isQueueAvailable } = require('./queue');
 const alertingService = require('./alerting.service');
 const { isIgnoredEvent, isUnknownEvent } = require('../config/stripe-events.config');
+
+// C3: Replay attack protection
+const MAX_SIGNATURE_AGE_SECONDS = 300; // 5 minutes
+
+/**
+ * Extracts timestamp from Stripe-Signature header.
+ * Format: "t=1234567890,v1=abc123,v0=xyz789"
+ */
+function extractSignatureTimestamp(signatureHeader) {
+  if (!signatureHeader) return null;
+
+  const parts = signatureHeader.split(',');
+  for (const part of parts) {
+    const [key, value] = part.split('=');
+    if (key === 't') {
+      const timestamp = parseInt(value, 10);
+      return isNaN(timestamp) ? null : timestamp;
+    }
+  }
+  return null;
+}
+
+/**
+ * Validates that webhook signature is not too old (replay protection).
+ * Returns { valid: true } or { valid: false, reason: string, age: number }
+ */
+function validateSignatureAge(signatureHeader) {
+  const signatureTimestamp = extractSignatureTimestamp(signatureHeader);
+
+  if (!signatureTimestamp) {
+    return { valid: false, reason: 'missing_timestamp' };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const age = now - signatureTimestamp;
+
+  if (age > MAX_SIGNATURE_AGE_SECONDS) {
+    return {
+      valid: false,
+      reason: 'signature_too_old',
+      age,
+      maxAge: MAX_SIGNATURE_AGE_SECONDS,
+    };
+  }
+
+  // Also reject if timestamp is in the future (clock skew protection)
+  if (age < -60) { // Allow 1 minute clock skew
+    return {
+      valid: false,
+      reason: 'signature_in_future',
+      age,
+    };
+  }
+
+  return { valid: true, age };
+}
 
 // Lazy load Prisma
 let prisma = null;
@@ -40,6 +96,24 @@ function getPrisma() {
  */
 async function handleWebhook(rawBody, signature) {
   const db = getPrisma();
+
+  // C3: Validate signature age BEFORE processing (replay attack protection)
+  const ageValidation = validateSignatureAge(signature);
+  if (!ageValidation.valid) {
+    logger.warn('Webhook signature age validation failed', {
+      level: 'SECURITY',
+      reason: ageValidation.reason,
+      signatureAge: ageValidation.age,
+      maxAge: ageValidation.maxAge,
+    });
+
+    // Return rejection for replay attacks
+    return {
+      received: false,
+      rejected: true,
+      reason: ageValidation.reason,
+    };
+  }
 
   // 1. Verify signature and construct event
   let event;
@@ -357,6 +431,41 @@ async function updateSubscriptionFromStripe(companyId, subscription) {
   const db = getPrisma();
   const status = mapStripeStatus(subscription.status);
 
+  // M2: Handle SCA (Strong Customer Authentication) states
+  if (status === SUBSCRIPTION_STATUS.INCOMPLETE && subscription.latest_invoice) {
+    try {
+      const stripeClient = getStripe();
+
+      // Fetch the invoice to check payment intent status
+      const invoice = await stripeClient.invoices.retrieve(subscription.latest_invoice);
+
+      if (invoice.payment_intent) {
+        const paymentIntent = await stripeClient.paymentIntents.retrieve(
+          invoice.payment_intent
+        );
+
+        if (paymentIntent.status === 'requires_action') {
+          logger.info('Subscription requires SCA authentication', {
+            stripeSubscriptionId: subscription.id,
+            companyId,
+            paymentIntentStatus: paymentIntent.status,
+            nextAction: paymentIntent.next_action?.type,
+          });
+
+          // TODO: Optionally send email with payment completion link
+          // The link is: paymentIntent.next_action.redirect_to_url.url
+          // Or use hosted invoice page: invoice.hosted_invoice_url
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to check SCA status', {
+        stripeSubscriptionId: subscription.id,
+        error: error.message,
+      });
+    }
+  }
+
+  // Update local subscription
   await db.subscription.update({
     where: { companyId },
     data: {
@@ -485,7 +594,30 @@ async function handleCheckoutCompleted(session) {
 // ============================================
 
 /**
- * Map Stripe subscription status to our status enum
+ * M2: Maps Stripe subscription status to local status.
+ *
+ * Status flow:
+ * - trialing → TRIALING (full access)
+ * - active → ACTIVE (full access)
+ * - past_due → PAST_DUE (grace period, show warning)
+ * - incomplete → INCOMPLETE (SCA pending, no access)
+ * - incomplete_expired → INCOMPLETE_EXPIRED (SCA timeout, no access)
+ * - canceled → CANCELED (no access)
+ * - unpaid → UNPAID (multiple failed payments, no access)
+ * - paused → PAUSED (if using pause feature)
+ *
+ * Access control based on subscription status:
+ *
+ * | Status              | Access Level | UI Behavior                    |
+ * |---------------------|--------------|--------------------------------|
+ * | TRIALING            | Full         | Show trial days remaining      |
+ * | ACTIVE              | Full         | Normal operation               |
+ * | PAST_DUE            | Full         | Show payment warning banner    |
+ * | INCOMPLETE          | None         | Show "Complete payment" CTA    |
+ * | INCOMPLETE_EXPIRED  | None         | Show "Restart subscription"    |
+ * | CANCELED            | None         | Show "Resubscribe" option      |
+ * | UNPAID              | Read-only    | Show "Update payment method"   |
+ * | PAUSED              | None         | Show "Resume subscription"     |
  */
 function mapStripeStatus(stripeStatus) {
   const statusMap = {
@@ -498,7 +630,17 @@ function mapStripeStatus(stripeStatus) {
     incomplete_expired: SUBSCRIPTION_STATUS.INCOMPLETE_EXPIRED,
   };
 
-  return statusMap[stripeStatus] || stripeStatus;
+  const mappedStatus = statusMap[stripeStatus];
+
+  if (!mappedStatus) {
+    logger.warn('Unknown Stripe subscription status', {
+      stripeStatus,
+      defaultingTo: stripeStatus,
+    });
+    return stripeStatus;
+  }
+
+  return mappedStatus;
 }
 
 /**
