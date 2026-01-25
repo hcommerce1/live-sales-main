@@ -371,7 +371,11 @@ async function loadExportsFromServer() {
             sheets_tab: 'Sheet1',
             status: exp.status || 'active',
             last_run: exp.last_run || new Date().toISOString().slice(0, 19).replace('T', ' '),
-            sheet_url: exp.sheets?.sheet_url || ''
+            // Poprawne mapowanie - sheets to tablica obiektów
+            sheet_url: exp.sheets?.[0]?.sheet_url || exp.sheetsUrl || '',
+            sheetsUrl: exp.sheetsUrl || '',
+            sheets: exp.sheets || [],
+            sheets_config: exp.sheets_config || []
         }))
     } catch (error) {
         console.error('Failed to load exports:', error)

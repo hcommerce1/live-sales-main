@@ -14,6 +14,8 @@ const {
 const featureFlags = require('../utils/feature-flags');
 // SEC-1: Resource ownership middleware for authorization
 const { requireOwnership } = require('../middleware/resourceOwnership');
+// Rate limiting for export runs
+const { exportLimiter } = require('../middleware/rateLimiter');
 
 // Export fields configuration (centralized in config file)
 const exportFields = require('../config/export-fields');
@@ -331,7 +333,7 @@ router.delete('/:id', requireCompany, requireOwnership('export'), async (req, re
  * - runId: Database record ID
  * - clientRunId: The idempotency key (provided or auto-generated)
  */
-router.post('/:id/run', requireCompany, requireOwnership('export'), async (req, res) => {
+router.post('/:id/run', requireCompany, requireOwnership('export'), exportLimiter, async (req, res) => {
   const exportId = req.params.id;
   const userId = req.user?.id;
   const companyId = req.company?.id;

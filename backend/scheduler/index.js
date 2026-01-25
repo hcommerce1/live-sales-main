@@ -5,9 +5,40 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+// Global timeout for export execution (10 minutes)
+// Prevents exports from hanging indefinitely and blocking scheduler
+const EXPORT_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * Execute a promise with timeout
+ * @param {Promise} promise - Promise to execute
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {string} operationName - Name for error message
+ * @returns {Promise} - Result or timeout error
+ */
+async function withTimeout(promise, timeoutMs, operationName = 'Export') {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${operationName} timed out after ${timeoutMs / 1000} seconds`));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
+
 class Scheduler {
   constructor() {
     this.jobs = new Map();
+    // Track currently running exports to prevent overlapping executions
+    this.runningExports = new Set();
   }
 
   /**
@@ -130,9 +161,25 @@ class Scheduler {
     logger.info(`Scheduling export ${exportId} with interval ${minutes} minutes (${cronExpression})`);
 
     const job = cron.schedule(cronExpression, async () => {
+      // Mutex: Skip if export is already running (prevents overlapping executions)
+      if (this.runningExports.has(exportId)) {
+        logger.warn(`Scheduler skipped export ${exportId} - already running`, {
+          exportId,
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+
+      this.runningExports.add(exportId);
       logger.info(`Scheduler triggered export ${exportId}`);
+
       try {
-        await exportService.runExport(exportId);
+        // Execute with global timeout to prevent hanging exports
+        await withTimeout(
+          exportService.runExport(exportId),
+          EXPORT_TIMEOUT_MS,
+          `Export ${exportId}`
+        );
         logger.info(`Scheduled export ${exportId} completed successfully`);
       } catch (error) {
         logger.error(`Scheduled export ${exportId} failed`, {
@@ -140,8 +187,11 @@ class Scheduler {
           stack: error.stack,
           code: error.code,
           exportId,
+          isTimeout: error.message?.includes('timed out'),
           timestamp: new Date().toISOString()
         });
+      } finally {
+        this.runningExports.delete(exportId);
       }
     });
 
@@ -181,6 +231,7 @@ class Scheduler {
       logger.info(`Stopped job for export ${exportId}`);
     });
     this.jobs.clear();
+    this.runningExports.clear();
     logger.info('All scheduled jobs stopped');
   }
 
@@ -225,6 +276,23 @@ class Scheduler {
    */
   isScheduled(exportId) {
     return this.jobs.has(exportId);
+  }
+
+  /**
+   * Check if export is currently running
+   * @param {string} exportId - Export ID
+   * @returns {boolean} - True if running
+   */
+  isRunning(exportId) {
+    return this.runningExports.has(exportId);
+  }
+
+  /**
+   * Get count of currently running exports
+   * @returns {number} - Count of running exports
+   */
+  getRunningCount() {
+    return this.runningExports.size;
   }
 }
 

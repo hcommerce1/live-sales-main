@@ -22,6 +22,39 @@ const exportFields = require('../config/export-fields');
 const prisma = new PrismaClient();
 
 // ============================================
+// TIMEOUT CONFIGURATION
+// ============================================
+
+// Global timeout for entire export operation (10 minutes)
+// Prevents exports from hanging indefinitely
+const EXPORT_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * Execute a promise with timeout
+ * @param {Promise} promise - Promise to execute
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {string} operationName - Name for error message
+ * @returns {Promise} - Result or timeout error
+ */
+async function withTimeout(promise, timeoutMs, operationName = 'Operation') {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${operationName} timed out after ${timeoutMs / 1000} seconds`));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
+
+// ============================================
 // IDEMPOTENCY HELPERS
 // ============================================
 
