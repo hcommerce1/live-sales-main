@@ -91,6 +91,15 @@ const isLoading = ref(false)
 const wizardEditingExportId = ref(null)  // null = new export, string = editing existing
 const wizardTemplateData = ref(null)     // template data for prefilling wizard
 
+// === Templates State ===
+const hiddenTemplates = ref(new Set())   // IDs of hidden sample templates
+const showTokenRequiredModal = ref(false) // Modal for missing BaseLinker token
+
+// Computed: visible templates (excluding hidden ones)
+const visibleTemplates = computed(() =>
+  SAMPLE_EXPORTS.filter(t => !hiddenTemplates.value.has(t.id))
+)
+
 // Configuration page
 const baselinkerToken = ref('')
 const showToken = ref(false)
@@ -646,6 +655,12 @@ async function saveConfig() {
 }
 
 function createNewExport() {
+    // Check if BaseLinker token is configured
+    if (!integrationsStore.baselinker.configured) {
+        showTokenRequiredModal.value = true
+        return
+    }
+
     // Open the new export wizard instead of old configurator
     wizardEditingExportId.value = null
     wizardTemplateData.value = null
@@ -653,6 +668,16 @@ function createNewExport() {
 }
 
 function useTemplate(template) {
+    // Check if BaseLinker token is configured
+    if (!integrationsStore.baselinker.configured) {
+        showTokenRequiredModal.value = true
+        return
+    }
+
+    // Hide this specific template
+    hiddenTemplates.value.add(template.id)
+    localStorage.setItem('hiddenTemplates', JSON.stringify([...hiddenTemplates.value]))
+
     // Open wizard with template data prefilled
     wizardEditingExportId.value = null
     wizardTemplateData.value = {
@@ -823,20 +848,6 @@ async function handleWizardSaveDraft(draftConfig) {
 function editExportInWizard(exportId) {
     // Open wizard for editing existing export
     wizardEditingExportId.value = exportId
-    currentPage.value = 'wizard'
-}
-
-function duplicateExport(exp) {
-    // Open wizard with copied data but without ID and sheet URL
-    wizardEditingExportId.value = null
-    wizardTemplateData.value = {
-        name: `${exp.name} (kopia)`,
-        dataset: exp.dataset,
-        selectedFields: exp.selected_fields || exp.selectedFields || [],
-        filters: exp.filters ? { ...exp.filters } : null,
-        scheduleMinutes: exp.schedule_minutes || exp.scheduleMinutes
-        // Note: sheetsUrl is intentionally NOT copied - user must provide new URL
-    }
     currentPage.value = 'wizard'
 }
 
@@ -1783,6 +1794,16 @@ onMounted(async () => {
         return
     }
 
+    // Load hidden templates from localStorage
+    const storedHiddenTemplates = localStorage.getItem('hiddenTemplates')
+    if (storedHiddenTemplates) {
+        try {
+            hiddenTemplates.value = new Set(JSON.parse(storedHiddenTemplates))
+        } catch (e) {
+            console.error('Failed to parse hiddenTemplates from localStorage:', e)
+        }
+    }
+
     // Update time every second
     setInterval(() => {
         updateTime()
@@ -1790,6 +1811,9 @@ onMounted(async () => {
 
     // Load user's company
     await loadCompany()
+
+    // Load integrations status (for token checks)
+    await integrationsStore.fetchStatus()
 
     // Load exports from server
     await loadExportsFromServer()
@@ -2079,11 +2103,11 @@ onBeforeUnmount(() => {
                 </div>
 
                 <!-- Przykładowe konfiguracje -->
-                <div v-if="exportsList.length === 0" class="mb-6 md:mb-8">
+                <div v-if="visibleTemplates.length > 0" class="mb-6 md:mb-8">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4">Przykładowe konfiguracje</h3>
                     <p class="text-sm text-gray-600 mb-4">Wybierz gotowy szablon i dostosuj go do swoich potrzeb. Wystarczy podpiąć arkusz Google Sheets.</p>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div v-for="template in SAMPLE_EXPORTS" :key="template.id"
+                        <div v-for="template in visibleTemplates" :key="template.id"
                              class="bg-white rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-400 p-4 transition-colors cursor-pointer group"
                              @click="useTemplate(template)">
                             <div class="flex items-start gap-3">
@@ -2159,12 +2183,6 @@ onBeforeUnmount(() => {
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                             </svg>
                                             Edytuj
-                                        </button>
-                                        <button @click="duplicateExport(exp)" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                            </svg>
-                                            Duplikuj
                                         </button>
                                         <button @click="confirmDelete(exp.id)" class="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3452,6 +3470,41 @@ onBeforeUnmount(() => {
                 </div>
             </div>
         </div>
+
+            <!-- Token Required Modal -->
+            <div v-if="showTokenRequiredModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">Wymagana konfiguracja</h3>
+                            <p class="text-sm text-gray-500">Token BaseLinker nie jest skonfigurowany</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-6">
+                        Aby utworzyć eksport, musisz najpierw skonfigurować token API BaseLinker.
+                        Token umożliwia pobieranie danych z Twojego konta BaseLinker.
+                    </p>
+                    <div class="flex gap-3">
+                        <button
+                            @click="showTokenRequiredModal = false"
+                            class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                        >
+                            Anuluj
+                        </button>
+                        <button
+                            @click="showTokenRequiredModal = false; currentPage = 'config'"
+                            class="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                        >
+                            Skonfiguruj token
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Toast (prawy dolny róg) -->
             <div v-if="toast.show" class="fixed bottom-4 right-4 bg-white border-2 border-gray-200 rounded-xl shadow-2xl p-4 max-w-sm z-50 animate-slide-in">
