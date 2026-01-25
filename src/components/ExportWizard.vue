@@ -119,8 +119,14 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
             </svg>
             <div>
-              <p class="text-sm font-medium text-red-800">Ten arkusz jest już używany!</p>
-              <p class="text-sm text-red-700 mt-1">Każdy eksport musi mieć unikalny arkusz docelowy.</p>
+              <p class="text-sm font-medium text-red-800">
+                {{ duplicateInSameExport ? 'Zduplikowany arkusz w tym eksporcie!' : 'Ten arkusz jest już używany!' }}
+              </p>
+              <p class="text-sm text-red-700 mt-1">
+                {{ duplicateInSameExport
+                  ? 'Ten sam arkusz (ta sama zakładka) nie może być użyty wielokrotnie w jednym eksporcie.'
+                  : 'Każdy eksport musi mieć unikalny arkusz docelowy.' }}
+              </p>
             </div>
           </div>
         </div>
@@ -487,25 +493,51 @@ function handleDropOnContainer() {
   }
 }
 
-// Extract Google Sheets ID from URL for comparison
-function extractSheetId(url) {
+// Extract Google Sheets ID and GID from URL for comparison
+function extractSheetIdentifiers(url) {
   if (!url) return null
-  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
-  return match ? match[1] : null
+  const spreadsheetMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+  const gidMatch = url.match(/[#&?]gid=(\d+)/)
+  if (!spreadsheetMatch) return null
+  return {
+    spreadsheetId: spreadsheetMatch[1],
+    gid: gidMatch ? gidMatch[1] : '0'
+  }
 }
 
-// URL validation - check if sheet is already used in another export
+// Legacy function for backward compatibility
+function extractSheetId(url) {
+  const ids = extractSheetIdentifiers(url)
+  return ids ? ids.spreadsheetId : null
+}
+
+// Get unique key for sheet (spreadsheetId:gid)
+function getSheetKey(url) {
+  const ids = extractSheetIdentifiers(url)
+  return ids ? `${ids.spreadsheetId}:${ids.gid}` : null
+}
+
+// URL validation - check duplicates in same export AND other exports
+const duplicateInSameExport = ref(false)
+
 function checkDuplicateUrl() {
-  const currentSheetIds = config.value.sheets_config
-    ?.map(s => extractSheetId(s.sheet_url))
+  const currentSheetKeys = config.value.sheets_config
+    ?.map(s => getSheetKey(s.sheet_url))
     .filter(Boolean) || []
 
-  const otherSheetIds = props.existingExports
+  // Check for duplicates within same export
+  const uniqueKeys = new Set(currentSheetKeys)
+  duplicateInSameExport.value = uniqueKeys.size < currentSheetKeys.length
+
+  // Check for duplicates in other exports
+  const otherSheetKeys = props.existingExports
     .filter(e => e.id !== config.value.id)
-    .flatMap(e => e.sheets?.map(s => extractSheetId(s.sheet_url)) || [])
+    .flatMap(e => e.sheets?.map(s => getSheetKey(s.sheet_url)) || [])
     .filter(Boolean)
 
-  duplicateSheetWarning.value = currentSheetIds.some(id => otherSheetIds.includes(id))
+  const duplicateInOtherExport = currentSheetKeys.some(key => otherSheetKeys.includes(key))
+
+  duplicateSheetWarning.value = duplicateInSameExport.value || duplicateInOtherExport
 }
 
 // Navigation
