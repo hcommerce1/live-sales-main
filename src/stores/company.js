@@ -2,8 +2,7 @@
  * Company Store - Pinia store for company and subscription management
  *
  * Handles:
- * - Current company context
- * - User's companies list
+ * - Current company context (single company per user)
  * - Subscription and billing status
  * - Plan capabilities
  * - Trial status
@@ -19,8 +18,7 @@ export const useCompanyStore = defineStore('company', () => {
   // STATE
   // ============================================
 
-  const current = ref(null) // Currently selected company
-  const list = ref([]) // All companies user belongs to
+  const current = ref(null) // User's company
   const subscription = ref(null)
   const plan = ref(null)
   const trialStatus = ref(null)
@@ -40,8 +38,6 @@ export const useCompanyStore = defineStore('company', () => {
   const companyId = computed(() => current.value?.id)
 
   const companyName = computed(() => current.value?.name || '')
-
-  const hasMultipleCompanies = computed(() => list.value.length > 1)
 
   const isOwner = computed(() => myRole.value === 'owner')
 
@@ -92,52 +88,34 @@ export const useCompanyStore = defineStore('company', () => {
   // ============================================
 
   /**
-   * Fetch all companies user belongs to
+   * Load user's company
    */
-  async function fetchCompanies() {
-    error.value = null
-
-    try {
-      const response = await API.company.getMyCompanies()
-      if (response.success && response.data) {
-        list.value = response.data.companies || []
-
-        // Auto-select first company if none selected
-        if (!current.value && list.value.length > 0) {
-          await selectCompany(list.value[0].id)
-        }
-      }
-    } catch (err) {
-      error.value = err.message
-      console.error('Failed to fetch companies:', err)
-    }
-  }
-
-  /**
-   * Select a company as current context
-   */
-  async function selectCompany(companyId) {
-    if (!companyId) return
-
+  async function loadCompany() {
     error.value = null
     isLoading.value = true
 
     try {
-      const response = await API.company.get(companyId)
-      if (response.success && response.data) {
-        current.value = response.data.company
-        subscription.value = response.data.subscription
-        myRole.value = response.data.myRole
+      const response = await API.company.getMyCompanies()
+      const companies = response.data?.companies || response.companies || []
 
-        // Store company ID for API requests
-        localStorage.setItem('currentCompanyId', companyId)
+      if (companies.length > 0) {
+        const companyId = companies[0].id
+        const details = await API.company.get(companyId)
 
-        // Fetch additional data
-        await Promise.all([fetchSubscription(), fetchTeam()])
+        if (details.success && details.data) {
+          current.value = details.data.company
+          subscription.value = details.data.subscription
+          myRole.value = details.data.myRole
+
+          // Fetch additional data
+          await Promise.all([fetchSubscription(), fetchTeam()])
+        }
+      } else {
+        current.value = null
       }
     } catch (err) {
       error.value = err.message
-      console.error('Failed to select company:', err)
+      console.error('Failed to load company:', err)
     } finally {
       isLoading.value = false
     }
@@ -307,7 +285,6 @@ export const useCompanyStore = defineStore('company', () => {
    */
   function $reset() {
     current.value = null
-    list.value = []
     subscription.value = null
     plan.value = null
     trialStatus.value = null
@@ -316,14 +293,11 @@ export const useCompanyStore = defineStore('company', () => {
     myRole.value = null
     isLoading.value = false
     error.value = null
-
-    localStorage.removeItem('currentCompanyId')
   }
 
   return {
     // State
     current,
-    list,
     subscription,
     plan,
     trialStatus,
@@ -337,7 +311,6 @@ export const useCompanyStore = defineStore('company', () => {
     isCompanySelected,
     companyId,
     companyName,
-    hasMultipleCompanies,
     isOwner,
     isAdmin,
     canManageTeam,
@@ -349,8 +322,7 @@ export const useCompanyStore = defineStore('company', () => {
     planLimits,
 
     // Actions
-    fetchCompanies,
-    selectCompany,
+    loadCompany,
     fetchSubscription,
     fetchTrialStatus,
     startTrial,

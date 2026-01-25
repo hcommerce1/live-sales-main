@@ -2,11 +2,12 @@
  * Company Context Middleware
  *
  * Injects company context into request based on user's membership.
+ * Each user has exactly one company (no multi-company support).
  * Feature flag: company.enabled
  *
  * When enabled:
- * - Loads user's company memberships
- * - Sets req.company to active company
+ * - Loads user's company membership
+ * - Sets req.company to user's company
  * - Sets req.memberRole to user's role in that company
  *
  * When disabled (legacy mode):
@@ -32,9 +33,9 @@ function getPrisma() {
  * Must be used AFTER auth middleware (requires req.user)
  *
  * Adds to request:
- * - req.company: Active company object (or null)
+ * - req.company: User's company object (or null if no membership)
  * - req.memberRole: User's role in company ('owner', 'admin', 'member')
- * - req.companyMembers: Array of all user's memberships (for multi-company support)
+ * - req.companyMembers: Array with user's membership (kept for compatibility)
  */
 async function companyContextMiddleware(req, res, next) {
   try {
@@ -85,33 +86,8 @@ async function companyContextMiddleware(req, res, next) {
       return next();
     }
 
-    // Determine active company
-    // Priority: X-Company-Id header > first membership
-    let activeCompanyId = req.headers['x-company-id'];
-    let activeMembership = null;
-
-    if (activeCompanyId) {
-      // Validate user has access to requested company
-      activeMembership = memberships.find((m) => m.companyId === activeCompanyId);
-
-      if (!activeMembership) {
-        logger.warn('User attempted to access unauthorized company', {
-          level: 'SECURITY',
-          userId: req.user.id,
-          requestedCompanyId: activeCompanyId,
-          userCompanies: memberships.map((m) => m.companyId),
-          ip: req.ip,
-        });
-
-        return res.status(403).json({
-          error: 'Access denied to this company',
-          code: 'COMPANY_ACCESS_DENIED',
-        });
-      }
-    } else {
-      // Default to first company
-      activeMembership = memberships[0];
-    }
+    // Single company per user - use the first (and only) membership
+    const activeMembership = memberships[0];
 
     // Set company context
     req.company = activeMembership.company;

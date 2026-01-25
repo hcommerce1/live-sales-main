@@ -42,25 +42,6 @@ export const API = {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
-    localStorage.removeItem('activeCompanyId');
-  },
-
-  /**
-   * Get active company ID
-   */
-  getActiveCompanyId() {
-    return localStorage.getItem('activeCompanyId');
-  },
-
-  /**
-   * Set active company ID
-   */
-  setActiveCompanyId(companyId) {
-    if (companyId) {
-      localStorage.setItem('activeCompanyId', companyId);
-    } else {
-      localStorage.removeItem('activeCompanyId');
-    }
   },
 
   /**
@@ -107,12 +88,6 @@ export const API = {
 
     if (token && !endpoint.startsWith('/api/auth/login') && !endpoint.startsWith('/api/auth/register')) {
       headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    // Add X-Company-Id header for multi-company support
-    const companyId = this.getActiveCompanyId();
-    if (companyId && !endpoint.startsWith('/api/auth/') && !endpoint.startsWith('/api/company/register') && !endpoint.startsWith('/api/company/lookup')) {
-      headers['X-Company-Id'] = companyId;
     }
 
     const config = {

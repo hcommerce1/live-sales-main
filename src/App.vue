@@ -98,9 +98,8 @@ const tokenSaved = ref(false)
 let tokenSaveTimeout = null
 const userEmail = ref('')
 
-// === PR F3: Multi-company, Team, Billing ===
-// Company state
-const companies = ref([])
+// === Company, Team, Billing ===
+// Company state (single company per user)
 const company = ref(null)
 
 // Team state
@@ -1001,7 +1000,7 @@ async function saveBaselinkerToken() {
     }
 
     try {
-        // Use API.request to include X-Company-Id header automatically
+        // Use API.request for consistent error handling
         await API.request('/api/user/baselinker-token', {
             method: 'POST',
             body: JSON.stringify({
@@ -1024,7 +1023,7 @@ async function saveBaselinkerToken() {
 
 async function loadBaselinkerToken() {
     try {
-        // Use API.request to include X-Company-Id header automatically
+        // Use API.request for consistent error handling
         const data = await API.request('/api/user/baselinker-token')
 
         if (data.token) {
@@ -1061,64 +1060,39 @@ async function logout() {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
-    localStorage.removeItem('activeCompanyId')
 
-    // Redirect is now handled by auth state change
+    // Redirect to login
+    window.location.href = '/login.html'
 }
 
-// === PR F3: Company, Team, Billing Methods ===
+// === Company, Team, Billing Methods ===
 
 // --- Company Methods ---
-async function loadCompanies() {
+async function loadCompany() {
     try {
+        // Get user's single company (backend auto-selects based on membership)
         const result = await API.company.getMyCompanies()
-        companies.value = result.data?.companies || result.companies || []
+        const companies = result.data?.companies || result.companies || []
 
-        // Set active company if not set
-        const activeId = API.getActiveCompanyId()
-        if (companies.value.length > 0) {
-            if (!activeId || !companies.value.find(c => c.id === activeId)) {
-                selectCompany(companies.value[0].id)
-            } else {
-                await loadCompanyDetails(activeId)
+        if (companies.length > 0) {
+            company.value = companies[0]
+            // Load additional company details
+            const details = await API.company.get(companies[0].id)
+            if (details.subscription) {
+                subscription.value = details.subscription
             }
         } else {
-            // No companies yet - user needs to register one
-            console.log('No companies found. User should register a company first.')
+            company.value = null
+            console.log('No company found. User should register a company first.')
         }
     } catch (error) {
-        console.error('Failed to load companies:', error)
-        // Backend may not have company endpoints yet - this is expected during development
-        companies.value = []
+        console.error('Failed to load company:', error)
+        company.value = null
     }
-}
-
-async function loadCompanyDetails(companyId) {
-    try {
-        const result = await API.company.get(companyId)
-        company.value = result.company
-        subscription.value = result.subscription
-    } catch (error) {
-        console.error('Failed to load company details:', error)
-    }
-}
-
-function selectCompany(companyId) {
-    API.setActiveCompanyId(companyId)
-    loadCompanyDetails(companyId)
-    // Reload data for new company context
-    loadExportsFromServer()
-    loadTeamMembers()
-    loadSubscription()
-    loadCapabilities()
 }
 
 // --- Team Methods ---
 async function loadTeamMembers() {
-    if (!API.getActiveCompanyId()) {
-        teamMembers.value = []
-        return
-    }
     try {
         const result = await API.team.getMembers()
         teamMembers.value = result.members || []
@@ -1129,11 +1103,6 @@ async function loadTeamMembers() {
 }
 
 async function inviteTeamMember() {
-    if (!API.getActiveCompanyId()) {
-        showToast('Błąd', 'Najpierw zarejestruj lub wybierz firmę', '<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>')
-        return
-    }
-
     if (!teamInviteEmail.value) {
         showToast('Błąd', 'Wprowadź adres email', '<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>')
         return
@@ -1192,11 +1161,6 @@ async function loadPlans() {
 }
 
 async function loadSubscription() {
-    if (!API.getActiveCompanyId()) {
-        subscription.value = null
-        hasStripeCustomer.value = false
-        return
-    }
     try {
         const result = await API.billing.getSubscription()
         subscription.value = result.subscription
@@ -1209,10 +1173,6 @@ async function loadSubscription() {
 }
 
 async function loadCapabilities() {
-    if (!API.getActiveCompanyId()) {
-        capabilities.value = null
-        return
-    }
     try {
         const result = await API.features.getCapabilities()
         capabilities.value = result
@@ -1223,10 +1183,6 @@ async function loadCapabilities() {
 }
 
 async function loadTrialStatus() {
-    if (!API.getActiveCompanyId()) {
-        trialStatus.value = null
-        return
-    }
     try {
         const result = await API.billing.getTrialStatus()
         trialStatus.value = result
@@ -1306,11 +1262,6 @@ async function refreshBillingDataSafe() {
 
 // Load member role for current user
 async function loadMemberRole() {
-    if (!API.getActiveCompanyId()) {
-        memberRole.value = null
-        memberRoleLoading.value = false
-        return
-    }
     // Nie ustawiaj true tutaj - już jest true na start
     try {
         const result = await API.team.getMembers()
@@ -1837,8 +1788,8 @@ onMounted(async () => {
         updateTime()
     }, 1000)
 
-    // Load companies (PR F3)
-    await loadCompanies()
+    // Load user's company
+    await loadCompany()
 
     // Load exports from server
     await loadExportsFromServer()
@@ -1912,18 +1863,6 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <!-- Company Selector (PR F3) -->
-                <div v-if="companies.length > 0" class="mt-4">
-                    <select
-                        :value="API.getActiveCompanyId()"
-                        @change="selectCompany($event.target.value)"
-                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:border-blue-500 focus:outline-none"
-                    >
-                        <option v-for="c in companies" :key="c.id" :value="c.id">
-                            {{ c.name }}
-                        </option>
-                    </select>
-                </div>
             </div>
 
             <nav class="flex-1 px-3 space-y-1 sidebar-nav overflow-y-auto">
