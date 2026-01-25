@@ -9,6 +9,7 @@ import emailjs from '@emailjs/browser'
 import ExportWizard from './components/ExportWizard.vue'
 // Auth components
 import LoginForm from './components/LoginForm.vue'
+import SecurityTab from './components/SecurityTab.vue'
 
 // Pinia stores
 import { useAuthStore } from './stores/auth'
@@ -1865,6 +1866,12 @@ onBeforeUnmount(() => {
                     </svg>
                     Konfiguracja
                 </a>
+                <a href="#" @click.prevent="currentPage = 'security'" :class="{'active': currentPage === 'security'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                    Bezpieczeństwo
+                </a>
             </nav>
 
             <div class="p-4 border-t border-gray-200">
@@ -2515,6 +2522,16 @@ onBeforeUnmount(() => {
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- BEZPIECZEŃSTWO -->
+            <div v-if="currentPage === 'security'" class="p-4 md:p-8">
+                <div class="max-w-3xl mx-auto">
+                    <h1 class="text-2xl md:text-3xl font-bold mb-2">Bezpieczeństwo</h1>
+                    <p class="text-sm md:text-base text-gray-600 mb-8">Zarządzaj hasłem i weryfikacją dwuetapową</p>
+
+                    <SecurityTab />
                 </div>
             </div>
 

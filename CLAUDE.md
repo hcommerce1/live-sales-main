@@ -182,6 +182,14 @@ git pull --rebase
 git push
 ```
 
-### Working Directory
-Main project path: `live-sales-v7/` (relative to repo root)
-Full path on dev machine: `c:\Users\huber\OneDrive\Pulpit\VS CODE\live-sales-v24\live-sales-v23\live-sales-v23\live-sales-v21\live-sales-v21\live-sales-v7`
+## Current Development Context
+
+Aktywny plan implementacji znajduje się w:
+- **Plan:** `.claude/plans/` - szczegółowy plan zmian do implementacji
+
+### Key Files for Current Work
+- `prisma/schema.prisma` - Database schema (Export model)
+- `backend/services/exportService.js` - Export execution logic
+- `backend/config/export-fields.js` - Dataset definitions
+- `src/App.vue` - Main Vue SPA (dashboard, subscription)
+- `src/components/ExportWizard.vue` - Export configuration wizard

@@ -324,7 +324,7 @@ const twoFactorError = ref(null)
 const twoFactorSuccess = ref(null)
 
 // Computed
-const twoFactorEnabled = computed(() => authStore.twoFactorEnabled)
+const twoFactorEnabled = computed(() => authStore.hasTwoFactor)
 
 const canSubmitPassword = computed(() => {
   return (
