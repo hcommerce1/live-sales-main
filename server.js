@@ -246,17 +246,25 @@ app.listen(PORT, async () => {
   // In development: logs warnings only
   try {
     stripeValidation.validateStripeConfiguration();
-
-    // Validate price IDs exist in Stripe (async, only in production)
-    if (process.env.NODE_ENV === 'production') {
-      await stripeValidation.validatePriceIdsWithStripe();
-      logger.info('Stripe price IDs validated successfully');
-    }
   } catch (error) {
     logger.error('Stripe configuration validation failed - server cannot start', {
       error: error.message,
     });
     process.exit(1);
+  }
+
+  // Validate price IDs exist in Stripe (async, only in production)
+  // This is a soft check - logs warning but doesn't block startup
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      await stripeValidation.validatePriceIdsWithStripe();
+      logger.info('Stripe price IDs validated successfully');
+    } catch (error) {
+      logger.warn('Stripe price validation failed - billing may not work correctly', {
+        error: error.message,
+      });
+      // Don't exit - allow server to start, billing will fail at checkout time
+    }
   }
 
   // Initialize webhook queue and worker (requires Redis)
