@@ -109,6 +109,26 @@ module.exports = {
         { key: 'order_page',   label: 'Strona zamówienia',   group: 'Status', plan: 'basic', type: 'text' },
         { key: 'pick_state',   label: 'Status kompletacji',  group: 'Status', plan: 'basic', type: 'number' },
         { key: 'pack_state',   label: 'Status pakowania',    group: 'Status', plan: 'basic', type: 'number' },
+
+        // Dokumenty sprzedażowe (wzbogacenie z getInvoices + getReceipts API)
+        { key: 'fv_number',          label: 'Numer faktury',              group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
+        { key: 'fv_date_add',        label: 'Data wystawienia faktury',   group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'date' },
+        { key: 'fv_date_sell',       label: 'Data sprzedaży',             group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'date' },
+        { key: 'fv_date_pay_to',     label: 'Termin płatności',           group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'date' },
+        { key: 'fv_total_brutto',    label: 'Faktura - suma brutto',      group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'number' },
+        { key: 'fv_total_netto',     label: 'Faktura - suma netto',       group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'number' },
+        { key: 'fv_currency',        label: 'Waluta faktury',             group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
+        { key: 'fv_payment',         label: 'Metoda płatności (faktura)', group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
+        { key: 'fv_seller',          label: 'Sprzedawca',                 group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
+        { key: 'fv_external_number', label: 'Zewnętrzny numer faktury',   group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
+
+        { key: 'fv_correction_number', label: 'Numer korekty',   group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
+        { key: 'fv_correction_reason', label: 'Powód korekty',   group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
+        { key: 'fv_correction_date',   label: 'Data korekty',    group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'date' },
+
+        { key: 'fv_receipt_nr',   label: 'Numer paragonu',   group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
+        { key: 'fv_receipt_date', label: 'Data paragonu',     group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'date' },
+        { key: 'fv_receipt_nip',  label: 'NIP na paragonie',  group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
       ]
     },
 

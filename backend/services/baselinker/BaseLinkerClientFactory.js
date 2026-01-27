@@ -698,6 +698,59 @@ class BaseLinkerClient {
   }
 
   /**
+   * Get receipts with pagination (fetches all in batches of 100)
+   * @param {object} filters - Receipt filters
+   * @param {number} maxRecords - Maximum records to fetch
+   * @returns {Promise<Array>}
+   */
+  async getReceiptsWithPagination(filters = {}, maxRecords = 10000) {
+    const BATCH_SIZE = 100;
+    let allReceipts = [];
+    let lastId = filters.id_from || 0;
+    let hasMore = true;
+
+    while (hasMore && allReceipts.length < maxRecords) {
+      const parameters = {
+        id_from: lastId,
+        series_id: filters.series_id,
+        date_from: filters.date_from
+          ? Math.floor(new Date(filters.date_from).getTime() / 1000)
+          : undefined,
+        date_to: filters.date_to
+          ? Math.floor(new Date(filters.date_to).getTime() / 1000)
+          : undefined,
+      };
+
+      // Remove undefined values
+      Object.keys(parameters).forEach((key) => {
+        if (parameters[key] === undefined) {
+          delete parameters[key];
+        }
+      });
+
+      const response = await this.makeRequest('getReceipts', parameters);
+      const batch = response.receipts || [];
+
+      if (batch.length === 0) {
+        hasMore = false;
+      } else {
+        allReceipts = allReceipts.concat(batch);
+        const lastReceipt = batch[batch.length - 1];
+        lastId = lastReceipt.receipt_id + 1;
+        hasMore = batch.length === BATCH_SIZE;
+      }
+    }
+
+    logger.info('Fetched receipts with pagination', {
+      companyId: this.companyId,
+      count: allReceipts.length,
+      batchCount: Math.ceil(allReceipts.length / BATCH_SIZE),
+    });
+
+    return allReceipts;
+  }
+
+  /**
    * Get numbering series (invoices, corrections, receipts)
    * @returns {Promise<Array<{id: number, type: string, name: string, format: string}>>}
    */

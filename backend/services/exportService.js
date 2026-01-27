@@ -961,7 +961,7 @@ class ExportService {
 
       switch (config.dataset) {
         case 'orders':
-          rawData = await this.fetchOrders(client, apiFilters);
+          rawData = await this.fetchOrders(client, apiFilters, config.selected_fields || []);
           break;
         case 'products':
           rawData = await this.fetchProducts(client, apiFilters);
@@ -1252,14 +1252,15 @@ class ExportService {
    * Fetch orders from BaseLinker
    * @param {object} client - BaseLinker client
    * @param {object} apiFilters - API-side filters
+   * @param {Array<string>} selectedFields - Selected fields (to determine if document enrichment needed)
    * @returns {Promise<Array>} - List of orders (flat structure)
    */
-  async fetchOrders(client, apiFilters = {}) {
+  async fetchOrders(client, apiFilters = {}, selectedFields = []) {
     try {
       const orders = await client.getOrdersWithPagination(apiFilters);
 
       // Transform orders to flat structure with all available fields
-      return orders.map(order => ({
+      const flatOrders = orders.map(order => ({
         order_id: order.order_id,
         shop_order_id: order.shop_order_id,
         external_order_id: order.external_order_id,
@@ -1318,6 +1319,22 @@ class ExportService {
         // Store products for order_products dataset
         _products: order.products
       }));
+
+      // Document enrichment pipeline (invoices + receipts)
+      if (this.needsDocumentEnrichment(selectedFields) && flatOrders.length > 0) {
+        logger.info('Document enrichment requested for orders', {
+          orderCount: flatOrders.length,
+          selectedFvFields: selectedFields.filter(f => f.startsWith('fv_'))
+        });
+
+        const documentMap = await this.fetchDocumentDataForOrders(client, apiFilters);
+
+        return flatOrders.map(order =>
+          this.mergeDocumentData(order, documentMap.get(order.order_id))
+        );
+      }
+
+      return flatOrders;
     } catch (error) {
       logger.error('Failed to fetch orders', { error: error.message });
       throw error;
@@ -1441,6 +1458,16 @@ class ExportService {
   needsInventoryEnrichment(selectedFields) {
     if (!selectedFields || selectedFields.length === 0) return false;
     return selectedFields.some(field => field.startsWith('inv_'));
+  }
+
+  /**
+   * Check if any selected fields require document enrichment (invoices/receipts)
+   * @param {Array<string>} selectedFields - Selected field keys
+   * @returns {boolean}
+   */
+  needsDocumentEnrichment(selectedFields) {
+    if (!selectedFields || selectedFields.length === 0) return false;
+    return selectedFields.some(field => field.startsWith('fv_'));
   }
 
   /**
@@ -1570,6 +1597,121 @@ class ExportService {
       inv_profit_margin: details.profit_margin || 0,
       inv_average_cost_netto: averageCostNetto,
       inv_average_cost_brutto: averageCostBrutto,
+    };
+  }
+
+  /**
+   * Fetch sales document data (invoices + receipts) for order enrichment.
+   * Builds a Map of order_id -> { invoice, correction, receipt } for fast lookup.
+   *
+   * @param {object} client - BaseLinker client
+   * @param {object} apiFilters - API-side filters (date_from used for date range)
+   * @returns {Promise<Map<number, object>>} - Map of order_id -> document data
+   */
+  async fetchDocumentDataForOrders(client, apiFilters = {}) {
+    const documentMap = new Map();
+
+    // Fetch invoices
+    let invoices = [];
+    try {
+      invoices = await client.getInvoicesWithPagination({
+        date_from: apiFilters.date_confirmed_from || apiFilters.date_from,
+      });
+      logger.info('Fetched invoices for order enrichment', { count: invoices.length });
+    } catch (error) {
+      logger.warn('Failed to fetch invoices for order enrichment', { error: error.message });
+    }
+
+    // Fetch receipts
+    let receipts = [];
+    try {
+      receipts = await client.getReceiptsWithPagination({
+        date_from: apiFilters.date_confirmed_from || apiFilters.date_from,
+      });
+      logger.info('Fetched receipts for order enrichment', { count: receipts.length });
+    } catch (error) {
+      logger.warn('Failed to fetch receipts for order enrichment', { error: error.message });
+    }
+
+    // Group invoices by order_id, picking latest normal + latest correcting
+    for (const inv of invoices) {
+      const orderId = inv.order_id;
+      if (!orderId) continue;
+
+      if (!documentMap.has(orderId)) {
+        documentMap.set(orderId, { invoice: null, correction: null, receipt: null });
+      }
+      const entry = documentMap.get(orderId);
+
+      if (inv.type === 'correcting') {
+        if (!entry.correction || inv.invoice_id > entry.correction.invoice_id) {
+          entry.correction = inv;
+        }
+      } else {
+        // type 'normal' or any other = regular invoice
+        if (!entry.invoice || inv.invoice_id > entry.invoice.invoice_id) {
+          entry.invoice = inv;
+        }
+      }
+    }
+
+    // Group receipts by order_id, picking latest
+    for (const rcpt of receipts) {
+      const orderId = rcpt.order_id;
+      if (!orderId) continue;
+
+      if (!documentMap.has(orderId)) {
+        documentMap.set(orderId, { invoice: null, correction: null, receipt: null });
+      }
+      const entry = documentMap.get(orderId);
+
+      if (!entry.receipt || rcpt.receipt_id > (entry.receipt.receipt_id || 0)) {
+        entry.receipt = rcpt;
+      }
+    }
+
+    logger.info('Document enrichment data built', {
+      ordersWithDocuments: documentMap.size,
+      totalInvoices: invoices.length,
+      totalReceipts: receipts.length,
+    });
+
+    return documentMap;
+  }
+
+  /**
+   * Merge sales document data into an order record
+   * @param {object} order - Order row
+   * @param {object|null} docData - { invoice, correction, receipt } or null
+   * @returns {object} - Order with fv_ fields added
+   */
+  mergeDocumentData(order, docData) {
+    const docs = docData || { invoice: null, correction: null, receipt: null };
+    const inv = docs.invoice || {};
+    const corr = docs.correction || {};
+    const rcpt = docs.receipt || {};
+
+    return {
+      ...order,
+      // Faktura sprzedażowa
+      fv_number: inv.number || '',
+      fv_date_add: inv.date_add || '',
+      fv_date_sell: inv.date_sell || '',
+      fv_date_pay_to: inv.date_pay_to || '',
+      fv_total_brutto: inv.total_price_brutto || 0,
+      fv_total_netto: inv.total_price_netto || 0,
+      fv_currency: inv.currency || '',
+      fv_payment: inv.payment || '',
+      fv_seller: inv.seller || '',
+      fv_external_number: inv.external_invoice_number || '',
+      // Korekta
+      fv_correction_number: corr.number || '',
+      fv_correction_reason: corr.correcting_reason || '',
+      fv_correction_date: corr.date_add || '',
+      // Paragon
+      fv_receipt_nr: rcpt.receipt_full_nr || '',
+      fv_receipt_date: rcpt.date_add || '',
+      fv_receipt_nip: rcpt.nip || '',
     };
   }
 
