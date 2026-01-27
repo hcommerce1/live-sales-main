@@ -51,6 +51,8 @@ module.exports = {
         { key: 'order_source',     label: 'Źródło zamówienia',     group: 'Podstawowe',   plan: 'basic', type: 'select', source: 'order-sources' },
         { key: 'order_source_id',  label: 'ID źródła',             group: 'Podstawowe',   plan: 'basic', type: 'number' },
         { key: 'confirmed',        label: 'Potwierdzone',          group: 'Podstawowe',   plan: 'free',  type: 'boolean' },
+        { key: 'order_source_info', label: 'Info o źródle zamówienia', group: 'Podstawowe', plan: 'basic', type: 'text' },
+        { key: 'date_in_status',    label: 'Data wejścia w status',   group: 'Podstawowe', plan: 'basic', type: 'date' },
 
         // Dane klienta
         { key: 'email',              label: 'Email',                      group: 'Dane klienta', plan: 'free',  type: 'text' },
@@ -130,16 +132,21 @@ module.exports = {
         { key: 'stock',          label: 'Stan magazynowy',  group: 'Magazyn', plan: 'basic', type: 'number' },
         { key: 'location',       label: 'Lokalizacja',      group: 'Magazyn', plan: 'basic', type: 'text' },
         { key: 'weight',         label: 'Waga (kg)',        group: 'Magazyn', plan: 'basic', type: 'number' },
+        { key: 'height',         label: 'Wysokość (cm)',    group: 'Magazyn', plan: 'pro',   type: 'number' },
+        { key: 'width',          label: 'Szerokość (cm)',   group: 'Magazyn', plan: 'pro',   type: 'number' },
+        { key: 'length',         label: 'Długość (cm)',     group: 'Magazyn', plan: 'pro',   type: 'number' },
 
         // Szczegóły
         { key: 'manufacturer',   label: 'Producent',        group: 'Szczegóły', plan: 'pro', type: 'text' },
         { key: 'category',       label: 'Kategoria',        group: 'Szczegóły', plan: 'pro', type: 'text' },
         { key: 'description',    label: 'Opis',             group: 'Szczegóły', plan: 'pro', type: 'text' },
+        { key: 'image_url',      label: 'URL zdjęcia',      group: 'Szczegóły', plan: 'pro', type: 'text' },
 
         // Finansowe
         { key: 'tax_rate',       label: 'Stawka VAT',       group: 'Finansowe', plan: 'pro', type: 'number' },
         { key: 'purchase_price', label: 'Cena zakupu',      group: 'Finansowe', plan: 'pro', type: 'number' },
         { key: 'profit_margin',  label: 'Marża (%)',        group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'average_cost',   label: 'Średni koszt',     group: 'Finansowe', plan: 'pro', type: 'number' },
       ]
     },
 

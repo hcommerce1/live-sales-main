@@ -1278,6 +1278,8 @@ class ExportService {
         order_page: order.order_page,
         pick_state: order.pick_state,
         pack_state: order.pack_state,
+        order_source_info: order.order_source_info,
+        date_in_status: order.date_in_status,
         // Store products for order_products dataset
         _products: order.products
       }));
@@ -1325,6 +1327,11 @@ class ExportService {
           tax_rate: details.tax_rate || 23,
           purchase_price: details.purchase_price || 0,
           profit_margin: details.profit_margin || 0,
+          average_cost: details.average_cost || 0,
+          height: details.height || 0,
+          width: details.width || 0,
+          length: details.length || 0,
+          image_url: details.images ? Object.values(details.images)[0] || '' : '',
         };
       });
     } catch (error) {
