@@ -26,6 +26,7 @@ const integrationsRoutes = require('./backend/routes/integrations');
 // Import middleware
 const { publicLimiter } = require('./backend/middleware/rateLimiter');
 const authMiddleware = require('./backend/middleware/auth');
+const { noCacheHeaders } = require('./backend/middleware/cacheControl');
 
 // Import scheduler
 const scheduler = require('./backend/scheduler');
@@ -92,7 +93,7 @@ app.use(helmet({
       connectSrc: [
         "'self'",
         "https://cdn.jsdelivr.net",
-        process.env.FRONTEND_URL || "*"
+        ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
       ],
       fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
       objectSrc: ["'none'"],
@@ -184,16 +185,16 @@ if (process.env.NODE_ENV === 'production') {
 // API Routes
 app.use('/api/auth', authRoutes);  // Public auth routes
 app.use('/api', apiRoutes);
-app.use('/api/user', authMiddleware.authenticate(), userRoutes);            // Protected
-app.use('/api/baselinker', authMiddleware.authenticate(), baselinkRoutes);  // Protected
-app.use('/api/sheets', authMiddleware.authenticate(), sheetsRoutes);        // Protected
-app.use('/api/exports', authMiddleware.authenticate(), exportsRoutes);      // Protected
-app.use('/api/admin', authMiddleware.authenticate(), adminRoutes);          // Protected + admin check inside
-app.use('/api/billing', billingRoutes);                                      // Mixed: webhook public, rest protected
+app.use('/api/user', noCacheHeaders, authMiddleware.authenticate(), userRoutes);            // Protected
+app.use('/api/baselinker', noCacheHeaders, authMiddleware.authenticate(), baselinkRoutes);  // Protected
+app.use('/api/sheets', noCacheHeaders, authMiddleware.authenticate(), sheetsRoutes);        // Protected
+app.use('/api/exports', noCacheHeaders, authMiddleware.authenticate(), exportsRoutes);      // Protected
+app.use('/api/admin', noCacheHeaders, authMiddleware.authenticate(), adminRoutes);          // Protected + admin check inside
+app.use('/api/billing', noCacheHeaders, billingRoutes);                                      // Mixed: webhook public, rest protected
 app.use('/api/features', featuresRoutes);                                    // Auth inside routes
-app.use('/api/team', authMiddleware.authenticate(), teamRoutes);            // Protected - team management
-app.use('/api/company', companyRoutes);                                       // Mixed: lookup/register public, rest protected
-app.use('/api/integrations', authMiddleware.authenticate(), integrationsRoutes); // Protected - integration management
+app.use('/api/team', noCacheHeaders, authMiddleware.authenticate(), teamRoutes);            // Protected - team management
+app.use('/api/company', noCacheHeaders, companyRoutes);                                       // Mixed: lookup/register public, rest protected
+app.use('/api/integrations', noCacheHeaders, authMiddleware.authenticate(), integrationsRoutes); // Protected - integration management
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -231,7 +232,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
+// Start server (only when run directly, not when imported for testing)
+if (require.main === module) {
 app.listen(PORT, async () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -289,6 +291,9 @@ app.listen(PORT, async () => {
     logger.error('Scheduler initialization failed', { error: error.message });
   }
 });
+}
+
+module.exports = app;
 
 // Graceful shutdown
 async function gracefulShutdown(signal) {

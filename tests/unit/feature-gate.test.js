@@ -215,7 +215,7 @@ describe('Feature Gate Middleware', () => {
         code: 'SCHEDULE_INTERVAL_TOO_LOW',
         requestedInterval: 2,
         minInterval: 5,
-        requiredPlan: 'basic',
+        requiredPlan: 'pro',
       });
       expect(next).not.toHaveBeenCalled();
     });

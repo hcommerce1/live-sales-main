@@ -136,8 +136,8 @@ describe('CSRF Protection', () => {
 
     test('returns 403 when token mismatch', async () => {
       featureFlags.isEnabled.mockResolvedValue(true);
-      req.headers['x-csrf-token'] = 'wrong-token-here-1234567890123456789012345678901234567890123456789012345678901234';
-      mockRedisGet.mockResolvedValue('correct-token-12345678901234567890123456789012345678901234567890123456789012');
+      req.headers['x-csrf-token'] = 'a'.repeat(64);
+      mockRedisGet.mockResolvedValue('b'.repeat(64));
 
       const middleware = csrf.csrfProtection();
       await middleware(req, res, next);

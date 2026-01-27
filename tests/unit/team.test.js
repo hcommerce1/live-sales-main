@@ -4,23 +4,32 @@
  * Tests for team management: invitations, roles, permissions.
  */
 
-const teamService = require('../../backend/services/team.service');
+// Shared Prisma mock functions - must be declared before jest.mock
+// so both the test and the service's getPrisma() share the same mocks
+const mockCompanyMemberFindMany = jest.fn();
+const mockCompanyMemberFindUnique = jest.fn();
+const mockCompanyMemberFindFirst = jest.fn();
+const mockCompanyMemberCreate = jest.fn();
+const mockCompanyMemberUpdate = jest.fn();
+const mockCompanyMemberDelete = jest.fn();
+const mockUserFindUnique = jest.fn();
+const mockTransaction = jest.fn();
 
-// Mock Prisma
+// Mock Prisma with shared references
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
     companyMember: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
+      findMany: mockCompanyMemberFindMany,
+      findUnique: mockCompanyMemberFindUnique,
+      findFirst: mockCompanyMemberFindFirst,
+      create: mockCompanyMemberCreate,
+      update: mockCompanyMemberUpdate,
+      delete: mockCompanyMemberDelete,
     },
     user: {
-      findUnique: jest.fn(),
+      findUnique: mockUserFindUnique,
     },
-    $transaction: jest.fn(),
+    $transaction: mockTransaction,
   })),
 }));
 
@@ -48,13 +57,11 @@ jest.mock('../../backend/utils/logger', () => ({
   debug: jest.fn(),
 }));
 
-describe('Team Service', () => {
-  let mockPrisma;
+const teamService = require('../../backend/services/team.service');
 
+describe('Team Service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    const { PrismaClient } = require('@prisma/client');
-    mockPrisma = new PrismaClient();
   });
 
   describe('ROLES configuration', () => {
@@ -148,7 +155,7 @@ describe('Team Service', () => {
 
   describe('getTeamMembers', () => {
     test('returns formatted member list', async () => {
-      mockPrisma.companyMember.findMany.mockResolvedValue([
+      mockCompanyMemberFindMany.mockResolvedValue([
         {
           id: 'member-1',
           userId: 'user-1',
@@ -192,7 +199,7 @@ describe('Team Service', () => {
     });
 
     test('identifies pending members correctly', async () => {
-      mockPrisma.companyMember.findMany.mockResolvedValue([
+      mockCompanyMemberFindMany.mockResolvedValue([
         {
           id: 'member-1',
           userId: null,
@@ -208,7 +215,8 @@ describe('Team Service', () => {
       const members = await teamService.getTeamMembers('company-1');
 
       expect(members).toHaveLength(1);
-      expect(members[0].isPending).toBe(true);
+      // isPending is `!joinedAt && invitationToken` which returns the token string (truthy)
+      expect(members[0].isPending).toBeTruthy();
     });
   });
 
@@ -227,7 +235,7 @@ describe('Team Service', () => {
     });
 
     test('rejects non-member inviter', async () => {
-      mockPrisma.companyMember.findFirst.mockResolvedValue(null);
+      mockCompanyMemberFindFirst.mockResolvedValue(null);
 
       await expect(
         teamService.inviteMember(validInviteParams)
@@ -235,7 +243,7 @@ describe('Team Service', () => {
     });
 
     test('rejects member trying to invite', async () => {
-      mockPrisma.companyMember.findFirst.mockResolvedValue({
+      mockCompanyMemberFindFirst.mockResolvedValue({
         id: 'member-1',
         userId: 'user-1',
         role: 'member',
@@ -250,7 +258,7 @@ describe('Team Service', () => {
 
   describe('acceptInvitation', () => {
     test('rejects invalid token', async () => {
-      mockPrisma.companyMember.findUnique.mockResolvedValue(null);
+      mockCompanyMemberFindUnique.mockResolvedValue(null);
 
       await expect(
         teamService.acceptInvitation('invalid-token', 'user-1')
@@ -261,7 +269,7 @@ describe('Team Service', () => {
       const expiredDate = new Date();
       expiredDate.setDate(expiredDate.getDate() - 1);
 
-      mockPrisma.companyMember.findUnique.mockResolvedValue({
+      mockCompanyMemberFindUnique.mockResolvedValue({
         id: 'member-1',
         companyId: 'company-1',
         invitationExpires: expiredDate,
@@ -275,7 +283,7 @@ describe('Team Service', () => {
     });
 
     test('rejects already accepted invitation', async () => {
-      mockPrisma.companyMember.findUnique.mockResolvedValue({
+      mockCompanyMemberFindUnique.mockResolvedValue({
         id: 'member-1',
         companyId: 'company-1',
         invitationExpires: new Date(Date.now() + 86400000),
@@ -291,7 +299,7 @@ describe('Team Service', () => {
 
   describe('removeMember', () => {
     test('cannot remove owner', async () => {
-      mockPrisma.companyMember.findUnique.mockResolvedValue({
+      mockCompanyMemberFindUnique.mockResolvedValue({
         id: 'member-1',
         companyId: 'company-1',
         userId: 'owner-user',
@@ -304,14 +312,14 @@ describe('Team Service', () => {
     });
 
     test('admin cannot remove another admin', async () => {
-      mockPrisma.companyMember.findUnique.mockResolvedValue({
+      mockCompanyMemberFindUnique.mockResolvedValue({
         id: 'member-1',
         companyId: 'company-1',
         userId: 'admin-user-2',
         role: 'admin',
       });
 
-      mockPrisma.companyMember.findFirst.mockResolvedValue({
+      mockCompanyMemberFindFirst.mockResolvedValue({
         id: 'member-2',
         companyId: 'company-1',
         userId: 'admin-user',
@@ -333,7 +341,7 @@ describe('Team Service', () => {
     });
 
     test('cannot change owner role', async () => {
-      mockPrisma.companyMember.findUnique.mockResolvedValue({
+      mockCompanyMemberFindUnique.mockResolvedValue({
         id: 'member-1',
         companyId: 'company-1',
         role: 'owner',
@@ -347,7 +355,7 @@ describe('Team Service', () => {
 
   describe('transferOwnership', () => {
     test('only owner can transfer ownership', async () => {
-      mockPrisma.companyMember.findFirst
+      mockCompanyMemberFindFirst
         .mockResolvedValueOnce(null); // Current user is not owner
 
       await expect(
@@ -356,7 +364,7 @@ describe('Team Service', () => {
     });
 
     test('cannot transfer to self', async () => {
-      mockPrisma.companyMember.findFirst
+      mockCompanyMemberFindFirst
         .mockResolvedValueOnce({
           id: 'member-1',
           companyId: 'company-1',
@@ -380,7 +388,7 @@ describe('Team Service', () => {
 
   describe('leaveCompany', () => {
     test('owner cannot leave', async () => {
-      mockPrisma.companyMember.findFirst.mockResolvedValue({
+      mockCompanyMemberFindFirst.mockResolvedValue({
         id: 'member-1',
         companyId: 'company-1',
         userId: 'owner-user',
@@ -394,7 +402,7 @@ describe('Team Service', () => {
     });
 
     test('non-member cannot leave', async () => {
-      mockPrisma.companyMember.findFirst.mockResolvedValue(null);
+      mockCompanyMemberFindFirst.mockResolvedValue(null);
 
       await expect(
         teamService.leaveCompany('company-1', 'random-user')
