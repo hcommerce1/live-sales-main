@@ -112,6 +112,18 @@ const FEATURE_FLAGS = {
     description: 'Access to BaseLinker invoices API (PRO feature)',
     rolloutPercent: 100,
   },
+
+  'baselinker.courier': {
+    default: true,
+    description: 'Access to BaseLinker courier shipments API',
+    rolloutPercent: 100,
+  },
+
+  'baselinker.receipts': {
+    default: true,
+    description: 'Access to BaseLinker receipts API',
+    rolloutPercent: 100,
+  },
 };
 
 /**

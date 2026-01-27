@@ -57,8 +57,8 @@ const createExportSchema = z.object({
     .max(100, 'Name too long')
     .trim(),
 
-  dataset: z.enum(['orders', 'products'], {
-    errorMap: () => ({ message: 'Dataset must be "orders" or "products"' })
+  dataset: z.enum(['orders', 'products', 'order_products', 'invoices'], {
+    errorMap: () => ({ message: 'Dataset must be "orders", "products", "order_products" or "invoices"' })
   }),
 
   filters: exportFiltersSchema,
@@ -129,6 +129,74 @@ const updateExportSchema = z.object({
 
   status: z.enum(['active', 'paused', 'error'])
     .optional(),
+});
+
+// ============================================
+// BaseLinker Query Schemas
+// ============================================
+
+const orderIdParamSchema = z.object({
+  id: z.string().regex(/^\d+$/, 'Order ID must be a positive integer'),
+});
+
+const packageIdParamSchema = z.object({
+  id: z.string().regex(/^\d+$/, 'Package ID must be a positive integer'),
+});
+
+const courierCodeParamSchema = z.object({
+  code: z.string().min(1, 'Courier code is required').max(20),
+});
+
+const journalQuerySchema = z.object({
+  last_log_id: z.string().regex(/^\d+$/).optional(),
+  logs_types: z.string().regex(/^(\d+,)*\d+$/, 'logs_types must be comma-separated integers').optional(),
+  order_id: z.string().regex(/^\d+$/).optional(),
+});
+
+const ordersByEmailQuerySchema = z.object({
+  email: z.string().email('Valid email address is required').max(50),
+});
+
+const ordersByPhoneQuerySchema = z.object({
+  phone: z.string().min(3, 'Phone number is required').max(50),
+});
+
+const transactionQuerySchema = z.object({
+  include_complex_taxes: z.enum(['true', 'false']).optional(),
+  include_amazon_data: z.enum(['true', 'false']).optional(),
+});
+
+const paymentsHistoryQuerySchema = z.object({
+  show_full_history: z.enum(['true', 'false']).optional(),
+});
+
+const pickPackQuerySchema = z.object({
+  action_type: z.string().regex(/^\d+$/).optional(),
+});
+
+const statusHistoryQuerySchema = z.object({
+  ids: z.string()
+    .min(1, 'At least one package ID is required')
+    .regex(/^(\d+,)*\d+$/, 'ids must be comma-separated integers'),
+});
+
+const receiptsQuerySchema = z.object({
+  series_id: z.string().regex(/^\d+$/).optional(),
+  id_from: z.string().regex(/^\d+$/).optional(),
+  date_from: z.string().regex(/^\d+$/, 'date_from must be unix timestamp').optional(),
+  date_to: z.string().regex(/^\d+$/, 'date_to must be unix timestamp').optional(),
+});
+
+const newReceiptsQuerySchema = z.object({
+  series_id: z.string().regex(/^\d+$/).optional(),
+  id_from: z.string().regex(/^\d+$/).optional(),
+});
+
+const courierServicesQuerySchema = z.object({
+  order_id: z.string().regex(/^\d+$/, 'order_id is required'),
+  account_id: z.string().regex(/^\d+$/).optional(),
+  fields: z.string().min(1, 'fields JSON is required'),
+  packages: z.string().min(1, 'packages JSON is required'),
 });
 
 // UUID validation
@@ -204,6 +272,21 @@ module.exports = {
   updateExportSchema,
   uuidSchema,
   paginationSchema,
+
+  // BaseLinker schemas
+  orderIdParamSchema,
+  packageIdParamSchema,
+  courierCodeParamSchema,
+  journalQuerySchema,
+  ordersByEmailQuerySchema,
+  ordersByPhoneQuerySchema,
+  transactionQuerySchema,
+  paymentsHistoryQuerySchema,
+  pickPackQuerySchema,
+  statusHistoryQuerySchema,
+  receiptsQuerySchema,
+  newReceiptsQuerySchema,
+  courierServicesQuerySchema,
 
   // Middleware
   validate,

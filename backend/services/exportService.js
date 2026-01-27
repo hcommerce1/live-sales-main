@@ -935,7 +935,7 @@ class ExportService {
           rawData = await this.fetchInvoices(client, apiFilters);
           break;
         case 'order_products':
-          rawData = await this.fetchOrderProducts(client, apiFilters);
+          rawData = await this.fetchOrderProducts(client, apiFilters, config.selected_fields || []);
           break;
         default:
           throw new Error(`Unknown dataset type: ${config.dataset}`);
@@ -1399,12 +1399,126 @@ class ExportService {
   }
 
   /**
+   * Check if any selected fields require inventory enrichment
+   * @param {Array<string>} selectedFields - Selected field keys
+   * @returns {boolean}
+   */
+  needsInventoryEnrichment(selectedFields) {
+    if (!selectedFields || selectedFields.length === 0) return false;
+    return selectedFields.some(field => field.startsWith('inv_'));
+  }
+
+  /**
+   * Fetch inventory product data for a list of product IDs
+   * Handles batching (max 1000 per API call) and missing products gracefully
+   *
+   * @param {object} client - BaseLinker client
+   * @param {Array<string>} productIds - Unique product IDs to look up
+   * @returns {Promise<Map<string, object>>} - Map of product_id -> inventory data
+   */
+  async fetchInventoryDataForProducts(client, productIds) {
+    const BATCH_SIZE = 1000;
+    const inventoryMap = new Map();
+
+    if (!productIds || productIds.length === 0) {
+      return inventoryMap;
+    }
+
+    // Filter out invalid product IDs
+    const validIds = productIds.filter(id => id && id !== '0' && id !== 0 && id !== 'undefined' && id !== 'null');
+
+    if (validIds.length === 0) {
+      return inventoryMap;
+    }
+
+    // Dynamically fetch inventory ID from getInventories()
+    let inventoryId;
+    try {
+      const inventories = await client.getInventories();
+      if (!inventories || inventories.length === 0) {
+        logger.warn('No inventories found for enrichment, skipping inventory lookup');
+        return inventoryMap;
+      }
+      inventoryId = inventories[0].inventory_id;
+      logger.info('Using inventory for enrichment', { inventoryId, totalInventories: inventories.length });
+    } catch (error) {
+      logger.warn('Failed to fetch inventories for enrichment', { error: error.message });
+      return inventoryMap;
+    }
+
+    logger.info('Fetching inventory data for order product enrichment', {
+      totalProductIds: productIds.length,
+      validProductIds: validIds.length,
+      inventoryId,
+      batchCount: Math.ceil(validIds.length / BATCH_SIZE)
+    });
+
+    // Process in batches
+    for (let i = 0; i < validIds.length; i += BATCH_SIZE) {
+      const batch = validIds.slice(i, i + BATCH_SIZE);
+
+      try {
+        const batchData = await client.getInventoryProductsData(batch, inventoryId);
+
+        for (const [productId, data] of Object.entries(batchData)) {
+          inventoryMap.set(String(productId), data);
+        }
+      } catch (error) {
+        logger.warn('Failed to fetch inventory batch for enrichment', {
+          batchStart: i,
+          batchSize: batch.length,
+          inventoryId,
+          error: error.message
+        });
+      }
+    }
+
+    logger.info('Inventory enrichment data fetched', {
+      requested: validIds.length,
+      found: inventoryMap.size,
+      missing: validIds.length - inventoryMap.size
+    });
+
+    return inventoryMap;
+  }
+
+  /**
+   * Merge inventory data into an order product record
+   * @param {object} orderProduct - Order product row
+   * @param {object|null} inventoryData - Inventory product data (or null if not found)
+   * @returns {object} - Order product with inv_ fields added
+   */
+  mergeInventoryData(orderProduct, inventoryData) {
+    const details = inventoryData || {};
+    return {
+      ...orderProduct,
+      inv_manufacturer: details.manufacturer || '',
+      inv_category: details.category || '',
+      inv_description: details.description || '',
+      inv_image_url: details.images ? Object.values(details.images)[0] || '' : '',
+      inv_purchase_price: details.purchase_price || 0,
+      inv_stock: details.stock || 0,
+      inv_weight: details.weight || 0,
+      inv_height: details.height || 0,
+      inv_width: details.width || 0,
+      inv_length: details.length || 0,
+      inv_location: details.location || '',
+      inv_tax_rate: details.tax_rate || 0,
+      inv_profit_margin: details.profit_margin || 0,
+      inv_average_cost: details.average_cost || 0,
+    };
+  }
+
+  /**
    * Fetch order products (one row per product in order)
+   * If selectedFields contains any inv_* fields, enriches with inventory data
+   *
    * @param {object} client - BaseLinker client
    * @param {object} apiFilters - API-side filters
-   * @returns {Promise<Array>} - List of order products (flattened)
+   * @param {Array<string>} selectedFields - Selected fields (to determine if enrichment needed)
+   * @returns {Promise<Array>} - List of order products (flattened, optionally enriched)
    */
-  async fetchOrderProducts(client, apiFilters = {}) {
+  async fetchOrderProducts(client, apiFilters = {}, selectedFields = []) {
     try {
       const orders = await client.getOrdersWithPagination(apiFilters);
 
@@ -1447,6 +1561,29 @@ class ExportService {
             bundle_id: product.bundle_id,
           });
         }
+      }
+
+      // Inventory enrichment pipeline
+      if (this.needsInventoryEnrichment(selectedFields) && orderProducts.length > 0) {
+        logger.info('Inventory enrichment requested for order_products', {
+          orderProductCount: orderProducts.length,
+          selectedInvFields: selectedFields.filter(f => f.startsWith('inv_'))
+        });
+
+        // Collect unique product_ids
+        const uniqueProductIds = [...new Set(
+          orderProducts
+            .map(op => String(op.product_id))
+            .filter(id => id && id !== '0' && id !== 'undefined' && id !== 'null')
+        )];
+
+        // Fetch inventory data
+        const inventoryMap = await this.fetchInventoryDataForProducts(client, uniqueProductIds);
+
+        // Merge inventory data into each order product
+        return orderProducts.map(op =>
+          this.mergeInventoryData(op, inventoryMap.get(String(op.product_id)))
+        );
       }
 
       return orderProducts;

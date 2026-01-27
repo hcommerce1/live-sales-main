@@ -15,6 +15,22 @@ const logger = require('../utils/logger');
 const { companyContextMiddleware, requireCompany } = require('../middleware/companyContext');
 const { featureFlagMiddleware } = require('../middleware/featureFlag');
 const { getClient } = require('../services/baselinker');
+const {
+  validate,
+  orderIdParamSchema,
+  packageIdParamSchema,
+  courierCodeParamSchema,
+  journalQuerySchema,
+  ordersByEmailQuerySchema,
+  ordersByPhoneQuerySchema,
+  transactionQuerySchema,
+  paymentsHistoryQuerySchema,
+  pickPackQuerySchema,
+  statusHistoryQuerySchema,
+  receiptsQuerySchema,
+  newReceiptsQuerySchema,
+  courierServicesQuerySchema,
+} = require('../validators/schemas');
 
 // ============================================
 // Middleware Stack
@@ -462,6 +478,593 @@ router.get('/status', async (req, res) => {
     });
   } catch (error) {
     logger.error('Failed to get integration status', {
+      error: error.message,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// ============================================
+// Courier Shipments
+// ============================================
+
+/**
+ * GET /api/baselinker/couriers
+ * Get list of available couriers (reference data, no feature flag)
+ */
+router.get('/couriers', async (req, res) => {
+  try {
+    const client = await getBaseLinkerClient(req, res);
+    if (!client) return;
+
+    const couriers = await client.getCouriersList();
+
+    res.json({
+      success: true,
+      count: couriers.length,
+      data: couriers,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch couriers list', {
+      error: error.message,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/baselinker/couriers/:code/accounts
+ * Get courier accounts (reference data, no feature flag)
+ */
+router.get('/couriers/:code/accounts', validate(courierCodeParamSchema, 'params'), async (req, res) => {
+  try {
+    const client = await getBaseLinkerClient(req, res);
+    if (!client) return;
+
+    const accounts = await client.getCourierAccounts(req.params.code);
+
+    res.json({
+      success: true,
+      count: accounts.length,
+      data: accounts,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch courier accounts', {
+      error: error.message,
+      courierCode: req.params.code,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/baselinker/couriers/:code/services
+ * Get available courier services for an order
+ */
+router.get(
+  '/couriers/:code/services',
+  featureFlagMiddleware('baselinker.courier'),
+  validate(courierCodeParamSchema, 'params'),
+  validate(courierServicesQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      let fields, packages;
+      try {
+        fields = JSON.parse(req.query.fields);
+        packages = JSON.parse(req.query.packages);
+      } catch (parseError) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid JSON in fields or packages parameter',
+        });
+      }
+
+      const accountId = req.query.account_id ? parseInt(req.query.account_id, 10) : undefined;
+      const orderId = parseInt(req.query.order_id, 10);
+
+      const services = await client.getCourierServices(
+        req.params.code,
+        orderId,
+        fields,
+        packages,
+        accountId
+      );
+
+      res.json({
+        success: true,
+        data: services,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch courier services', {
+        error: error.message,
+        courierCode: req.params.code,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/packages/status-history
+ * Get courier packages status history (BEFORE :id routes)
+ */
+router.get(
+  '/packages/status-history',
+  featureFlagMiddleware('baselinker.courier'),
+  validate(statusHistoryQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const packageIds = req.query.ids.split(',').map(Number);
+
+      if (packageIds.length > 100) {
+        return res.status(400).json({
+          success: false,
+          error: 'Maximum 100 package IDs allowed per request',
+        });
+      }
+
+      const history = await client.getCourierPackagesStatusHistory(packageIds);
+
+      res.json({
+        success: true,
+        data: history,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch packages status history', {
+        error: error.message,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/packages/:id/details
+ * Get package details (dimensions, weight, etc.)
+ */
+router.get(
+  '/packages/:id/details',
+  featureFlagMiddleware('baselinker.courier'),
+  validate(packageIdParamSchema, 'params'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const packageId = parseInt(req.params.id, 10);
+      const details = await client.getPackageDetails(packageId);
+
+      res.json({
+        success: true,
+        data: details,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch package details', {
+        error: error.message,
+        packageId: req.params.id,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/order/:id/packages
+ * Get packages for an order
+ */
+router.get(
+  '/order/:id/packages',
+  featureFlagMiddleware('baselinker.courier'),
+  validate(orderIdParamSchema, 'params'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const orderId = parseInt(req.params.id, 10);
+      const packages = await client.getOrderPackages(orderId);
+
+      res.json({
+        success: true,
+        count: packages.length,
+        data: packages,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch order packages', {
+        error: error.message,
+        orderId: req.params.id,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+// ============================================
+// Orders Extended
+// ============================================
+
+/**
+ * GET /api/baselinker/order/:id/transaction
+ * Get order transaction data
+ */
+router.get(
+  '/order/:id/transaction',
+  featureFlagMiddleware('baselinker.orders'),
+  validate(orderIdParamSchema, 'params'),
+  validate(transactionQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const orderId = parseInt(req.params.id, 10);
+      const options = {
+        include_complex_taxes: req.query.include_complex_taxes === 'true',
+        include_amazon_data: req.query.include_amazon_data === 'true',
+      };
+
+      const data = await client.getOrderTransactionData(orderId, options);
+
+      res.json({
+        success: true,
+        data: data,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch order transaction data', {
+        error: error.message,
+        orderId: req.params.id,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/order/:id/payments-history
+ * Get order payments history
+ */
+router.get(
+  '/order/:id/payments-history',
+  featureFlagMiddleware('baselinker.orders'),
+  validate(orderIdParamSchema, 'params'),
+  validate(paymentsHistoryQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const orderId = parseInt(req.params.id, 10);
+      const showFullHistory = req.query.show_full_history === 'true';
+
+      const payments = await client.getOrderPaymentsHistory(orderId, showFullHistory);
+
+      res.json({
+        success: true,
+        count: payments.length,
+        data: payments,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch order payments history', {
+        error: error.message,
+        orderId: req.params.id,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/order/:id/pick-pack-history
+ * Get order pick & pack history
+ */
+router.get(
+  '/order/:id/pick-pack-history',
+  featureFlagMiddleware('baselinker.orders'),
+  validate(orderIdParamSchema, 'params'),
+  validate(pickPackQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const orderId = parseInt(req.params.id, 10);
+      const actionType = req.query.action_type ? parseInt(req.query.action_type, 10) : undefined;
+
+      const history = await client.getOrderPickPackHistory(orderId, actionType);
+
+      res.json({
+        success: true,
+        count: history.length,
+        data: history,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch order pick-pack history', {
+        error: error.message,
+        orderId: req.params.id,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/orders/by-email
+ * Find orders by customer email
+ */
+router.get(
+  '/orders/by-email',
+  featureFlagMiddleware('baselinker.orders'),
+  validate(ordersByEmailQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const orders = await client.getOrdersByEmail(req.query.email);
+
+      res.json({
+        success: true,
+        count: orders.length,
+        data: orders,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch orders by email', {
+        error: error.message,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/orders/by-phone
+ * Find orders by customer phone
+ */
+router.get(
+  '/orders/by-phone',
+  featureFlagMiddleware('baselinker.orders'),
+  validate(ordersByPhoneQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const orders = await client.getOrdersByPhone(req.query.phone);
+
+      res.json({
+        success: true,
+        count: orders.length,
+        data: orders,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch orders by phone', {
+        error: error.message,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/journal
+ * Get order journal (change log). Max 3 days of logs.
+ */
+router.get(
+  '/journal',
+  featureFlagMiddleware('baselinker.orders'),
+  validate(journalQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const filters = {
+        last_log_id: req.query.last_log_id ? parseInt(req.query.last_log_id, 10) : undefined,
+        logs_types: req.query.logs_types ? req.query.logs_types.split(',').map(Number) : undefined,
+        order_id: req.query.order_id ? parseInt(req.query.order_id, 10) : undefined,
+      };
+
+      const logs = await client.getJournalList(filters);
+
+      res.json({
+        success: true,
+        count: logs.length,
+        data: logs,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch journal list', {
+        error: error.message,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/order-extra-fields
+ * Get order extra field definitions (reference data, no feature flag)
+ */
+router.get('/order-extra-fields', async (req, res) => {
+  try {
+    const client = await getBaseLinkerClient(req, res);
+    if (!client) return;
+
+    const extraFields = await client.getOrderExtraFields();
+
+    res.json({
+      success: true,
+      data: extraFields,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch order extra fields', {
+      error: error.message,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// ============================================
+// Receipts
+// ============================================
+
+/**
+ * GET /api/baselinker/receipts/new
+ * Get new receipts (not yet printed) — BEFORE /receipts
+ */
+router.get(
+  '/receipts/new',
+  featureFlagMiddleware('baselinker.receipts'),
+  validate(newReceiptsQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const filters = {
+        series_id: req.query.series_id ? parseInt(req.query.series_id, 10) : undefined,
+        id_from: req.query.id_from ? parseInt(req.query.id_from, 10) : undefined,
+      };
+
+      const receipts = await client.getNewReceipts(filters);
+
+      res.json({
+        success: true,
+        count: receipts.length,
+        data: receipts,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch new receipts', {
+        error: error.message,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/receipts
+ * Get receipts (max 100 per request)
+ */
+router.get(
+  '/receipts',
+  featureFlagMiddleware('baselinker.receipts'),
+  validate(receiptsQuerySchema, 'query'),
+  async (req, res) => {
+    try {
+      const client = await getBaseLinkerClient(req, res);
+      if (!client) return;
+
+      const filters = {
+        series_id: req.query.series_id ? parseInt(req.query.series_id, 10) : undefined,
+        id_from: req.query.id_from ? parseInt(req.query.id_from, 10) : undefined,
+        date_from: req.query.date_from ? parseInt(req.query.date_from, 10) : undefined,
+        date_to: req.query.date_to ? parseInt(req.query.date_to, 10) : undefined,
+      };
+
+      const receipts = await client.getReceipts(filters);
+
+      res.json({
+        success: true,
+        count: receipts.length,
+        data: receipts,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch receipts', {
+        error: error.message,
+        companyId: req.company?.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/baselinker/series
+ * Get numbering series (reference data, no feature flag)
+ */
+router.get('/series', async (req, res) => {
+  try {
+    const client = await getBaseLinkerClient(req, res);
+    if (!client) return;
+
+    const series = await client.getSeries();
+
+    res.json({
+      success: true,
+      count: series.length,
+      data: series,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch series', {
       error: error.message,
       companyId: req.company?.id,
     });

@@ -422,6 +422,289 @@ class BaseLinkerClient {
 
     return allInvoices;
   }
+
+  // ============================================
+  // Courier Shipments
+  // ============================================
+
+  /**
+   * Get list of available couriers
+   * @returns {Promise<Array<{code: string, name: string}>>}
+   */
+  async getCouriersList() {
+    const response = await this.makeRequest('getCouriersList', {});
+    return response.couriers || [];
+  }
+
+  /**
+   * Get courier accounts for a specific courier
+   * @param {string} courierCode - Courier code (e.g. 'dpd', 'inpost')
+   * @returns {Promise<Array<{id: number, name: string}>>}
+   */
+  async getCourierAccounts(courierCode) {
+    const response = await this.makeRequest('getCourierAccounts', {
+      courier_code: courierCode,
+    });
+    return response.accounts || [];
+  }
+
+  /**
+   * Get packages for an order
+   * @param {number} orderId - Order ID
+   * @returns {Promise<Array>} - Package list with tracking info
+   */
+  async getOrderPackages(orderId) {
+    const response = await this.makeRequest('getOrderPackages', {
+      order_id: orderId,
+    });
+    return response.packages || [];
+  }
+
+  /**
+   * Get package details (dimensions, weight, COD, insurance)
+   * @param {number} packageId - Package ID
+   * @returns {Promise<object>}
+   */
+  async getPackageDetails(packageId) {
+    const response = await this.makeRequest('getPackageDetails', {
+      package_id: packageId,
+    });
+    return response.package_details || {};
+  }
+
+  /**
+   * Get courier packages status history
+   * @param {number[]} packageIds - Array of package IDs (max 100)
+   * @returns {Promise<object>} - Keyed by package ID
+   */
+  async getCourierPackagesStatusHistory(packageIds) {
+    if (packageIds.length > 100) {
+      throw new Error('Maximum 100 package IDs allowed per request');
+    }
+    const response = await this.makeRequest('getCourierPackagesStatusHistory', {
+      package_ids: packageIds,
+    });
+    return response.packages_history || {};
+  }
+
+  /**
+   * Get available courier services for an order
+   * NOTE: Only supported for X-press, BrokerSystem, Wysyłam z Allegro, ErliPRO
+   * @param {string} courierCode - Courier code
+   * @param {number} orderId - Order ID
+   * @param {object} fields - Shipment fields as object
+   * @param {Array} packages - Package definitions
+   * @param {number} [accountId] - Optional courier account ID
+   * @returns {Promise<object>}
+   */
+  async getCourierServices(courierCode, orderId, fields, packages, accountId) {
+    const parameters = {
+      courier_code: courierCode,
+      order_id: orderId,
+      fields: fields,
+      packages: packages,
+      account_id: accountId,
+    };
+
+    // Remove undefined values
+    Object.keys(parameters).forEach((key) => {
+      if (parameters[key] === undefined) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest('getCourierServices', parameters);
+    return response.services || {};
+  }
+
+  // ============================================
+  // Orders Extended
+  // ============================================
+
+  /**
+   * Get order journal (change log)
+   * NOTE: Returns max 3 days of logs. Requires Base support.
+   * @param {object} filters
+   * @param {number} [filters.last_log_id] - Start from this log ID
+   * @param {number[]} [filters.logs_types] - Filter by log types (1-21)
+   * @param {number} [filters.order_id] - Filter by order ID
+   * @returns {Promise<Array>}
+   */
+  async getJournalList(filters = {}) {
+    const parameters = {
+      last_log_id: filters.last_log_id,
+      logs_types: filters.logs_types,
+      order_id: filters.order_id,
+    };
+
+    // Remove undefined values
+    Object.keys(parameters).forEach((key) => {
+      if (parameters[key] === undefined) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest('getJournalList', parameters);
+    return response.logs || [];
+  }
+
+  /**
+   * Get order extra field definitions
+   * @returns {Promise<object>} - Extra field definitions keyed by ID
+   */
+  async getOrderExtraFields() {
+    const response = await this.makeRequest('getOrderExtraFields', {});
+    return response.extra_fields || {};
+  }
+
+  /**
+   * Get order transaction data (marketplace, fulfillment, taxes)
+   * @param {number} orderId - Order ID
+   * @param {object} options
+   * @param {boolean} [options.include_complex_taxes]
+   * @param {boolean} [options.include_amazon_data]
+   * @returns {Promise<object>}
+   */
+  async getOrderTransactionData(orderId, options = {}) {
+    const parameters = {
+      order_id: orderId,
+      include_complex_taxes: options.include_complex_taxes,
+      include_amazon_data: options.include_amazon_data,
+    };
+
+    // Remove undefined values
+    Object.keys(parameters).forEach((key) => {
+      if (parameters[key] === undefined) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest('getOrderTransactionData', parameters);
+    const { status, ...data } = response;
+    return data;
+  }
+
+  /**
+   * Find orders by email address
+   * @param {string} email - Customer email
+   * @returns {Promise<Array>}
+   */
+  async getOrdersByEmail(email) {
+    const response = await this.makeRequest('getOrdersByEmail', {
+      email: email,
+    });
+    return response.orders || [];
+  }
+
+  /**
+   * Find orders by phone number
+   * @param {string} phone - Customer phone number
+   * @returns {Promise<Array>}
+   */
+  async getOrdersByPhone(phone) {
+    const response = await this.makeRequest('getOrdersByPhone', {
+      phone: phone,
+    });
+    return response.orders || [];
+  }
+
+  /**
+   * Get order payments history
+   * @param {number} orderId - Order ID
+   * @param {boolean} [showFullHistory=false] - Show full payment history
+   * @returns {Promise<Array>}
+   */
+  async getOrderPaymentsHistory(orderId, showFullHistory = false) {
+    const response = await this.makeRequest('getOrderPaymentsHistory', {
+      order_id: orderId,
+      show_full_history: showFullHistory,
+    });
+    return response.payments || [];
+  }
+
+  /**
+   * Get order pick & pack history
+   * @param {number} orderId - Order ID
+   * @param {number} [actionType] - Filter by action type (1-17)
+   * @returns {Promise<Array>}
+   */
+  async getOrderPickPackHistory(orderId, actionType) {
+    const parameters = {
+      order_id: orderId,
+      action_type: actionType,
+    };
+
+    // Remove undefined values
+    Object.keys(parameters).forEach((key) => {
+      if (parameters[key] === undefined) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest('getOrderPickPackHistory', parameters);
+    return response.history || [];
+  }
+
+  /**
+   * Get new receipts (not yet printed)
+   * @param {object} filters
+   * @param {number} [filters.series_id]
+   * @param {number} [filters.id_from]
+   * @returns {Promise<Array>}
+   */
+  async getNewReceipts(filters = {}) {
+    const parameters = {
+      series_id: filters.series_id,
+      id_from: filters.id_from,
+    };
+
+    // Remove undefined values
+    Object.keys(parameters).forEach((key) => {
+      if (parameters[key] === undefined) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest('getNewReceipts', parameters);
+    return response.orders || [];
+  }
+
+  /**
+   * Get receipts (max 100 per request)
+   * @param {object} filters
+   * @param {number} [filters.series_id]
+   * @param {number} [filters.id_from]
+   * @param {number} [filters.date_from] - Unix timestamp
+   * @param {number} [filters.date_to] - Unix timestamp
+   * @returns {Promise<Array>}
+   */
+  async getReceipts(filters = {}) {
+    const parameters = {
+      series_id: filters.series_id,
+      id_from: filters.id_from,
+      date_from: filters.date_from,
+      date_to: filters.date_to,
+    };
+
+    // Remove undefined values
+    Object.keys(parameters).forEach((key) => {
+      if (parameters[key] === undefined) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest('getReceipts', parameters);
+    return response.receipts || [];
+  }
+
+  /**
+   * Get numbering series (invoices, corrections, receipts)
+   * @returns {Promise<Array<{id: number, type: string, name: string, format: string}>>}
+   */
+  async getSeries() {
+    const response = await this.makeRequest('getSeries', {});
+    return response.series || [];
+  }
 }
 
 /**

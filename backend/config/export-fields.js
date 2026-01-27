@@ -260,6 +260,22 @@ module.exports = {
         { key: 'storage_id',    label: 'ID magazynu',    group: 'Magazyn', plan: 'pro', type: 'number' },
         { key: 'warehouse_id',  label: 'ID hurtowni',    group: 'Magazyn', plan: 'pro', type: 'number' },
         { key: 'bundle_id',     label: 'ID zestawu',     group: 'Magazyn', plan: 'pro', type: 'number' },
+
+        // Dane z magazynu (wzbogacenie przez inventory API)
+        { key: 'inv_manufacturer',   label: 'Producent (magazyn)',    group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_category',       label: 'Kategoria (magazyn)',    group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_description',    label: 'Opis (magazyn)',         group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_image_url',      label: 'URL zdjęcia (magazyn)',  group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_purchase_price', label: 'Cena zakupu (magazyn)',  group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_stock',          label: 'Stan magazynowy',        group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_weight',         label: 'Waga (magazyn)',         group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_height',         label: 'Wysokość (magazyn)',     group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_width',          label: 'Szerokość (magazyn)',    group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_length',         label: 'Długość (magazyn)',      group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_location',       label: 'Lokalizacja (magazyn)',  group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_tax_rate',       label: 'Stawka VAT (magazyn)',   group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_profit_margin',  label: 'Marża % (magazyn)',      group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_average_cost',   label: 'Średni koszt (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
       ]
     }
   },

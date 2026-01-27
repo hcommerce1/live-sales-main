@@ -370,6 +370,191 @@ class BaselinkerService {
 
     return allInvoices;
   }
+  // ============================================
+  // Courier Shipments
+  // ============================================
+
+  async getCouriersList(userToken) {
+    const response = await this.makeRequest(userToken, 'getCouriersList', {});
+    return response.couriers || [];
+  }
+
+  async getCourierAccounts(userToken, courierCode) {
+    const response = await this.makeRequest(userToken, 'getCourierAccounts', {
+      courier_code: courierCode,
+    });
+    return response.accounts || [];
+  }
+
+  async getOrderPackages(userToken, orderId) {
+    const response = await this.makeRequest(userToken, 'getOrderPackages', {
+      order_id: orderId,
+    });
+    return response.packages || [];
+  }
+
+  async getPackageDetails(userToken, packageId) {
+    const response = await this.makeRequest(userToken, 'getPackageDetails', {
+      package_id: packageId,
+    });
+    return response.package_details || {};
+  }
+
+  async getCourierPackagesStatusHistory(userToken, packageIds) {
+    if (packageIds.length > 100) {
+      throw new Error('Maximum 100 package IDs allowed per request');
+    }
+    const response = await this.makeRequest(userToken, 'getCourierPackagesStatusHistory', {
+      package_ids: packageIds,
+    });
+    return response.packages_history || {};
+  }
+
+  async getCourierServices(userToken, courierCode, orderId, fields, packages, accountId) {
+    const parameters = {
+      courier_code: courierCode,
+      order_id: orderId,
+      fields: fields,
+      packages: packages,
+      account_id: accountId || null,
+    };
+
+    // Remove null values
+    Object.keys(parameters).forEach(key => {
+      if (parameters[key] === null) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest(userToken, 'getCourierServices', parameters);
+    return response.services || {};
+  }
+
+  // ============================================
+  // Orders Extended
+  // ============================================
+
+  async getJournalList(userToken, filters = {}) {
+    const parameters = {
+      last_log_id: filters.last_log_id || null,
+      logs_types: filters.logs_types || null,
+      order_id: filters.order_id || null,
+    };
+
+    // Remove null values
+    Object.keys(parameters).forEach(key => {
+      if (parameters[key] === null) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest(userToken, 'getJournalList', parameters);
+    return response.logs || [];
+  }
+
+  async getOrderExtraFields(userToken) {
+    const response = await this.makeRequest(userToken, 'getOrderExtraFields', {});
+    return response.extra_fields || {};
+  }
+
+  async getOrderTransactionData(userToken, orderId, options = {}) {
+    const parameters = {
+      order_id: orderId,
+      include_complex_taxes: options.include_complex_taxes || null,
+      include_amazon_data: options.include_amazon_data || null,
+    };
+
+    // Remove null values
+    Object.keys(parameters).forEach(key => {
+      if (parameters[key] === null) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest(userToken, 'getOrderTransactionData', parameters);
+    const { status, ...data } = response;
+    return data;
+  }
+
+  async getOrdersByEmail(userToken, email) {
+    const response = await this.makeRequest(userToken, 'getOrdersByEmail', {
+      email: email,
+    });
+    return response.orders || [];
+  }
+
+  async getOrdersByPhone(userToken, phone) {
+    const response = await this.makeRequest(userToken, 'getOrdersByPhone', {
+      phone: phone,
+    });
+    return response.orders || [];
+  }
+
+  async getOrderPaymentsHistory(userToken, orderId, showFullHistory = false) {
+    const response = await this.makeRequest(userToken, 'getOrderPaymentsHistory', {
+      order_id: orderId,
+      show_full_history: showFullHistory,
+    });
+    return response.payments || [];
+  }
+
+  async getOrderPickPackHistory(userToken, orderId, actionType) {
+    const parameters = {
+      order_id: orderId,
+      action_type: actionType || null,
+    };
+
+    // Remove null values
+    Object.keys(parameters).forEach(key => {
+      if (parameters[key] === null) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest(userToken, 'getOrderPickPackHistory', parameters);
+    return response.history || [];
+  }
+
+  async getNewReceipts(userToken, filters = {}) {
+    const parameters = {
+      series_id: filters.series_id || null,
+      id_from: filters.id_from || null,
+    };
+
+    // Remove null values
+    Object.keys(parameters).forEach(key => {
+      if (parameters[key] === null) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest(userToken, 'getNewReceipts', parameters);
+    return response.orders || [];
+  }
+
+  async getReceipts(userToken, filters = {}) {
+    const parameters = {
+      series_id: filters.series_id || null,
+      id_from: filters.id_from || null,
+      date_from: filters.date_from || null,
+      date_to: filters.date_to || null,
+    };
+
+    // Remove null values
+    Object.keys(parameters).forEach(key => {
+      if (parameters[key] === null) {
+        delete parameters[key];
+      }
+    });
+
+    const response = await this.makeRequest(userToken, 'getReceipts', parameters);
+    return response.receipts || [];
+  }
+
+  async getSeries(userToken) {
+    const response = await this.makeRequest(userToken, 'getSeries', {});
+    return response.series || [];
+  }
 }
 
 module.exports = new BaselinkerService();
