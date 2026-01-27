@@ -229,53 +229,117 @@ module.exports = {
       apiMethod: 'getOrders', // Pobieramy z getOrders i rozwijamy tablicę products
       expandFrom: 'products', // Wskazuje, że dane są zagnieżdżone
       fields: [
-        // Kontekst zamówienia
-        { key: 'order_id',         label: 'ID zamówienia',       group: 'Zamówienie', plan: 'basic', type: 'number' },
-        { key: 'date_add',         label: 'Data zamówienia',     group: 'Zamówienie', plan: 'basic', type: 'date' },
-        { key: 'date_confirmed',   label: 'Data potwierdzenia',  group: 'Zamówienie', plan: 'basic', type: 'date' },
-        { key: 'order_status_id',  label: 'Status zamówienia',   group: 'Zamówienie', plan: 'basic', type: 'select', source: 'order-statuses' },
-        { key: 'order_source',     label: 'Źródło zamówienia',   group: 'Zamówienie', plan: 'basic', type: 'select', source: 'order-sources' },
-        { key: 'email',            label: 'Email klienta',       group: 'Zamówienie', plan: 'basic', type: 'text' },
-        { key: 'delivery_fullname', label: 'Klient',             group: 'Zamówienie', plan: 'basic', type: 'text' },
+        // ========== ZAMÓWIENIE (kontekst) ==========
+        { key: 'order_id',          label: 'ID zamówienia',            group: 'Zamówienie', plan: 'basic', type: 'number' },
+        { key: 'shop_order_id',     label: 'ID zamówienia w sklepie',  group: 'Zamówienie', plan: 'free',  type: 'number' },
+        { key: 'external_order_id', label: 'Zewnętrzny ID',            group: 'Zamówienie', plan: 'basic', type: 'text' },
+        { key: 'date_add',          label: 'Data zamówienia',          group: 'Zamówienie', plan: 'basic', type: 'date' },
+        { key: 'date_confirmed',    label: 'Data potwierdzenia',       group: 'Zamówienie', plan: 'basic', type: 'date' },
+        { key: 'order_status_id',   label: 'Status zamówienia',        group: 'Zamówienie', plan: 'basic', type: 'select', source: 'order-statuses' },
+        { key: 'order_source',      label: 'Źródło zamówienia',        group: 'Zamówienie', plan: 'basic', type: 'select', source: 'order-sources' },
+        { key: 'order_source_id',   label: 'ID źródła',               group: 'Zamówienie', plan: 'basic', type: 'number' },
+        { key: 'order_source_info', label: 'Info o źródle zamówienia', group: 'Zamówienie', plan: 'basic', type: 'text' },
+        { key: 'confirmed',         label: 'Potwierdzone',             group: 'Zamówienie', plan: 'free',  type: 'boolean' },
+        { key: 'date_in_status',    label: 'Data wejścia w status',    group: 'Zamówienie', plan: 'basic', type: 'date' },
 
-        // Produkt
-        { key: 'order_product_id', label: 'ID pozycji',          group: 'Produkt', plan: 'basic', type: 'number' },
-        { key: 'product_id',       label: 'ID produktu',         group: 'Produkt', plan: 'basic', type: 'text' },
-        { key: 'variant_id',       label: 'ID wariantu',         group: 'Produkt', plan: 'basic', type: 'text' },
-        { key: 'name',             label: 'Nazwa produktu',      group: 'Produkt', plan: 'basic', type: 'text' },
-        { key: 'sku',              label: 'SKU',                 group: 'Produkt', plan: 'basic', type: 'text' },
-        { key: 'ean',              label: 'EAN',                 group: 'Produkt', plan: 'basic', type: 'text' },
-        { key: 'attributes',       label: 'Atrybuty/Wariant',    group: 'Produkt', plan: 'basic', type: 'text' },
-        { key: 'location',         label: 'Lokalizacja',         group: 'Produkt', plan: 'basic', type: 'text' },
-        { key: 'auction_id',       label: 'ID aukcji',           group: 'Produkt', plan: 'basic', type: 'text' },
+        // ========== DANE KLIENTA ==========
+        { key: 'email',                  label: 'Email',                     group: 'Dane klienta', plan: 'free',  type: 'text' },
+        { key: 'phone',                  label: 'Telefon',                   group: 'Dane klienta', plan: 'free',  type: 'text' },
+        { key: 'user_login',             label: 'Login użytkownika',         group: 'Dane klienta', plan: 'basic', type: 'text' },
+        { key: 'delivery_fullname',      label: 'Imię i nazwisko (dostawa)', group: 'Dane klienta', plan: 'free',  type: 'text' },
+        { key: 'delivery_company',       label: 'Firma (dostawa)',           group: 'Dane klienta', plan: 'free',  type: 'text' },
+        { key: 'delivery_address',       label: 'Adres (dostawa)',           group: 'Dane klienta', plan: 'free',  type: 'text' },
+        { key: 'delivery_city',          label: 'Miasto (dostawa)',          group: 'Dane klienta', plan: 'free',  type: 'text' },
+        { key: 'delivery_postcode',      label: 'Kod pocztowy (dostawa)',    group: 'Dane klienta', plan: 'free',  type: 'text' },
+        { key: 'delivery_state',         label: 'Województwo (dostawa)',     group: 'Dane klienta', plan: 'basic', type: 'text' },
+        { key: 'delivery_country',       label: 'Kraj (dostawa)',            group: 'Dane klienta', plan: 'free',  type: 'text' },
+        { key: 'delivery_country_code',  label: 'Kod kraju (dostawa)',       group: 'Dane klienta', plan: 'basic', type: 'text' },
 
-        // Ilość i cena
+        // ========== PUNKT ODBIORU ==========
+        { key: 'delivery_point_id',       label: 'ID punktu odbioru',     group: 'Punkt odbioru', plan: 'basic', type: 'text' },
+        { key: 'delivery_point_name',     label: 'Nazwa punktu odbioru',  group: 'Punkt odbioru', plan: 'basic', type: 'text' },
+        { key: 'delivery_point_address',  label: 'Adres punktu odbioru',  group: 'Punkt odbioru', plan: 'basic', type: 'text' },
+        { key: 'delivery_point_postcode', label: 'Kod poczt. punktu',     group: 'Punkt odbioru', plan: 'basic', type: 'text' },
+        { key: 'delivery_point_city',     label: 'Miasto punktu odbioru', group: 'Punkt odbioru', plan: 'basic', type: 'text' },
+
+        // ========== PŁATNOŚĆ I DOSTAWA ==========
+        { key: 'currency',             label: 'Waluta',              group: 'Płatność', plan: 'free',  type: 'text' },
+        { key: 'payment_method',       label: 'Metoda płatności',    group: 'Płatność', plan: 'free',  type: 'text' },
+        { key: 'payment_method_cod',   label: 'Za pobraniem',        group: 'Płatność', plan: 'free',  type: 'boolean' },
+        { key: 'payment_done',         label: 'Zapłacono',           group: 'Płatność', plan: 'free',  type: 'number' },
+        { key: 'delivery_method',      label: 'Metoda dostawy',      group: 'Płatność', plan: 'free',  type: 'text' },
+        { key: 'delivery_method_id',   label: 'ID metody dostawy',   group: 'Płatność', plan: 'basic', type: 'number' },
+        { key: 'delivery_price_brutto', label: 'Cena dostawy brutto', group: 'Płatność', plan: 'pro',  type: 'number' },
+        { key: 'delivery_price_netto',  label: 'Cena dostawy netto',  group: 'Płatność', plan: 'pro',  type: 'number' },
+
+        // ========== WYSYŁKA ==========
+        { key: 'delivery_package_module', label: 'Moduł kuriera',   group: 'Wysyłka', plan: 'basic', type: 'text' },
+        { key: 'delivery_package_nr',     label: 'Numer przesyłki', group: 'Wysyłka', plan: 'basic', type: 'text' },
+
+        // ========== FAKTURA ==========
+        { key: 'invoice_fullname',     label: 'Dane do faktury - Nazwa',  group: 'Faktura', plan: 'pro', type: 'text' },
+        { key: 'invoice_company',      label: 'Dane do faktury - Firma',  group: 'Faktura', plan: 'pro', type: 'text' },
+        { key: 'invoice_nip',          label: 'NIP',                      group: 'Faktura', plan: 'pro', type: 'text' },
+        { key: 'invoice_address',      label: 'Adres (faktura)',          group: 'Faktura', plan: 'pro', type: 'text' },
+        { key: 'invoice_postcode',     label: 'Kod pocztowy (faktura)',   group: 'Faktura', plan: 'pro', type: 'text' },
+        { key: 'invoice_city',         label: 'Miasto (faktura)',         group: 'Faktura', plan: 'pro', type: 'text' },
+        { key: 'invoice_state',        label: 'Województwo (faktura)',    group: 'Faktura', plan: 'pro', type: 'text' },
+        { key: 'invoice_country',      label: 'Kraj (faktura)',           group: 'Faktura', plan: 'pro', type: 'text' },
+        { key: 'invoice_country_code', label: 'Kod kraju (faktura)',      group: 'Faktura', plan: 'pro', type: 'text' },
+        { key: 'want_invoice',         label: 'Chce fakturę',             group: 'Faktura', plan: 'pro', type: 'boolean' },
+
+        // ========== KOMENTARZE ==========
+        { key: 'user_comments',  label: 'Komentarz klienta',    group: 'Komentarze', plan: 'basic', type: 'text' },
+        { key: 'admin_comments', label: 'Komentarz wewnętrzny', group: 'Komentarze', plan: 'pro',   type: 'text' },
+        { key: 'extra_field_1',  label: 'Pole dodatkowe 1',     group: 'Komentarze', plan: 'pro',   type: 'text' },
+        { key: 'extra_field_2',  label: 'Pole dodatkowe 2',     group: 'Komentarze', plan: 'pro',   type: 'text' },
+
+        // ========== STATUS ==========
+        { key: 'order_page', label: 'Strona zamówienia',    group: 'Status', plan: 'basic', type: 'text' },
+        { key: 'pick_state', label: 'Status kompletacji',   group: 'Status', plan: 'basic', type: 'number' },
+        { key: 'pack_state', label: 'Status pakowania',     group: 'Status', plan: 'basic', type: 'number' },
+
+        // ========== POZYCJA ZAMÓWIENIA (produkt) ==========
+        { key: 'order_product_id', label: 'ID pozycji',       group: 'Produkt', plan: 'basic', type: 'number' },
+        { key: 'product_id',       label: 'ID produktu',      group: 'Produkt', plan: 'basic', type: 'text' },
+        { key: 'variant_id',       label: 'ID wariantu',      group: 'Produkt', plan: 'basic', type: 'text' },
+        { key: 'name',             label: 'Nazwa produktu',   group: 'Produkt', plan: 'basic', type: 'text' },
+        { key: 'sku',              label: 'SKU',              group: 'Produkt', plan: 'basic', type: 'text' },
+        { key: 'ean',              label: 'EAN',              group: 'Produkt', plan: 'basic', type: 'text' },
+        { key: 'attributes',       label: 'Atrybuty/Wariant', group: 'Produkt', plan: 'basic', type: 'text' },
+        { key: 'location',         label: 'Lokalizacja',      group: 'Produkt', plan: 'basic', type: 'text' },
+        { key: 'auction_id',       label: 'ID aukcji',        group: 'Produkt', plan: 'basic', type: 'text' },
+
+        // ========== WARTOŚĆ (ceny pozycji) ==========
         { key: 'quantity',     label: 'Ilość',        group: 'Wartość', plan: 'basic', type: 'number' },
         { key: 'price_brutto', label: 'Cena brutto',  group: 'Wartość', plan: 'basic', type: 'number' },
+        { key: 'price_netto',  label: 'Cena netto',   group: 'Wartość', plan: 'pro',   type: 'number' },
         { key: 'tax_rate',     label: 'Stawka VAT',   group: 'Wartość', plan: 'pro',   type: 'number' },
         { key: 'weight',       label: 'Waga',         group: 'Wartość', plan: 'pro',   type: 'number' },
 
-        // Magazyn
-        { key: 'storage',       label: 'Typ magazynu',   group: 'Magazyn', plan: 'pro', type: 'text' },
-        { key: 'storage_id',    label: 'ID magazynu',    group: 'Magazyn', plan: 'pro', type: 'number' },
-        { key: 'warehouse_id',  label: 'ID hurtowni',    group: 'Magazyn', plan: 'pro', type: 'number' },
-        { key: 'bundle_id',     label: 'ID zestawu',     group: 'Magazyn', plan: 'pro', type: 'number' },
+        // ========== MAGAZYN (pozycji) ==========
+        { key: 'storage',      label: 'Typ magazynu', group: 'Magazyn', plan: 'pro', type: 'text' },
+        { key: 'storage_id',   label: 'ID magazynu',  group: 'Magazyn', plan: 'pro', type: 'number' },
+        { key: 'warehouse_id', label: 'ID hurtowni',  group: 'Magazyn', plan: 'pro', type: 'number' },
+        { key: 'bundle_id',    label: 'ID zestawu',   group: 'Magazyn', plan: 'pro', type: 'number' },
 
-        // Dane z magazynu (wzbogacenie przez inventory API)
-        { key: 'inv_manufacturer',   label: 'Producent (magazyn)',    group: 'Dane z magazynu', plan: 'pro', type: 'text' },
-        { key: 'inv_category',       label: 'Kategoria (magazyn)',    group: 'Dane z magazynu', plan: 'pro', type: 'text' },
-        { key: 'inv_description',    label: 'Opis (magazyn)',         group: 'Dane z magazynu', plan: 'pro', type: 'text' },
-        { key: 'inv_image_url',      label: 'URL zdjęcia (magazyn)',  group: 'Dane z magazynu', plan: 'pro', type: 'text' },
-        { key: 'inv_purchase_price', label: 'Cena zakupu (magazyn)',  group: 'Dane z magazynu', plan: 'pro', type: 'number' },
-        { key: 'inv_stock',          label: 'Stan magazynowy',        group: 'Dane z magazynu', plan: 'pro', type: 'number' },
-        { key: 'inv_weight',         label: 'Waga (magazyn)',         group: 'Dane z magazynu', plan: 'pro', type: 'number' },
-        { key: 'inv_height',         label: 'Wysokość (magazyn)',     group: 'Dane z magazynu', plan: 'pro', type: 'number' },
-        { key: 'inv_width',          label: 'Szerokość (magazyn)',    group: 'Dane z magazynu', plan: 'pro', type: 'number' },
-        { key: 'inv_length',         label: 'Długość (magazyn)',      group: 'Dane z magazynu', plan: 'pro', type: 'number' },
-        { key: 'inv_location',       label: 'Lokalizacja (magazyn)',  group: 'Dane z magazynu', plan: 'pro', type: 'text' },
-        { key: 'inv_tax_rate',       label: 'Stawka VAT (magazyn)',   group: 'Dane z magazynu', plan: 'pro', type: 'number' },
-        { key: 'inv_profit_margin',  label: 'Marża % (magazyn)',      group: 'Dane z magazynu', plan: 'pro', type: 'number' },
-        { key: 'inv_average_cost',   label: 'Średni koszt (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        // ========== DANE Z MAGAZYNU (wzbogacenie przez inventory API) ==========
+        { key: 'inv_manufacturer',          label: 'Producent (magazyn)',          group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_category',              label: 'Kategoria (magazyn)',          group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_description',           label: 'Opis (magazyn)',              group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_image_url',             label: 'URL zdjęcia (magazyn)',       group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_purchase_price_netto',  label: 'Cena zakupu netto (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_purchase_price_brutto', label: 'Cena zakupu brutto (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_stock',                 label: 'Stan magazynowy',             group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_weight',                label: 'Waga (magazyn)',              group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_height',                label: 'Wysokość (magazyn)',          group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_width',                 label: 'Szerokość (magazyn)',         group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_length',                label: 'Długość (magazyn)',           group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_location',              label: 'Lokalizacja (magazyn)',       group: 'Dane z magazynu', plan: 'pro', type: 'text' },
+        { key: 'inv_tax_rate',              label: 'Stawka VAT (magazyn)',        group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_profit_margin',         label: 'Marża % (magazyn)',           group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_average_cost_netto',    label: 'Średni koszt netto (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+        { key: 'inv_average_cost_brutto',   label: 'Średni koszt brutto (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
       ]
     }
   },

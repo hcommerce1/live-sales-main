@@ -293,6 +293,10 @@ model Export {
   // Selected fields (array of field keys)
   selectedFields  Json
 
+  // Per-export settings (optional JSON)
+  // { inventoryPriceFormat: 'netto'|'brutto', deliveryTaxRate: number }
+  settings        Json?
+
   // BaseLinker API token (encrypted with AES-256-GCM)
   // LEGACY: per-export token
   // When company.secrets.enabled=true, use CompanySecret instead

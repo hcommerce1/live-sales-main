@@ -184,6 +184,62 @@
                 </button>
               </div>
             </div>
+
+            <!-- Settings: Netto/Brutto (order_products only) -->
+            <div v-if="showSettingsSection" class="border border-blue-200 bg-blue-50/50 rounded-lg p-4 space-y-4">
+              <h4 class="text-sm font-semibold text-blue-900">Ustawienia przeliczania cen</h4>
+
+              <!-- Delivery VAT rate -->
+              <div v-if="showDeliveryTaxSetting">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Stawka VAT na dostawę</label>
+                <p class="text-xs text-gray-500 mb-2">BaseLinker nie podaje stawki VAT dostawy — wybierz odpowiednią stawkę</p>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="opt in deliveryTaxOptions"
+                    :key="opt.value"
+                    type="button"
+                    class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
+                    :class="{
+                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.deliveryTaxRate === opt.value,
+                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.deliveryTaxRate !== opt.value
+                    }"
+                    @click="config.settings.deliveryTaxRate = opt.value"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Inventory price format -->
+              <div v-if="showInventoryPriceFormatSetting">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Ceny zakupowe w magazynie są zapisane jako</label>
+                <p class="text-xs text-gray-500 mb-2">Sprawdź ustawienia w panelu BaseLinker</p>
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
+                    :class="{
+                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.inventoryPriceFormat === 'netto',
+                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.inventoryPriceFormat !== 'netto'
+                    }"
+                    @click="config.settings.inventoryPriceFormat = 'netto'"
+                  >
+                    Netto
+                  </button>
+                  <button
+                    type="button"
+                    class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
+                    :class="{
+                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.inventoryPriceFormat === 'brutto',
+                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.inventoryPriceFormat !== 'brutto'
+                    }"
+                    @click="config.settings.inventoryPriceFormat = 'brutto'"
+                  >
+                    Brutto
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Right: Summary -->
@@ -343,7 +399,11 @@ const config = ref({
     write_mode: 'replace'
   }],
   schedule_minutes: 15,
-  status: 'active'
+  status: 'active',
+  settings: {
+    inventoryPriceFormat: 'brutto',
+    deliveryTaxRate: 23
+  }
 })
 
 // Steps definition (Step 2 "Filtry" hidden - backend support preserved)
@@ -398,6 +458,31 @@ const canProceed = computed(() => {
       return true
   }
 })
+
+const showDeliveryTaxSetting = computed(() => {
+  if (config.value.dataset !== 'order_products') return false
+  return config.value.selected_fields.some(f =>
+    f === 'delivery_price_netto' || f === 'delivery_price_brutto'
+  )
+})
+
+const showInventoryPriceFormatSetting = computed(() => {
+  if (config.value.dataset !== 'order_products') return false
+  return config.value.selected_fields.some(f =>
+    f.startsWith('inv_purchase_price_') || f.startsWith('inv_average_cost_')
+  )
+})
+
+const showSettingsSection = computed(() => {
+  return showDeliveryTaxSetting.value || showInventoryPriceFormatSetting.value
+})
+
+const deliveryTaxOptions = [
+  { value: 23, label: '23%' },
+  { value: 8, label: '8%' },
+  { value: 5, label: '5%' },
+  { value: 0, label: '0% (zw.)' }
+]
 
 const canSave = computed(() => {
   return config.value.name?.trim() &&
@@ -584,7 +669,8 @@ function cancelWizard() {
         write_mode: sheet.write_mode || 'replace'
       })) || [],
       scheduleMinutes: config.value.schedule_minutes,
-      status: 'draft'
+      status: 'draft',
+      settings: config.value.settings
     }
     emit('save-draft', draftData)
   } else {
@@ -609,7 +695,8 @@ async function saveExport() {
         write_mode: sheet.write_mode || 'replace'
       })) || [],
       scheduleMinutes: config.value.schedule_minutes,
-      status: config.value.status || 'active'
+      status: config.value.status || 'active',
+      settings: config.value.settings
     }
 
     emit('save', exportData)
@@ -663,7 +750,8 @@ async function loadExistingExport() {
       },
       sheets_config: [{ sheet_url: '', write_mode: 'replace' }],
       schedule_minutes: props.templateData.scheduleMinutes || 15,
-      status: 'active'
+      status: 'active',
+      settings: props.templateData.settings || { inventoryPriceFormat: 'brutto', deliveryTaxRate: 23 }
     }
     return
   }
@@ -688,7 +776,8 @@ async function loadExistingExport() {
           write_mode: s.write_mode || 'replace'
         })) || [{ sheet_url: '', write_mode: 'replace' }],
         schedule_minutes: exportData.schedule_minutes || 15,
-        status: exportData.status || 'active'
+        status: exportData.status || 'active',
+        settings: exportData.settings || { inventoryPriceFormat: 'brutto', deliveryTaxRate: 23 }
       }
     }
   } catch (error) {

@@ -29,6 +29,39 @@ const prisma = new PrismaClient();
 // Prevents exports from hanging indefinitely
 const EXPORT_TIMEOUT_MS = 10 * 60 * 1000;
 
+// ============================================
+// PRICE CALCULATION HELPERS
+// ============================================
+
+/**
+ * Calculate netto from brutto or brutto from netto
+ * @param {number} price - Source price
+ * @param {number} taxRate - VAT percentage (e.g., 23, 8, 5, 0)
+ * @param {'to_netto'|'to_brutto'} direction - Calculation direction
+ * @returns {number} - Calculated price, rounded to 2 decimal places
+ */
+function calculatePriceVariant(price, taxRate, direction) {
+  if (price === null || price === undefined || isNaN(price) || !price) return 0;
+  if (taxRate === null || taxRate === undefined || isNaN(taxRate) || taxRate < 0) {
+    return Math.round(Number(price) * 100) / 100;
+  }
+  const rate = Number(taxRate);
+  const p = Number(price);
+  if (direction === 'to_netto') {
+    return Math.round((p / (1 + rate / 100)) * 100) / 100;
+  } else {
+    return Math.round((p * (1 + rate / 100)) * 100) / 100;
+  }
+}
+
+/**
+ * Backward compatibility: map old field keys to new ones
+ */
+const FIELD_MIGRATIONS = {
+  'inv_purchase_price': 'inv_purchase_price_brutto',
+  'inv_average_cost': 'inv_average_cost_brutto',
+};
+
 /**
  * Execute a promise with timeout
  * @param {Promise} promise - Promise to execute
@@ -444,6 +477,7 @@ class ExportService {
       createdBy: dbExport.createdBy,
       createdAt: dbExport.createdAt?.toISOString(),
       updatedAt: dbExport.updatedAt?.toISOString(),
+      settings: dbExport.settings || {},
       // Multiple sheets support
       sheets: dbExport.sheets?.map(s => ({
         sheet_url: s.sheetUrl,
@@ -650,6 +684,7 @@ class ExportService {
         sheetsUrl: config.sheetsUrl || config.sheets_url || '',
         sheetsWriteMode: config.sheetsWriteMode || config.sheets_write_mode || 'append',
         scheduleMinutes: config.schedule_minutes || config.scheduleMinutes || null,
+        settings: config.settings || null,
         companyId,
         createdBy: effectiveUserId
       };
@@ -935,7 +970,7 @@ class ExportService {
           rawData = await this.fetchInvoices(client, apiFilters);
           break;
         case 'order_products':
-          rawData = await this.fetchOrderProducts(client, apiFilters, config.selected_fields || []);
+          rawData = await this.fetchOrderProducts(client, apiFilters, config.selected_fields || [], config.settings || {});
           break;
         default:
           throw new Error(`Unknown dataset type: ${config.dataset}`);
@@ -1484,28 +1519,57 @@ class ExportService {
 
   /**
    * Merge inventory data into an order product record
+   * Calculates netto/brutto variants based on user's price format setting
    * @param {object} orderProduct - Order product row
    * @param {object|null} inventoryData - Inventory product data (or null if not found)
+   * @param {string} inventoryPriceFormat - 'netto' or 'brutto' (user's BaseLinker setting)
    * @returns {object} - Order product with inv_ fields added
    */
-  mergeInventoryData(orderProduct, inventoryData) {
+  mergeInventoryData(orderProduct, inventoryData, inventoryPriceFormat = 'brutto') {
     const details = inventoryData || {};
+    const format = inventoryPriceFormat || 'brutto';
+    const invTaxRate = details.tax_rate || 0;
+
+    // Calculate purchase price netto/brutto
+    const rawPurchasePrice = details.purchase_price || 0;
+    let purchasePriceNetto, purchasePriceBrutto;
+    if (format === 'netto') {
+      purchasePriceNetto = Math.round(rawPurchasePrice * 100) / 100;
+      purchasePriceBrutto = calculatePriceVariant(rawPurchasePrice, invTaxRate, 'to_brutto');
+    } else {
+      purchasePriceBrutto = Math.round(rawPurchasePrice * 100) / 100;
+      purchasePriceNetto = calculatePriceVariant(rawPurchasePrice, invTaxRate, 'to_netto');
+    }
+
+    // Calculate average cost netto/brutto
+    const rawAverageCost = details.average_cost || 0;
+    let averageCostNetto, averageCostBrutto;
+    if (format === 'netto') {
+      averageCostNetto = Math.round(rawAverageCost * 100) / 100;
+      averageCostBrutto = calculatePriceVariant(rawAverageCost, invTaxRate, 'to_brutto');
+    } else {
+      averageCostBrutto = Math.round(rawAverageCost * 100) / 100;
+      averageCostNetto = calculatePriceVariant(rawAverageCost, invTaxRate, 'to_netto');
+    }
+
     return {
       ...orderProduct,
       inv_manufacturer: details.manufacturer || '',
       inv_category: details.category || '',
       inv_description: details.description || '',
       inv_image_url: details.images ? Object.values(details.images)[0] || '' : '',
-      inv_purchase_price: details.purchase_price || 0,
+      inv_purchase_price_netto: purchasePriceNetto,
+      inv_purchase_price_brutto: purchasePriceBrutto,
       inv_stock: details.stock || 0,
       inv_weight: details.weight || 0,
       inv_height: details.height || 0,
       inv_width: details.width || 0,
       inv_length: details.length || 0,
       inv_location: details.location || '',
-      inv_tax_rate: details.tax_rate || 0,
+      inv_tax_rate: invTaxRate,
       inv_profit_margin: details.profit_margin || 0,
-      inv_average_cost: details.average_cost || 0,
+      inv_average_cost_netto: averageCostNetto,
+      inv_average_cost_brutto: averageCostBrutto,
     };
   }
 
@@ -1516,11 +1580,13 @@ class ExportService {
    * @param {object} client - BaseLinker client
    * @param {object} apiFilters - API-side filters
    * @param {Array<string>} selectedFields - Selected fields (to determine if enrichment needed)
+   * @param {object} settings - Export settings { inventoryPriceFormat, deliveryTaxRate }
    * @returns {Promise<Array>} - List of order products (flattened, optionally enriched)
    */
-  async fetchOrderProducts(client, apiFilters = {}, selectedFields = []) {
+  async fetchOrderProducts(client, apiFilters = {}, selectedFields = [], settings = {}) {
     try {
       const orders = await client.getOrdersWithPagination(apiFilters);
+      const deliveryTaxRate = settings.deliveryTaxRate || 23;
 
       // Flatten: one row per product
       const orderProducts = [];
@@ -1532,16 +1598,77 @@ class ExportService {
 
         for (const product of order.products) {
           orderProducts.push({
-            // Order context
+            // === Zamówienie (kontekst) ===
             order_id: order.order_id,
+            shop_order_id: order.shop_order_id,
+            external_order_id: order.external_order_id,
             date_add: order.date_add,
             date_confirmed: order.date_confirmed,
             order_status_id: order.order_status_id,
             order_source: order.order_source,
-            email: order.email,
-            delivery_fullname: order.delivery_fullname,
+            order_source_id: order.order_source_id,
+            order_source_info: order.order_source_info,
+            confirmed: order.confirmed,
+            date_in_status: order.date_in_status,
 
-            // Product data
+            // === Dane klienta ===
+            email: order.email,
+            phone: order.phone,
+            user_login: order.user_login,
+            delivery_fullname: order.delivery_fullname,
+            delivery_company: order.delivery_company,
+            delivery_address: order.delivery_address,
+            delivery_city: order.delivery_city,
+            delivery_postcode: order.delivery_postcode,
+            delivery_state: order.delivery_state,
+            delivery_country: order.delivery_country,
+            delivery_country_code: order.delivery_country_code,
+
+            // === Punkt odbioru ===
+            delivery_point_id: order.delivery_point_id,
+            delivery_point_name: order.delivery_point_name,
+            delivery_point_address: order.delivery_point_address,
+            delivery_point_postcode: order.delivery_point_postcode,
+            delivery_point_city: order.delivery_point_city,
+
+            // === Płatność ===
+            currency: order.currency,
+            payment_method: order.payment_method,
+            payment_method_cod: order.payment_method_cod,
+            payment_done: order.payment_done,
+            delivery_method: order.delivery_method,
+            delivery_method_id: order.delivery_method_id,
+            delivery_price_brutto: order.delivery_price || 0,
+            delivery_price_netto: calculatePriceVariant(order.delivery_price, deliveryTaxRate, 'to_netto'),
+
+            // === Wysyłka ===
+            delivery_package_module: order.delivery_package_module,
+            delivery_package_nr: order.delivery_package_nr,
+
+            // === Faktura ===
+            invoice_fullname: order.invoice_fullname,
+            invoice_company: order.invoice_company,
+            invoice_nip: order.invoice_nip,
+            invoice_address: order.invoice_address,
+            invoice_postcode: order.invoice_postcode,
+            invoice_city: order.invoice_city,
+            invoice_state: order.invoice_state,
+            invoice_country: order.invoice_country,
+            invoice_country_code: order.invoice_country_code,
+            want_invoice: order.want_invoice,
+
+            // === Komentarze ===
+            user_comments: order.user_comments,
+            admin_comments: order.admin_comments,
+            extra_field_1: order.extra_field_1,
+            extra_field_2: order.extra_field_2,
+
+            // === Status ===
+            order_page: order.order_page,
+            pick_state: order.pick_state,
+            pack_state: order.pack_state,
+
+            // === Pozycja zamówienia (produkt) ===
             order_product_id: product.order_product_id,
             product_id: product.product_id,
             variant_id: product.variant_id,
@@ -1553,6 +1680,7 @@ class ExportService {
             auction_id: product.auction_id,
             quantity: product.quantity,
             price_brutto: product.price_brutto,
+            price_netto: calculatePriceVariant(product.price_brutto, product.tax_rate, 'to_netto'),
             tax_rate: product.tax_rate,
             weight: product.weight,
             storage: product.storage,
@@ -1580,9 +1708,11 @@ class ExportService {
         // Fetch inventory data
         const inventoryMap = await this.fetchInventoryDataForProducts(client, uniqueProductIds);
 
+        const inventoryPriceFormat = settings.inventoryPriceFormat || 'brutto';
+
         // Merge inventory data into each order product
         return orderProducts.map(op =>
-          this.mergeInventoryData(op, inventoryMap.get(String(op.product_id)))
+          this.mergeInventoryData(op, inventoryMap.get(String(op.product_id)), inventoryPriceFormat)
         );
       }
 
@@ -1615,15 +1745,17 @@ class ExportService {
       }
     }
 
-    // Create headers
+    // Create headers (with backward compatibility for renamed fields)
     const headers = selectedFields.map(fieldKey => {
-      return fieldLabels[fieldKey] || fieldKey;
+      const effectiveKey = FIELD_MIGRATIONS[fieldKey] || fieldKey;
+      return fieldLabels[effectiveKey] || fieldLabels[fieldKey] || fieldKey;
     });
 
     // Create data rows
     const data = rawData.map(record => {
       return selectedFields.map(fieldKey => {
-        let value = record[fieldKey];
+        const effectiveKey = FIELD_MIGRATIONS[fieldKey] || fieldKey;
+        let value = record[effectiveKey];
 
         // Format dates (unix timestamp to readable)
         if (fieldKey.includes('date_') && typeof value === 'number' && value > 0) {

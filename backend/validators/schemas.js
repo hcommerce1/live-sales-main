@@ -88,6 +88,11 @@ const createExportSchema = z.object({
     .min(5, 'Minimum schedule is 5 minutes')
     .max(10080, 'Maximum schedule is 7 days')
     .optional(),
+
+  settings: z.object({
+    inventoryPriceFormat: z.enum(['netto', 'brutto']).default('brutto'),
+    deliveryTaxRate: z.number().min(0).max(100).default(23),
+  }).optional(),
 });
 
 const updateExportSchema = z.object({
@@ -129,6 +134,11 @@ const updateExportSchema = z.object({
 
   status: z.enum(['active', 'paused', 'error'])
     .optional(),
+
+  settings: z.object({
+    inventoryPriceFormat: z.enum(['netto', 'brutto']).default('brutto'),
+    deliveryTaxRate: z.number().min(0).max(100).default(23),
+  }).optional(),
 });
 
 // ============================================
