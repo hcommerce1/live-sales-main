@@ -239,6 +239,36 @@
                   </button>
                 </div>
               </div>
+
+              <!-- Decimal separator format -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Format liczb w arkuszu</label>
+                <p class="text-xs text-gray-500 mb-2">Wybierz separator dziesiętny zgodny z ustawieniami Twojego arkusza Google</p>
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
+                    :class="{
+                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.decimalSeparator === ',',
+                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.decimalSeparator !== ','
+                    }"
+                    @click="config.settings.decimalSeparator = ','"
+                  >
+                    Polski (1,99)
+                  </button>
+                  <button
+                    type="button"
+                    class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
+                    :class="{
+                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.decimalSeparator === '.',
+                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.decimalSeparator !== '.'"
+                    }"
+                    @click="config.settings.decimalSeparator = '.'"
+                  >
+                    Angielski (1.99)
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -402,7 +432,8 @@ const config = ref({
   status: 'active',
   settings: {
     inventoryPriceFormat: 'brutto',
-    deliveryTaxRate: 23
+    deliveryTaxRate: 23,
+    decimalSeparator: ','
   }
 })
 
@@ -486,7 +517,8 @@ const showInventoryPriceFormatSetting = computed(() => {
 })
 
 const showSettingsSection = computed(() => {
-  return showDeliveryTaxSetting.value || showInventoryPriceFormatSetting.value
+  // Always show - decimal separator applies to all exports
+  return true
 })
 
 const deliveryTaxOptions = [
@@ -763,7 +795,7 @@ async function loadExistingExport() {
       sheets_config: [{ sheet_url: '', write_mode: 'replace' }],
       schedule_minutes: props.templateData.scheduleMinutes || 15,
       status: 'active',
-      settings: props.templateData.settings || { inventoryPriceFormat: 'brutto', deliveryTaxRate: 23 }
+      settings: props.templateData.settings || { inventoryPriceFormat: 'brutto', deliveryTaxRate: 23, decimalSeparator: ',' }
     }
     return
   }
@@ -789,7 +821,7 @@ async function loadExistingExport() {
         })) || [{ sheet_url: '', write_mode: 'replace' }],
         schedule_minutes: exportData.schedule_minutes || 15,
         status: exportData.status || 'active',
-        settings: exportData.settings || { inventoryPriceFormat: 'brutto', deliveryTaxRate: 23 }
+        settings: exportData.settings || { inventoryPriceFormat: 'brutto', deliveryTaxRate: 23, decimalSeparator: ',' }
       }
     }
   } catch (error) {

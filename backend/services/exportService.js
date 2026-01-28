@@ -1003,7 +1003,8 @@ class ExportService {
       const { headers, data } = this.transformData(
         filteredData,
         config.selected_fields || [],
-        config.dataset
+        config.dataset,
+        config.settings || {}
       );
       metadata.phases.transformData = Date.now() - transformStart;
 
@@ -2044,22 +2045,28 @@ class ExportService {
    * @param {Array} rawData - Raw data from BaseLinker
    * @param {Array<string>} selectedFields - Selected field keys
    * @param {string} dataset - Dataset type
+   * @param {object} settings - Export settings { decimalSeparator }
    * @returns {object} - { headers, data }
    */
-  transformData(rawData, selectedFields, dataset) {
+  transformData(rawData, selectedFields, dataset, settings = {}) {
     if (selectedFields.length === 0) {
       return { headers: [], data: [] };
     }
 
-    // Get field labels from export-fields config
+    // Get field labels and types from export-fields config
     const datasetConfig = exportFields.datasets[dataset];
     const fieldLabels = {};
+    const fieldTypes = {};
 
     if (datasetConfig) {
       for (const field of datasetConfig.fields) {
         fieldLabels[field.key] = field.label;
+        fieldTypes[field.key] = field.type;
       }
     }
+
+    // Get decimal separator from settings (default: comma for Polish format)
+    const decimalSeparator = settings?.decimalSeparator || ',';
 
     // Create headers (with backward compatibility for renamed fields)
     const headers = selectedFields.map(fieldKey => {
@@ -2072,6 +2079,11 @@ class ExportService {
       return selectedFields.map(fieldKey => {
         const effectiveKey = FIELD_MIGRATIONS[fieldKey] || fieldKey;
         let value = record[effectiveKey];
+
+        // Format numbers with correct decimal separator
+        if (fieldTypes[effectiveKey] === 'number' && typeof value === 'number') {
+          value = String(value).replace('.', decimalSeparator);
+        }
 
         // Format dates (unix timestamp to readable)
         if (fieldKey.includes('date_') && typeof value === 'number' && value > 0) {
