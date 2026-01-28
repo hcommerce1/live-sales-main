@@ -1498,7 +1498,7 @@ class ExportService {
 
   /**
    * Check if any selected fields require document enrichment (invoices/receipts)
-   * Includes fv_* fields (legacy) and ds1_*/ds2_* fields (new sales document slots)
+   * Includes fv_* fields (legacy) and ds1_*, ds2_* fields (new sales document slots)
    * @param {Array<string>} selectedFields - Selected field keys
    * @returns {boolean}
    */
