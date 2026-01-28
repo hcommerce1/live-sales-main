@@ -1826,7 +1826,7 @@ class ExportService {
 
   /**
    * Merge sales document data into an order record
-   * Adds fv_* fields (legacy invoice/receipt details) and ds1_*/ds2_* fields (sales document slots)
+   * Adds fv_* fields (legacy invoice/receipt details) and ds1_*, ds2_* fields (sales document slots)
    * @param {object} order - Order row
    * @param {object|null} docData - { invoice, correction, receipt } or null
    * @returns {object} - Order with fv_ and ds_ fields added
