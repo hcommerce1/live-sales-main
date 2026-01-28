@@ -460,17 +460,29 @@ const canProceed = computed(() => {
 })
 
 const showDeliveryTaxSetting = computed(() => {
-  if (config.value.dataset !== 'order_products') return false
+  // Show for orders and order_products datasets when delivery price netto/brutto selected
+  if (!['orders', 'order_products'].includes(config.value.dataset)) return false
   return config.value.selected_fields.some(f =>
     f === 'delivery_price_netto' || f === 'delivery_price_brutto'
   )
 })
 
 const showInventoryPriceFormatSetting = computed(() => {
-  if (config.value.dataset !== 'order_products') return false
-  return config.value.selected_fields.some(f =>
-    f.startsWith('inv_purchase_price_') || f.startsWith('inv_average_cost_')
-  )
+  // Show for order_products when inv_* fields selected
+  if (config.value.dataset === 'order_products') {
+    return config.value.selected_fields.some(f =>
+      f.startsWith('inv_purchase_price_') || f.startsWith('inv_average_cost_')
+    )
+  }
+  // Show for orders when products_* summary fields that need inventory are selected
+  if (config.value.dataset === 'orders') {
+    const inventoryRequiredFields = [
+      'products_total_purchase_cost_brutto', 'products_total_purchase_cost_netto',
+      'products_average_margin'
+    ]
+    return config.value.selected_fields.some(f => inventoryRequiredFields.includes(f))
+  }
+  return false
 })
 
 const showSettingsSection = computed(() => {

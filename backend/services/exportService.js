@@ -60,6 +60,7 @@ function calculatePriceVariant(price, taxRate, direction) {
 const FIELD_MIGRATIONS = {
   'inv_purchase_price': 'inv_purchase_price_brutto',
   'inv_average_cost': 'inv_average_cost_brutto',
+  'delivery_price': 'delivery_price_brutto',
 };
 
 /**
@@ -961,7 +962,7 @@ class ExportService {
 
       switch (config.dataset) {
         case 'orders':
-          rawData = await this.fetchOrders(client, apiFilters, config.selected_fields || []);
+          rawData = await this.fetchOrders(client, apiFilters, config.selected_fields || [], config.settings || {});
           break;
         case 'products':
           rawData = await this.fetchProducts(client, apiFilters);
@@ -1252,12 +1253,14 @@ class ExportService {
    * Fetch orders from BaseLinker
    * @param {object} client - BaseLinker client
    * @param {object} apiFilters - API-side filters
-   * @param {Array<string>} selectedFields - Selected fields (to determine if document enrichment needed)
+   * @param {Array<string>} selectedFields - Selected fields (to determine if enrichment needed)
+   * @param {object} settings - Export settings { deliveryTaxRate, inventoryPriceFormat }
    * @returns {Promise<Array>} - List of orders (flat structure)
    */
-  async fetchOrders(client, apiFilters = {}, selectedFields = []) {
+  async fetchOrders(client, apiFilters = {}, selectedFields = [], settings = {}) {
     try {
       const orders = await client.getOrdersWithPagination(apiFilters);
+      const deliveryTaxRate = settings.deliveryTaxRate || 23;
 
       // Transform orders to flat structure with all available fields
       const flatOrders = orders.map(order => ({
@@ -1281,7 +1284,9 @@ class ExportService {
         phone: order.phone,
         delivery_method: order.delivery_method,
         delivery_method_id: order.delivery_method_id,
-        delivery_price: order.delivery_price,
+        // Delivery price brutto/netto (calculated from raw delivery_price)
+        delivery_price_brutto: order.delivery_price || 0,
+        delivery_price_netto: calculatePriceVariant(order.delivery_price, deliveryTaxRate, 'to_netto'),
         delivery_package_module: order.delivery_package_module,
         delivery_package_nr: order.delivery_package_nr,
         delivery_fullname: order.delivery_fullname,
@@ -1314,27 +1319,58 @@ class ExportService {
         order_page: order.order_page,
         pick_state: order.pick_state,
         pack_state: order.pack_state,
-        order_source_info: order.order_source_info,
-        date_in_status: order.date_in_status,
-        // Store products for order_products dataset
+        // Store products for enrichment pipelines
         _products: order.products
       }));
 
-      // Document enrichment pipeline (invoices + receipts)
-      if (this.needsDocumentEnrichment(selectedFields) && flatOrders.length > 0) {
+      let enrichedOrders = flatOrders;
+
+      // Document enrichment pipeline (invoices + receipts for fv_* and ds_* fields)
+      if (this.needsDocumentEnrichment(selectedFields) && enrichedOrders.length > 0) {
         logger.info('Document enrichment requested for orders', {
-          orderCount: flatOrders.length,
-          selectedFvFields: selectedFields.filter(f => f.startsWith('fv_'))
+          orderCount: enrichedOrders.length,
+          selectedDocFields: selectedFields.filter(f => f.startsWith('fv_') || f.startsWith('ds1_') || f.startsWith('ds2_'))
         });
 
         const documentMap = await this.fetchDocumentDataForOrders(client, apiFilters);
 
-        return flatOrders.map(order =>
+        enrichedOrders = enrichedOrders.map(order =>
           this.mergeDocumentData(order, documentMap.get(order.order_id))
         );
       }
 
-      return flatOrders;
+      // Product summary enrichment pipeline (for products_* aggregate fields)
+      if (this.needsProductSummaryEnrichment(selectedFields) && enrichedOrders.length > 0) {
+        logger.info('Product summary enrichment requested for orders', {
+          orderCount: enrichedOrders.length,
+          selectedSummaryFields: selectedFields.filter(f => f.startsWith('products_'))
+        });
+
+        let inventoryData = null;
+
+        // Fetch inventory data if needed for purchase costs/margin
+        if (this.needsInventoryForSummary(selectedFields)) {
+          const productIds = new Set();
+          enrichedOrders.forEach(o => {
+            const products = o._products || [];
+            products.forEach(p => {
+              if (p.product_id) productIds.add(String(p.product_id));
+            });
+          });
+
+          if (productIds.size > 0) {
+            inventoryData = await this.fetchInventoryDataForProducts(client, [...productIds]);
+          }
+        }
+
+        // Calculate product summaries
+        enrichedOrders = enrichedOrders.map(order => {
+          const summary = this.calculateProductSummary(order, inventoryData, settings);
+          return { ...order, ...summary };
+        });
+      }
+
+      return enrichedOrders;
     } catch (error) {
       logger.error('Failed to fetch orders', { error: error.message });
       throw error;
@@ -1462,12 +1498,121 @@ class ExportService {
 
   /**
    * Check if any selected fields require document enrichment (invoices/receipts)
+   * Includes fv_* fields (legacy) and ds1_*/ds2_* fields (new sales document slots)
    * @param {Array<string>} selectedFields - Selected field keys
    * @returns {boolean}
    */
   needsDocumentEnrichment(selectedFields) {
     if (!selectedFields || selectedFields.length === 0) return false;
-    return selectedFields.some(field => field.startsWith('fv_'));
+    return selectedFields.some(field =>
+      field.startsWith('fv_') ||
+      field.startsWith('ds1_') ||
+      field.startsWith('ds2_')
+    );
+  }
+
+  /**
+   * Check if any selected fields require product summary enrichment
+   * @param {Array<string>} selectedFields - Selected field keys
+   * @returns {boolean}
+   */
+  needsProductSummaryEnrichment(selectedFields) {
+    if (!selectedFields || selectedFields.length === 0) return false;
+    const summaryFields = [
+      'products_total_value_brutto', 'products_total_value_netto',
+      'products_total_purchase_cost_brutto', 'products_total_purchase_cost_netto',
+      'products_total_quantity', 'products_total_weight',
+      'products_average_margin', 'products_count'
+    ];
+    return selectedFields.some(f => summaryFields.includes(f));
+  }
+
+  /**
+   * Check if product summary requires inventory data (for purchase costs and margin)
+   * @param {Array<string>} selectedFields - Selected field keys
+   * @returns {boolean}
+   */
+  needsInventoryForSummary(selectedFields) {
+    if (!selectedFields || selectedFields.length === 0) return false;
+    const inventoryRequiredFields = [
+      'products_total_purchase_cost_brutto', 'products_total_purchase_cost_netto',
+      'products_average_margin'
+    ];
+    return selectedFields.some(f => inventoryRequiredFields.includes(f));
+  }
+
+  /**
+   * Calculate product summary aggregations for an order
+   * @param {object} order - Order with _products array
+   * @param {Map|null} inventoryData - Map of product_id -> inventory data
+   * @param {object} settings - Export settings
+   * @returns {object} - Product summary fields
+   */
+  calculateProductSummary(order, inventoryData, settings = {}) {
+    const products = order._products || order.products || [];
+    const inventoryPriceFormat = settings.inventoryPriceFormat || 'brutto';
+
+    let totalValueBrutto = 0;
+    let totalValueNetto = 0;
+    let totalPurchaseCostBrutto = 0;
+    let totalPurchaseCostNetto = 0;
+    let totalQuantity = 0;
+    let totalWeight = 0;
+    const margins = [];
+
+    for (const product of products) {
+      const qty = Number(product.quantity) || 0;
+      const priceBrutto = Number(product.price_brutto) || 0;
+      const taxRate = Number(product.tax_rate) || 23;
+
+      // Sales values
+      totalValueBrutto += priceBrutto * qty;
+      totalValueNetto += calculatePriceVariant(priceBrutto, taxRate, 'to_netto') * qty;
+      totalQuantity += qty;
+      totalWeight += (Number(product.weight) || 0) * qty;
+
+      // Purchase costs from inventory (if available)
+      if (inventoryData) {
+        const invData = inventoryData.get(String(product.product_id));
+        if (invData) {
+          const rawPurchasePrice = Number(invData.purchase_price) || 0;
+          const invTaxRate = Number(invData.tax_rate) || taxRate;
+
+          // Calculate purchase price netto/brutto based on format
+          let purchasePriceNetto, purchasePriceBrutto;
+          if (inventoryPriceFormat === 'netto') {
+            purchasePriceNetto = rawPurchasePrice;
+            purchasePriceBrutto = calculatePriceVariant(rawPurchasePrice, invTaxRate, 'to_brutto');
+          } else {
+            purchasePriceBrutto = rawPurchasePrice;
+            purchasePriceNetto = calculatePriceVariant(rawPurchasePrice, invTaxRate, 'to_netto');
+          }
+
+          totalPurchaseCostBrutto += purchasePriceBrutto * qty;
+          totalPurchaseCostNetto += purchasePriceNetto * qty;
+
+          // Margin calculation
+          if (priceBrutto > 0 && purchasePriceNetto > 0) {
+            const priceNetto = calculatePriceVariant(priceBrutto, taxRate, 'to_netto');
+            const margin = ((priceNetto - purchasePriceNetto) / purchasePriceNetto) * 100;
+            margins.push(margin);
+          }
+        }
+      }
+    }
+
+    return {
+      products_total_value_brutto: Math.round(totalValueBrutto * 100) / 100,
+      products_total_value_netto: Math.round(totalValueNetto * 100) / 100,
+      products_total_purchase_cost_brutto: Math.round(totalPurchaseCostBrutto * 100) / 100,
+      products_total_purchase_cost_netto: Math.round(totalPurchaseCostNetto * 100) / 100,
+      products_total_quantity: totalQuantity,
+      products_total_weight: Math.round(totalWeight * 1000) / 1000,
+      products_average_margin: margins.length > 0
+        ? Math.round((margins.reduce((a, b) => a + b, 0) / margins.length) * 100) / 100
+        : null,
+      products_count: products.length
+    };
   }
 
   /**
@@ -1681,9 +1826,10 @@ class ExportService {
 
   /**
    * Merge sales document data into an order record
+   * Adds fv_* fields (legacy invoice/receipt details) and ds1_*/ds2_* fields (sales document slots)
    * @param {object} order - Order row
    * @param {object|null} docData - { invoice, correction, receipt } or null
-   * @returns {object} - Order with fv_ fields added
+   * @returns {object} - Order with fv_ and ds_ fields added
    */
   mergeDocumentData(order, docData) {
     const docs = docData || { invoice: null, correction: null, receipt: null };
@@ -1691,9 +1837,29 @@ class ExportService {
     const corr = docs.correction || {};
     const rcpt = docs.receipt || {};
 
+    // Dokument sprzedaży 1 = Paragon (slot 1)
+    let ds1_type = '';
+    let ds1_number = '';
+    let ds1_date = null;
+    if (rcpt && (rcpt.receipt_full_nr || rcpt.receipt_id)) {
+      ds1_type = 'Paragon';
+      ds1_number = rcpt.receipt_full_nr || '';
+      ds1_date = rcpt.date_add || null;
+    }
+
+    // Dokument sprzedaży 2 = Faktura (slot 2)
+    let ds2_type = '';
+    let ds2_number = '';
+    let ds2_date = null;
+    if (inv && (inv.number || inv.invoice_id)) {
+      ds2_type = inv.type === 'correcting' ? 'Korekta' : 'Faktura';
+      ds2_number = inv.number || '';
+      ds2_date = inv.date_add || null;
+    }
+
     return {
       ...order,
-      // Faktura sprzedażowa
+      // Faktura sprzedażowa (szczegóły - legacy fv_* fields)
       fv_number: inv.number || '',
       fv_date_add: inv.date_add || '',
       fv_date_sell: inv.date_sell || '',
@@ -1708,10 +1874,18 @@ class ExportService {
       fv_correction_number: corr.number || '',
       fv_correction_reason: corr.correcting_reason || '',
       fv_correction_date: corr.date_add || '',
-      // Paragon
+      // Paragon (szczegóły - legacy fv_* fields)
       fv_receipt_nr: rcpt.receipt_full_nr || '',
       fv_receipt_date: rcpt.date_add || '',
       fv_receipt_nip: rcpt.nip || '',
+      // Dokument sprzedaży 1 (Paragon - slot 1)
+      ds1_type,
+      ds1_number,
+      ds1_date,
+      // Dokument sprzedaży 2 (Faktura - slot 2)
+      ds2_type,
+      ds2_number,
+      ds2_date,
     };
   }
 

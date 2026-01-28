@@ -81,7 +81,8 @@ module.exports = {
         { key: 'payment_done',       label: 'Zapłacono',           group: 'Płatność', plan: 'free',  type: 'number' },
         { key: 'delivery_method',    label: 'Metoda dostawy',      group: 'Płatność', plan: 'free',  type: 'text' },
         { key: 'delivery_method_id', label: 'ID metody dostawy',   group: 'Płatność', plan: 'basic', type: 'number' },
-        { key: 'delivery_price',     label: 'Cena dostawy',        group: 'Płatność', plan: 'pro',   type: 'number' },
+        { key: 'delivery_price_brutto', label: 'Cena dostawy brutto', group: 'Płatność', plan: 'pro', type: 'number' },
+        { key: 'delivery_price_netto',  label: 'Cena dostawy netto',  group: 'Płatność', plan: 'pro', type: 'number' },
 
         // Wysyłka
         { key: 'delivery_package_module', label: 'Moduł kuriera',    group: 'Wysyłka', plan: 'basic', type: 'text' },
@@ -129,6 +130,26 @@ module.exports = {
         { key: 'fv_receipt_nr',   label: 'Numer paragonu',   group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
         { key: 'fv_receipt_date', label: 'Data paragonu',     group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'date' },
         { key: 'fv_receipt_nip',  label: 'NIP na paragonie',  group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
+
+        // Dokument sprzedaży 1 (Paragon)
+        { key: 'ds1_type',   label: 'Dokument 1 - Typ',             group: 'Dokument sprzedaży 1', plan: 'pro', type: 'text' },
+        { key: 'ds1_number', label: 'Dokument 1 - Numer',           group: 'Dokument sprzedaży 1', plan: 'pro', type: 'text' },
+        { key: 'ds1_date',   label: 'Dokument 1 - Data wystawienia', group: 'Dokument sprzedaży 1', plan: 'pro', type: 'date' },
+
+        // Dokument sprzedaży 2 (Faktura)
+        { key: 'ds2_type',   label: 'Dokument 2 - Typ',             group: 'Dokument sprzedaży 2', plan: 'pro', type: 'text' },
+        { key: 'ds2_number', label: 'Dokument 2 - Numer',           group: 'Dokument sprzedaży 2', plan: 'pro', type: 'text' },
+        { key: 'ds2_date',   label: 'Dokument 2 - Data wystawienia', group: 'Dokument sprzedaży 2', plan: 'pro', type: 'date' },
+
+        // Podsumowanie produktów (agregacje)
+        { key: 'products_total_value_brutto',         label: 'Produkty - wartość brutto',      group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
+        { key: 'products_total_value_netto',          label: 'Produkty - wartość netto',       group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
+        { key: 'products_total_purchase_cost_brutto', label: 'Produkty - koszt zakupu brutto', group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
+        { key: 'products_total_purchase_cost_netto',  label: 'Produkty - koszt zakupu netto',  group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
+        { key: 'products_total_quantity',             label: 'Produkty - łączna ilość',        group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
+        { key: 'products_total_weight',               label: 'Produkty - łączna waga',         group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
+        { key: 'products_average_margin',             label: 'Produkty - średnia marża (%)',   group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
+        { key: 'products_count',                      label: 'Produkty - liczba pozycji',      group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
       ]
     },
 
