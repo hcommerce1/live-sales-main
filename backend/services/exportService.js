@@ -1897,23 +1897,20 @@ class ExportService {
   async fetchDocumentDataForOrders(client, apiFilters = {}) {
     const documentMap = new Map();
 
-    // Fetch invoices
+    // Fetch invoices - no date filter to ensure all invoices for orders are found
+    // (invoices may be created after order confirmation date)
     let invoices = [];
     try {
-      invoices = await client.getInvoicesWithPagination({
-        date_from: apiFilters.date_confirmed_from || apiFilters.date_from,
-      });
+      invoices = await client.getInvoicesWithPagination({});
       logger.info('Fetched invoices for order enrichment', { count: invoices.length });
     } catch (error) {
       logger.warn('Failed to fetch invoices for order enrichment', { error: error.message });
     }
 
-    // Fetch receipts
+    // Fetch receipts - no date filter for same reason
     let receipts = [];
     try {
-      receipts = await client.getReceiptsWithPagination({
-        date_from: apiFilters.date_confirmed_from || apiFilters.date_from,
-      });
+      receipts = await client.getReceiptsWithPagination({});
       logger.info('Fetched receipts for order enrichment', { count: receipts.length });
     } catch (error) {
       logger.warn('Failed to fetch receipts for order enrichment', { error: error.message });
