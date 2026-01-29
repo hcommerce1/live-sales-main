@@ -973,6 +973,9 @@ class ExportService {
         case 'order_products':
           rawData = await this.fetchOrderProducts(client, apiFilters, config.selected_fields || [], config.settings || {});
           break;
+        case 'receipts':
+          rawData = await this.fetchReceipts(client, apiFilters, config.selected_fields || [], config.settings || {});
+          break;
         default:
           throw new Error(`Unknown dataset type: ${config.dataset}`);
       }
@@ -1449,49 +1452,166 @@ class ExportService {
       const invoices = await client.getInvoicesWithPagination(apiFilters);
 
       // Transform to flat structure
-      return invoices.map(invoice => ({
-        invoice_id: invoice.invoice_id,
-        order_id: invoice.order_id,
-        series_id: invoice.series_id,
-        type: invoice.type,
-        number: invoice.number,
-        sub_id: invoice.sub_id,
-        month: invoice.month,
-        year: invoice.year,
-        postfix: invoice.postfix,
-        date_add: invoice.date_add,
-        date_sell: invoice.date_sell,
-        date_pay_to: invoice.date_pay_to,
-        currency: invoice.currency,
-        total_price_brutto: invoice.total_price_brutto,
-        total_price_netto: invoice.total_price_netto,
-        payment: invoice.payment,
-        additional_info: invoice.additional_info,
-        invoice_fullname: invoice.invoice_fullname,
-        invoice_company: invoice.invoice_company,
-        invoice_nip: invoice.invoice_nip,
-        invoice_address: invoice.invoice_address,
-        invoice_postcode: invoice.invoice_postcode,
-        invoice_city: invoice.invoice_city,
-        invoice_country: invoice.invoice_country,
-        invoice_country_code: invoice.invoice_country_code,
-        seller: invoice.seller,
-        issuer: invoice.issuer,
-        correcting_to_invoice_id: invoice.correcting_to_invoice_id,
-        correcting_reason: invoice.correcting_reason,
-        correcting_items: invoice.correcting_items,
-        correcting_data: invoice.correcting_data,
-        external_invoice_number: invoice.external_invoice_number,
-        exchange_currency: invoice.exchange_currency,
-        exchange_rate: invoice.exchange_rate,
-        exchange_date: invoice.exchange_date,
-        exchange_info: invoice.exchange_info,
-        external_id: invoice.external_id,
-        // Store items for potential future use
-        _items: invoice.items
-      }));
+      return invoices.map(invoice => {
+        // Calculate products and delivery totals from items array
+        const items = invoice.items || [];
+        let productsBrutto = 0;
+        let productsNetto = 0;
+        let deliveryBrutto = 0;
+        let deliveryNetto = 0;
+
+        for (const item of items) {
+          const qty = item.quantity || 1;
+          const brutto = (item.price_brutto || 0) * qty;
+          const netto = (item.price_netto || 0) * qty;
+
+          if (item.is_shipment === 1) {
+            deliveryBrutto += brutto;
+            deliveryNetto += netto;
+          } else {
+            productsBrutto += brutto;
+            productsNetto += netto;
+          }
+        }
+
+        return {
+          invoice_id: invoice.invoice_id,
+          order_id: invoice.order_id,
+          series_id: invoice.series_id,
+          type: invoice.type,
+          number: invoice.number,
+          sub_id: invoice.sub_id,
+          month: invoice.month,
+          year: invoice.year,
+          postfix: invoice.postfix,
+          date_add: invoice.date_add,
+          date_sell: invoice.date_sell,
+          date_pay_to: invoice.date_pay_to,
+          currency: invoice.currency,
+          total_price_brutto: invoice.total_price_brutto,
+          total_price_netto: invoice.total_price_netto,
+          products_total_brutto: productsBrutto,
+          products_total_netto: productsNetto,
+          delivery_total_brutto: deliveryBrutto,
+          delivery_total_netto: deliveryNetto,
+          payment: invoice.payment,
+          additional_info: invoice.additional_info,
+          invoice_fullname: invoice.invoice_fullname,
+          invoice_company: invoice.invoice_company,
+          invoice_nip: invoice.invoice_nip,
+          invoice_address: invoice.invoice_address,
+          invoice_postcode: invoice.invoice_postcode,
+          invoice_city: invoice.invoice_city,
+          invoice_country: invoice.invoice_country,
+          invoice_country_code: invoice.invoice_country_code,
+          seller: invoice.seller,
+          issuer: invoice.issuer,
+          correcting_to_invoice_id: invoice.correcting_to_invoice_id,
+          correcting_reason: invoice.correcting_reason,
+          correcting_items: invoice.correcting_items,
+          correcting_data: invoice.correcting_data,
+          external_invoice_number: invoice.external_invoice_number,
+          exchange_currency: invoice.exchange_currency,
+          exchange_rate: invoice.exchange_rate,
+          exchange_date: invoice.exchange_date,
+          exchange_info: invoice.exchange_info,
+          external_id: invoice.external_id,
+          // Store items for potential future use
+          _items: invoice.items
+        };
+      });
     } catch (error) {
       logger.error('Failed to fetch invoices', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch receipts from BaseLinker with optional order enrichment for financial data
+   * @param {object} client - BaseLinker client
+   * @param {object} apiFilters - API-side filters
+   * @param {Array<string>} selectedFields - Selected fields
+   * @param {object} settings - Export settings
+   * @returns {Promise<Array>} - List of receipts
+   */
+  async fetchReceipts(client, apiFilters = {}, selectedFields = [], settings = {}) {
+    try {
+      const receipts = await client.getReceiptsWithPagination(apiFilters);
+      const deliveryTaxRate = settings.deliveryTaxRate || 23;
+
+      // Check if financial fields need order enrichment
+      const needsOrderData = selectedFields.some(f =>
+        ['currency', 'total_brutto', 'total_netto', 'products_total_brutto', 'products_total_netto', 'delivery_total_brutto', 'delivery_total_netto'].includes(f)
+      );
+
+      let orderDataMap = new Map();
+
+      if (needsOrderData && receipts.length > 0) {
+        // Get unique order IDs
+        const orderIds = [...new Set(receipts.map(r => r.order_id).filter(id => id))];
+
+        if (orderIds.length > 0) {
+          logger.info('Fetching order data for receipt enrichment', { orderCount: orderIds.length });
+
+          // Fetch orders for financial data
+          const orders = await client.getOrdersWithPagination({
+            ...apiFilters,
+            order_ids: orderIds
+          });
+
+          // Build lookup map
+          for (const order of orders) {
+            // Calculate products total from order products
+            const products = order.products || [];
+            let productsBrutto = 0;
+            let productsNetto = 0;
+
+            for (const p of products) {
+              const qty = p.quantity || 1;
+              productsBrutto += (p.price_brutto || 0) * qty;
+              productsNetto += calculatePriceVariant(p.price_brutto, p.tax_rate, 'to_netto') * qty;
+            }
+
+            const deliveryBrutto = order.delivery_price || 0;
+            const deliveryNetto = calculatePriceVariant(deliveryBrutto, deliveryTaxRate, 'to_netto');
+
+            orderDataMap.set(order.order_id, {
+              currency: order.currency,
+              total_brutto: productsBrutto + deliveryBrutto,
+              total_netto: productsNetto + deliveryNetto,
+              products_total_brutto: productsBrutto,
+              products_total_netto: productsNetto,
+              delivery_total_brutto: deliveryBrutto,
+              delivery_total_netto: deliveryNetto
+            });
+          }
+        }
+      }
+
+      // Transform to flat structure with order enrichment
+      return receipts.map(receipt => {
+        const orderData = orderDataMap.get(receipt.order_id) || {};
+
+        return {
+          receipt_id: receipt.receipt_id,
+          order_id: receipt.order_id,
+          series_id: receipt.series_id,
+          receipt_nr: receipt.receipt_nr,
+          date_add: receipt.date_add,
+          nip: receipt.nip,
+          printer_name: receipt.printer_name,
+          // Financial data from order
+          currency: orderData.currency || null,
+          total_brutto: orderData.total_brutto || null,
+          total_netto: orderData.total_netto || null,
+          products_total_brutto: orderData.products_total_brutto || null,
+          products_total_netto: orderData.products_total_netto || null,
+          delivery_total_brutto: orderData.delivery_total_brutto || null,
+          delivery_total_netto: orderData.delivery_total_netto || null
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to fetch receipts', { error: error.message });
       throw error;
     }
   }

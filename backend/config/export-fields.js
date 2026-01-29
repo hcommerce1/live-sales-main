@@ -231,6 +231,10 @@ module.exports = {
         { key: 'currency',           label: 'Waluta',             group: 'Finansowe', plan: 'pro', type: 'text' },
         { key: 'total_price_brutto', label: 'Suma brutto',        group: 'Finansowe', plan: 'pro', type: 'number' },
         { key: 'total_price_netto',  label: 'Suma netto',         group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'products_total_brutto', label: 'Produkty brutto', group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'products_total_netto',  label: 'Produkty netto',  group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'delivery_total_brutto', label: 'Dostawa brutto',  group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'delivery_total_netto',  label: 'Dostawa netto',   group: 'Finansowe', plan: 'pro', type: 'number' },
         { key: 'payment',            label: 'Metoda płatności',   group: 'Finansowe', plan: 'pro', type: 'text' },
         { key: 'additional_info',    label: 'Dodatkowe info',     group: 'Finansowe', plan: 'pro', type: 'text' },
 
@@ -623,6 +627,15 @@ module.exports = {
         // Dane
         { key: 'nip',          label: 'NIP na paragonie', group: 'Dane', plan: 'pro', type: 'text' },
         { key: 'printer_name', label: 'Nazwa drukarki',   group: 'Dane', plan: 'pro', type: 'text' },
+
+        // Finansowe (z zamówienia)
+        { key: 'currency',              label: 'Waluta',           group: 'Finansowe', plan: 'pro', type: 'text' },
+        { key: 'total_brutto',          label: 'Suma brutto',      group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'total_netto',           label: 'Suma netto',       group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'products_total_brutto', label: 'Produkty brutto',  group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'products_total_netto',  label: 'Produkty netto',   group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'delivery_total_brutto', label: 'Dostawa brutto',   group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'delivery_total_netto',  label: 'Dostawa netto',    group: 'Finansowe', plan: 'pro', type: 'number' },
       ]
     },
 
