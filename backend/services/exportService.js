@@ -1260,7 +1260,12 @@ class ExportService {
    */
   async fetchOrders(client, apiFilters = {}, selectedFields = [], settings = {}) {
     try {
-      const orders = await client.getOrdersWithPagination(apiFilters);
+      // Include commission data if commission fields are selected
+      const filtersWithCommission = {
+        ...apiFilters,
+        include_commission_data: this.needsCommissionData(selectedFields)
+      };
+      const orders = await client.getOrdersWithPagination(filtersWithCommission);
       const deliveryTaxRate = settings.deliveryTaxRate || 23;
 
       // Transform orders to flat structure with all available fields
@@ -1320,6 +1325,10 @@ class ExportService {
         order_page: order.order_page,
         pick_state: order.pick_state,
         pack_state: order.pack_state,
+        // Commission data (marketplace fees)
+        commission_net: order.commission?.net || null,
+        commission_gross: order.commission?.gross || null,
+        commission_currency: order.commission?.currency || null,
         // Store products for enrichment pipelines
         _products: order.products
       }));
@@ -1540,6 +1549,17 @@ class ExportService {
       'products_average_margin'
     ];
     return selectedFields.some(f => inventoryRequiredFields.includes(f));
+  }
+
+  /**
+   * Check if any selected fields require commission data from BaseLinker API
+   * @param {Array<string>} selectedFields - Selected field keys
+   * @returns {boolean}
+   */
+  needsCommissionData(selectedFields) {
+    if (!selectedFields || selectedFields.length === 0) return false;
+    const commissionFields = ['commission_net', 'commission_gross', 'commission_currency'];
+    return selectedFields.some(f => commissionFields.includes(f));
   }
 
   /**
@@ -1902,7 +1922,12 @@ class ExportService {
    */
   async fetchOrderProducts(client, apiFilters = {}, selectedFields = [], settings = {}) {
     try {
-      const orders = await client.getOrdersWithPagination(apiFilters);
+      // Include commission data if commission fields are selected
+      const filtersWithCommission = {
+        ...apiFilters,
+        include_commission_data: this.needsCommissionData(selectedFields)
+      };
+      const orders = await client.getOrdersWithPagination(filtersWithCommission);
       const deliveryTaxRate = settings.deliveryTaxRate || 23;
 
       // Flatten: one row per product
@@ -1984,6 +2009,11 @@ class ExportService {
             order_page: order.order_page,
             pick_state: order.pick_state,
             pack_state: order.pack_state,
+
+            // === Prowizja marketplace ===
+            commission_net: order.commission?.net || null,
+            commission_gross: order.commission?.gross || null,
+            commission_currency: order.commission?.currency || null,
 
             // === Pozycja zamówienia (produkt) ===
             order_product_id: product.order_product_id,

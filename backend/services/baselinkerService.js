@@ -60,6 +60,7 @@ class BaselinkerService {
    * Get orders from Baselinker
    * @param {string} userToken - User's BaseLinker API token
    * @param {object} filters - Order filters
+   * @param {boolean} filters.include_commission_data - Include marketplace commission data
    * @returns {Promise<Array>} - List of orders
    */
   async getOrders(userToken, filters = {}) {
@@ -69,6 +70,7 @@ class BaselinkerService {
       order_status_id: filters.status || null,
       get_unconfirmed_orders: filters.get_unconfirmed || false,
       filter_id: filters.filter_id || null,
+      include_commission_data: filters.include_commission_data || null,
     };
 
     // Remove null values
@@ -276,6 +278,7 @@ class BaselinkerService {
         get_unconfirmed_orders: filters.get_unconfirmed || false,
         filter_order_source: filters.order_source || null,
         filter_order_source_id: filters.order_source_id || null,
+        include_commission_data: filters.include_commission_data || null,
       };
 
       // Remove null values

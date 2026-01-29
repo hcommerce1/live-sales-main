@@ -84,6 +84,11 @@ module.exports = {
         { key: 'delivery_price_brutto', label: 'Cena dostawy brutto', group: 'Płatność', plan: 'pro', type: 'number' },
         { key: 'delivery_price_netto',  label: 'Cena dostawy netto',  group: 'Płatność', plan: 'pro', type: 'number' },
 
+        // Prowizja marketplace
+        { key: 'commission_net',      label: 'Prowizja netto',   group: 'Prowizja', plan: 'pro', type: 'number' },
+        { key: 'commission_gross',    label: 'Prowizja brutto',  group: 'Prowizja', plan: 'pro', type: 'number' },
+        { key: 'commission_currency', label: 'Waluta prowizji',  group: 'Prowizja', plan: 'pro', type: 'text' },
+
         // Wysyłka
         { key: 'delivery_package_module', label: 'Moduł kuriera',    group: 'Wysyłka', plan: 'basic', type: 'text' },
         { key: 'delivery_package_nr',     label: 'Numer przesyłki',  group: 'Wysyłka', plan: 'basic', type: 'text' },
@@ -312,6 +317,11 @@ module.exports = {
         { key: 'delivery_method_id',   label: 'ID metody dostawy',   group: 'Płatność', plan: 'basic', type: 'number' },
         { key: 'delivery_price_brutto', label: 'Cena dostawy brutto', group: 'Płatność', plan: 'pro',  type: 'number' },
         { key: 'delivery_price_netto',  label: 'Cena dostawy netto',  group: 'Płatność', plan: 'pro',  type: 'number' },
+
+        // ========== PROWIZJA MARKETPLACE ==========
+        { key: 'commission_net',      label: 'Prowizja netto',   group: 'Prowizja', plan: 'pro', type: 'number' },
+        { key: 'commission_gross',    label: 'Prowizja brutto',  group: 'Prowizja', plan: 'pro', type: 'number' },
+        { key: 'commission_currency', label: 'Waluta prowizji',  group: 'Prowizja', plan: 'pro', type: 'text' },
 
         // ========== WYSYŁKA ==========
         { key: 'delivery_package_module', label: 'Moduł kuriera',   group: 'Wysyłka', plan: 'basic', type: 'text' },
