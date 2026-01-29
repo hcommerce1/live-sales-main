@@ -258,7 +258,16 @@ function splitFilters(filterConfig, dataset) {
   const appFilters = { logic: filterConfig?.logic || 'AND', groups: [] };
 
   if (!filterConfig || !filterConfig.groups) {
+    // Still check for inventory_id even without groups
+    if (dataset === 'products' && filterConfig?.inventory_id) {
+      apiFilters.inventory_id = filterConfig.inventory_id;
+    }
     return { apiFilters, appFilters };
+  }
+
+  // Extract inventory_id for products dataset (stored at root level of filters)
+  if (dataset === 'products' && filterConfig.inventory_id) {
+    apiFilters.inventory_id = filterConfig.inventory_id;
   }
 
   for (const group of filterConfig.groups) {
@@ -1423,7 +1432,10 @@ class ExportService {
    */
   async fetchProducts(client, apiFilters = {}) {
     try {
-      const inventoryId = apiFilters.inventory_id || 35072; // Default inventory
+      const inventoryId = apiFilters.inventory_id;
+      if (!inventoryId) {
+        throw new Error('inventory_id is required for products dataset. Please select a catalog.');
+      }
       const products = await client.getInventoryProductsList(inventoryId, apiFilters);
 
       if (products.length === 0) {
@@ -2283,6 +2295,11 @@ class ExportService {
         // Format booleans
         if (typeof value === 'boolean') {
           value = value ? 'Tak' : 'Nie';
+        }
+
+        // Round floating point numbers to 2 decimal places (fix precision issues like 170.69000000000003)
+        if (typeof value === 'number' && !Number.isInteger(value)) {
+          value = Math.round(value * 100) / 100;
         }
 
         return value !== undefined && value !== null ? String(value) : '';

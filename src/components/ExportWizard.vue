@@ -92,6 +92,25 @@
           </div>
         </div>
 
+        <!-- Inventory selection for products dataset -->
+        <div v-if="requiresInventory" class="flex-shrink-0 mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <label class="block text-sm font-medium text-amber-800 mb-2">
+            Wybierz katalog produktów
+          </label>
+          <select
+            v-model="config.filters.inventory_id"
+            class="w-full md:w-80 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none bg-white"
+          >
+            <option :value="null" disabled>-- Wybierz katalog --</option>
+            <option v-for="inv in inventories" :key="inv.inventory_id" :value="inv.inventory_id">
+              {{ inv.name }} (ID: {{ inv.inventory_id }})
+            </option>
+          </select>
+          <p v-if="inventories.length === 0" class="text-sm text-amber-600 mt-2">
+            Brak katalogów. Upewnij się, że masz skonfigurowaną integrację z BaseLinker.
+          </p>
+        </div>
+
         <!-- Dynamic Variant Component -->
         <div class="flex-1 min-h-0">
           <component
@@ -280,6 +299,10 @@
                 <span class="text-gray-600">Typ danych</span>
                 <span class="font-medium text-gray-900">{{ getDatasetLabel(config.dataset) }}</span>
               </div>
+              <div v-if="requiresInventory" class="flex justify-between py-2 border-b border-gray-100">
+                <span class="text-gray-600">Katalog</span>
+                <span class="font-medium text-gray-900">{{ getInventoryName(config.filters?.inventory_id) }}</span>
+              </div>
               <div class="flex justify-between py-2 border-b border-gray-100">
                 <span class="text-gray-600">Liczba pól</span>
                 <span class="font-medium text-gray-900">{{ config.selected_fields.length }}</span>
@@ -412,6 +435,7 @@ const fieldDefinitions = ref({
 // Dynamic data from BaseLinker
 const orderStatuses = ref([])
 const orderSources = ref({})
+const inventories = ref([]) // Katalogi produktów
 
 // Configuration
 const config = ref({
@@ -481,10 +505,21 @@ const currentDatasetFields = computed(() => {
   return ds?.fields || []
 })
 
+// Check if current dataset requires inventory selection
+// Only 'products' dataset needs inventory - 'order_products' gets products from orders, not from catalog
+const requiresInventory = computed(() => {
+  return config.value.dataset === 'products'
+})
+
 const canProceed = computed(() => {
   switch (currentStep.value) {
     case 0: // Dane
-      return config.value.dataset && config.value.selected_fields.length > 0
+      const hasFields = config.value.dataset && config.value.selected_fields.length > 0
+      // If dataset requires inventory, check if one is selected
+      if (requiresInventory.value) {
+        return hasFields && config.value.filters?.inventory_id
+      }
+      return hasFields
     case 1: // Arkusz (was case 2)
       return config.value.sheets_config?.some(s => s.sheet_url?.trim()) && !duplicateSheetWarning.value
     default: // Zapisz
@@ -531,10 +566,16 @@ const deliveryTaxOptions = [
 ]
 
 const canSave = computed(() => {
-  return config.value.name?.trim() &&
+  const basicChecks = config.value.name?.trim() &&
          config.value.selected_fields.length > 0 &&
          config.value.sheets_config?.some(s => s.sheet_url?.trim()) &&
          !duplicateSheetWarning.value
+
+  // Additional check for inventory if dataset requires it
+  if (requiresInventory.value) {
+    return basicChecks && config.value.filters?.inventory_id
+  }
+  return basicChecks
 })
 
 // Methods
@@ -593,6 +634,12 @@ function getFilterSummary() {
     return acc + validConditions.length
   }, 0)
   return conditionCount > 0 ? `${conditionCount} warunków` : 'Brak'
+}
+
+function getInventoryName(inventoryId) {
+  if (!inventoryId) return 'Nie wybrano'
+  const inv = inventories.value.find(i => i.inventory_id === inventoryId)
+  return inv?.name || `ID: ${inventoryId}`
 }
 
 // Drag & Drop
@@ -781,6 +828,15 @@ async function loadOrderSources() {
   }
 }
 
+async function loadInventories() {
+  try {
+    const data = await API.baselinker.getInventories()
+    inventories.value = data || []
+  } catch (error) {
+    console.error('Failed to load inventories:', error)
+  }
+}
+
 async function loadExistingExport() {
   // Load from template if provided (for sample exports)
   if (props.templateData) {
@@ -844,6 +900,7 @@ onMounted(async () => {
       loadFieldDefinitions(),
       loadOrderStatuses(),
       loadOrderSources(),
+      loadInventories(),
       loadExistingExport()
     ])
   } finally {

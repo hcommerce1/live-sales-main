@@ -91,7 +91,10 @@ class BaselinkerService {
    * @param {object} filters - Product filters
    * @returns {Promise<Array>} - List of products
    */
-  async getInventoryProductsList(userToken, inventoryId = config.inventories.main, filters = {}) {
+  async getInventoryProductsList(userToken, inventoryId, filters = {}) {
+    if (!inventoryId) {
+      throw new Error('inventoryId is required');
+    }
     const parameters = {
       inventory_id: inventoryId,
       filter_id: filters.filter_id || null,
@@ -124,7 +127,10 @@ class BaselinkerService {
    * @param {number} inventoryId - Inventory ID
    * @returns {Promise<object>} - Product details
    */
-  async getInventoryProductsData(userToken, productIds, inventoryId = config.inventories.main) {
+  async getInventoryProductsData(userToken, productIds, inventoryId) {
+    if (!inventoryId) {
+      throw new Error('inventoryId is required');
+    }
     const parameters = {
       inventory_id: inventoryId,
       products: productIds
@@ -141,7 +147,10 @@ class BaselinkerService {
    * @param {number} page - Page number
    * @returns {Promise<object>} - Products stock data
    */
-  async getInventoryProductsStock(userToken, inventoryId = config.inventories.main, page = 1) {
+  async getInventoryProductsStock(userToken, inventoryId, page = 1) {
+    if (!inventoryId) {
+      throw new Error('inventoryId is required');
+    }
     const parameters = {
       inventory_id: inventoryId,
       page: page
