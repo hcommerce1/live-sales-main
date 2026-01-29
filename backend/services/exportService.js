@@ -15,6 +15,7 @@
 const crypto = require('crypto');
 const { getClient } = require('./baselinker');
 const googleSheetsService = require('./googleSheetsService');
+const currencyService = require('./currencyService');
 const logger = require('../utils/logger');
 const { PrismaClient } = require('@prisma/client');
 const exportFields = require('../config/export-fields');
@@ -58,9 +59,28 @@ function calculatePriceVariant(price, taxRate, direction) {
  * Backward compatibility: map old field keys to new ones
  */
 const FIELD_MIGRATIONS = {
+  // Stare migracje
   'inv_purchase_price': 'inv_purchase_price_brutto',
   'inv_average_cost': 'inv_average_cost_brutto',
   'delivery_price': 'delivery_price_brutto',
+
+  // Migracja fv_* -> ds_* (dokumenty sprzedaży)
+  'fv_number': 'ds2_number',
+  'fv_date_add': 'ds2_date',
+  'fv_total_brutto': 'ds_total_brutto',
+  'fv_total_netto': 'ds_total_netto',
+  'fv_currency': 'ds_currency',
+  'fv_payment': 'ds_payment_method',
+  'fv_seller': 'ds_seller',
+  'fv_external_number': 'ds_external_number',
+  'fv_date_sell': 'ds_date_sell',
+  'fv_date_pay_to': 'ds_date_pay_to',
+  'fv_correction_number': 'ds_correction_number',
+  'fv_correction_reason': 'ds_correction_reason',
+  'fv_correction_date': 'ds_correction_date',
+  'fv_receipt_nr': 'ds1_number',
+  'fv_receipt_date': 'ds1_date',
+  'fv_receipt_nip': null, // Usunięte - NIP jest na invoice_nip z zamówienia
 };
 
 /**
@@ -1356,11 +1376,11 @@ class ExportService {
 
       let enrichedOrders = flatOrders;
 
-      // Document enrichment pipeline (invoices + receipts for fv_* and ds_* fields)
+      // Document enrichment pipeline (invoices + receipts for ds_* fields)
       if (this.needsDocumentEnrichment(selectedFields) && enrichedOrders.length > 0) {
         logger.info('Document enrichment requested for orders', {
           orderCount: enrichedOrders.length,
-          selectedDocFields: selectedFields.filter(f => f.startsWith('fv_') || f.startsWith('ds1_') || f.startsWith('ds2_'))
+          selectedDocFields: selectedFields.filter(f => f.startsWith('ds_') || f.startsWith('ds1_') || f.startsWith('ds2_'))
         });
 
         const documentMap = await this.fetchDocumentDataForOrders(client, apiFilters);
@@ -1415,6 +1435,16 @@ class ExportService {
           const summary = this.calculateProductSummary(order, inventoryData, settings);
           return { ...order, ...summary };
         });
+      }
+
+      // Currency conversion pipeline (for *_converted fields)
+      if (this.needsCurrencyConversion(selectedFields) && enrichedOrders.length > 0) {
+        logger.info('Currency conversion requested for orders', {
+          orderCount: enrichedOrders.length,
+          selectedConvertedFields: selectedFields.filter(f => f.endsWith('_converted'))
+        });
+
+        enrichedOrders = await this.applyCurrencyConversion(enrichedOrders, settings, selectedFields);
       }
 
       return enrichedOrders;
@@ -1665,17 +1695,27 @@ class ExportService {
 
   /**
    * Check if any selected fields require document enrichment (invoices/receipts)
-   * Includes fv_* fields (legacy) and ds1_*, ds2_* fields (new sales document slots)
+   * Includes ds_* fields (unified document values) and ds1_*, ds2_* fields (document slots)
    * @param {Array<string>} selectedFields - Selected field keys
    * @returns {boolean}
    */
   needsDocumentEnrichment(selectedFields) {
     if (!selectedFields || selectedFields.length === 0) return false;
     return selectedFields.some(field =>
-      field.startsWith('fv_') ||
+      field.startsWith('ds_') ||
       field.startsWith('ds1_') ||
       field.startsWith('ds2_')
     );
+  }
+
+  /**
+   * Check if any selected fields require currency conversion
+   * @param {Array<string>} selectedFields - Selected field keys
+   * @returns {boolean}
+   */
+  needsCurrencyConversion(selectedFields) {
+    if (!selectedFields || selectedFields.length === 0) return false;
+    return selectedFields.some(field => field.endsWith('_converted'));
   }
 
   /**
@@ -1717,6 +1757,156 @@ class ExportService {
     if (!selectedFields || selectedFields.length === 0) return false;
     const commissionFields = ['commission_net', 'commission_gross', 'commission_currency'];
     return selectedFields.some(f => commissionFields.includes(f));
+  }
+
+  /**
+   * Apply currency conversion to orders
+   * Converts financial fields to target currency using NBP exchange rates
+   *
+   * @param {Array} orders - Orders with financial fields
+   * @param {object} settings - Export settings with currencyConversion config
+   * @param {Array<string>} selectedFields - Selected fields (to check which conversions needed)
+   * @returns {Promise<Array>} - Orders with _converted fields added
+   */
+  async applyCurrencyConversion(orders, settings, selectedFields) {
+    const conversionSettings = settings?.currencyConversion;
+    if (!conversionSettings?.enabled || !conversionSettings?.targetCurrency) {
+      return orders;
+    }
+
+    const targetCurrency = conversionSettings.targetCurrency.toUpperCase();
+    const rateSource = conversionSettings.exchangeRateSource || 'today';
+
+    logger.info('Applying currency conversion', {
+      orderCount: orders.length,
+      targetCurrency,
+      rateSource
+    });
+
+    // Fields to convert with their source currency field
+    const fieldsToConvert = [
+      // Order values (use order.currency)
+      { source: 'payment_done', target: 'payment_done_converted', currencyField: 'currency' },
+      { source: 'delivery_price_brutto', target: 'delivery_price_brutto_converted', currencyField: 'currency' },
+      { source: 'delivery_price_netto', target: 'delivery_price_netto_converted', currencyField: 'currency' },
+      { source: 'products_total_value_brutto', target: 'products_total_value_brutto_converted', currencyField: 'currency' },
+      { source: 'products_total_value_netto', target: 'products_total_value_netto_converted', currencyField: 'currency' },
+      // Commission (uses commission_currency)
+      { source: 'commission_net', target: 'commission_net_converted', currencyField: 'commission_currency' },
+      { source: 'commission_gross', target: 'commission_gross_converted', currencyField: 'commission_currency' },
+      // Document values (uses ds_currency)
+      { source: 'ds_total_brutto', target: 'ds_total_brutto_converted', currencyField: 'ds_currency' },
+      { source: 'ds_total_netto', target: 'ds_total_netto_converted', currencyField: 'ds_currency' },
+      { source: 'ds_products_total_brutto', target: 'ds_products_total_brutto_converted', currencyField: 'ds_currency' },
+      { source: 'ds_products_total_netto', target: 'ds_products_total_netto_converted', currencyField: 'ds_currency' },
+      { source: 'ds_delivery_total_brutto', target: 'ds_delivery_total_brutto_converted', currencyField: 'ds_currency' },
+      { source: 'ds_delivery_total_netto', target: 'ds_delivery_total_netto_converted', currencyField: 'ds_currency' },
+    ];
+
+    // Filter to only selected converted fields
+    const selectedConversions = fieldsToConvert.filter(f =>
+      selectedFields.includes(f.target)
+    );
+
+    if (selectedConversions.length === 0) {
+      return orders;
+    }
+
+    // Cache for exchange rates (key: sourceCurrency-date)
+    const ratesCache = new Map();
+
+    // Process orders
+    const convertedOrders = await Promise.all(orders.map(async (order) => {
+      const convertedOrder = { ...order };
+
+      // Determine rate date based on settings
+      let rateDate;
+      switch (rateSource) {
+        case 'order_date':
+          rateDate = order.date_add
+            ? new Date(order.date_add * 1000).toISOString().split('T')[0]
+            : null;
+          break;
+        case 'invoice_date':
+          rateDate = order.ds2_date
+            ? new Date(order.ds2_date * 1000).toISOString().split('T')[0]
+            : null;
+          break;
+        case 'today':
+        default:
+          rateDate = new Date().toISOString().split('T')[0];
+      }
+
+      // Track the rate used for this order
+      let usedRate = null;
+      let usedDate = null;
+      let usedSource = null;
+
+      for (const field of selectedConversions) {
+        const sourceValue = order[field.source];
+        const sourceCurrency = (order[field.currencyField] || '').toUpperCase().trim();
+
+        // Skip if no value or no source currency
+        if (!sourceValue || !sourceCurrency) {
+          convertedOrder[field.target] = 0;
+          continue;
+        }
+
+        // Same currency - no conversion needed
+        if (sourceCurrency === targetCurrency) {
+          convertedOrder[field.target] = sourceValue;
+          usedRate = 1;
+          usedDate = rateDate;
+          usedSource = 'Ta sama waluta';
+          continue;
+        }
+
+        // Get or fetch rate
+        const cacheKey = `${sourceCurrency}-${targetCurrency}-${rateDate}`;
+        let rateInfo = ratesCache.get(cacheKey);
+
+        if (!rateInfo) {
+          try {
+            rateInfo = await currencyService.getExchangeRate(sourceCurrency, targetCurrency, rateDate);
+            ratesCache.set(cacheKey, rateInfo);
+          } catch (error) {
+            logger.warn('Failed to get exchange rate', {
+              orderId: order.order_id,
+              sourceCurrency,
+              targetCurrency,
+              rateDate,
+              error: error.message
+            });
+            rateInfo = { rate: 0, date: rateDate, source: 'Błąd pobierania kursu' };
+            ratesCache.set(cacheKey, rateInfo);
+          }
+        }
+
+        // Apply conversion
+        convertedOrder[field.target] = rateInfo.rate > 0
+          ? Math.round(sourceValue * rateInfo.rate * 100) / 100
+          : 0;
+
+        usedRate = rateInfo.rate;
+        usedDate = rateInfo.date;
+        usedSource = rateInfo.source;
+      }
+
+      // Add conversion metadata
+      convertedOrder.converted_target_currency = targetCurrency;
+      convertedOrder.converted_exchange_rate = usedRate;
+      convertedOrder.converted_exchange_date = usedDate;
+      convertedOrder.converted_exchange_source = usedSource;
+
+      return convertedOrder;
+    }));
+
+    logger.info('Currency conversion completed', {
+      orderCount: convertedOrders.length,
+      uniqueRates: ratesCache.size
+    });
+
+    return convertedOrders;
   }
 
   /**
@@ -2038,25 +2228,6 @@ class ExportService {
 
     return {
       ...order,
-      // Faktura sprzedażowa (szczegóły - legacy fv_* fields)
-      fv_number: inv.number || '',
-      fv_date_add: inv.date_add || '',
-      fv_date_sell: inv.date_sell || '',
-      fv_date_pay_to: inv.date_pay_to || '',
-      fv_total_brutto: inv.total_price_brutto || 0,
-      fv_total_netto: inv.total_price_netto || 0,
-      fv_currency: inv.currency || '',
-      fv_payment: inv.payment || '',
-      fv_seller: inv.seller || '',
-      fv_external_number: inv.external_invoice_number || '',
-      // Korekta
-      fv_correction_number: corr.number || '',
-      fv_correction_reason: corr.correcting_reason || '',
-      fv_correction_date: corr.date_add || '',
-      // Paragon (szczegóły - legacy fv_* fields)
-      fv_receipt_nr: rcpt.receipt_full_nr || '',
-      fv_receipt_date: rcpt.date_add || '',
-      fv_receipt_nip: rcpt.nip || '',
       // Dokument sprzedaży 1 (Paragon - slot 1)
       ds1_id,
       ds1_type,
@@ -2067,6 +2238,24 @@ class ExportService {
       ds2_type,
       ds2_number,
       ds2_date,
+      // Wartości dokumentu (z faktury, priorytet nad paragonem)
+      ds_total_brutto: inv.total_price_brutto || 0,
+      ds_total_netto: inv.total_price_netto || 0,
+      ds_products_total_brutto: inv.products_total_brutto || 0,
+      ds_products_total_netto: inv.products_total_netto || 0,
+      ds_delivery_total_brutto: inv.delivery_total_brutto || 0,
+      ds_delivery_total_netto: inv.delivery_total_netto || 0,
+      ds_currency: inv.currency || order.currency || '',
+      // Szczegóły dokumentu
+      ds_payment_method: inv.payment || '',
+      ds_seller: inv.seller || '',
+      ds_external_number: inv.external_invoice_number || '',
+      ds_date_sell: inv.date_sell || '',
+      ds_date_pay_to: inv.date_pay_to || '',
+      // Korekta
+      ds_correction_number: corr.number || '',
+      ds_correction_reason: corr.correcting_reason || '',
+      ds_correction_date: corr.date_add || '',
     };
   }
 
@@ -2270,25 +2459,31 @@ class ExportService {
     // Get decimal separator from settings (default: comma for Polish format)
     const decimalSeparator = settings?.decimalSeparator || ',';
 
+    // Apply field migrations (filter out fields mapped to null, rename others)
+    const migratedFields = selectedFields
+      .filter(fieldKey => FIELD_MIGRATIONS[fieldKey] !== null) // Remove deprecated fields
+      .map(fieldKey => ({
+        original: fieldKey,
+        effective: FIELD_MIGRATIONS.hasOwnProperty(fieldKey) ? FIELD_MIGRATIONS[fieldKey] : fieldKey
+      }));
+
     // Create headers (with backward compatibility for renamed fields)
-    const headers = selectedFields.map(fieldKey => {
-      const effectiveKey = FIELD_MIGRATIONS[fieldKey] || fieldKey;
-      return fieldLabels[effectiveKey] || fieldLabels[fieldKey] || fieldKey;
+    const headers = migratedFields.map(({ original, effective }) => {
+      return fieldLabels[effective] || fieldLabels[original] || original;
     });
 
     // Create data rows
     const data = rawData.map(record => {
-      return selectedFields.map(fieldKey => {
-        const effectiveKey = FIELD_MIGRATIONS[fieldKey] || fieldKey;
-        let value = record[effectiveKey];
+      return migratedFields.map(({ original, effective }) => {
+        let value = record[effective];
 
         // Format numbers with correct decimal separator
-        if (fieldTypes[effectiveKey] === 'number' && typeof value === 'number') {
+        if (fieldTypes[effective] === 'number' && typeof value === 'number') {
           value = String(value).replace('.', decimalSeparator);
         }
 
         // Format dates (unix timestamp to readable)
-        if (fieldKey.includes('date_') && typeof value === 'number' && value > 0) {
+        if (effective.includes('date_') && typeof value === 'number' && value > 0) {
           value = new Date(value * 1000).toISOString().slice(0, 19).replace('T', ' ');
         }
 

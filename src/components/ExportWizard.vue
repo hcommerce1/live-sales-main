@@ -288,6 +288,65 @@
                   </button>
                 </div>
               </div>
+
+              <!-- Currency conversion (orders only) -->
+              <div v-if="showCurrencyConversionSetting" class="border-t border-blue-200 pt-4 mt-4">
+                <div class="flex items-center gap-3 mb-3">
+                  <button
+                    type="button"
+                    class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                    :class="config.settings.currencyConversion?.enabled ? 'bg-blue-600' : 'bg-gray-200'"
+                    @click="toggleCurrencyConversion"
+                  >
+                    <span
+                      class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                      :class="config.settings.currencyConversion?.enabled ? 'translate-x-5' : 'translate-x-0'"
+                    />
+                  </button>
+                  <label class="text-sm font-medium text-gray-700">Przewalutowanie</label>
+                </div>
+
+                <div v-if="config.settings.currencyConversion?.enabled" class="space-y-4 pl-14">
+                  <!-- Target currency -->
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Waluta docelowa</label>
+                    <select
+                      v-model="config.settings.currencyConversion.targetCurrency"
+                      class="w-full md:w-48 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none bg-white"
+                    >
+                      <option v-for="opt in currencyOptions" :key="opt.value" :value="opt.value">
+                        {{ opt.label }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <!-- Exchange rate date source -->
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Data kursu wymiany</label>
+                    <p class="text-xs text-gray-500 mb-2">Wybierz ktora data ma byc uzyta do pobrania kursu NBP</p>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        v-for="opt in exchangeRateDateOptions"
+                        :key="opt.value"
+                        type="button"
+                        class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
+                        :class="{
+                          'border-blue-500 bg-blue-50 text-blue-700': config.settings.currencyConversion?.exchangeRateSource === opt.value,
+                          'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.currencyConversion?.exchangeRateSource !== opt.value
+                        }"
+                        @click="config.settings.currencyConversion.exchangeRateSource = opt.value"
+                      >
+                        {{ opt.label }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p class="text-xs text-gray-500">
+                    Kursy wymiany pobierane sa z Narodowego Banku Polskiego (NBP).
+                    Przeliczone wartosci pojawia sie w dodatkowych kolumnach.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -457,7 +516,12 @@ const config = ref({
   settings: {
     inventoryPriceFormat: 'brutto',
     deliveryTaxRate: 23,
-    decimalSeparator: ','
+    decimalSeparator: ',',
+    currencyConversion: {
+      enabled: false,
+      targetCurrency: 'PLN',
+      exchangeRateSource: 'today'
+    }
   }
 })
 
@@ -557,6 +621,84 @@ const showSettingsSection = computed(() => {
   // Always show - decimal separator applies to all exports
   return true
 })
+
+// Show currency conversion for orders dataset when financial fields are selected
+const showCurrencyConversionSetting = computed(() => {
+  if (config.value.dataset !== 'orders') return false
+  // Check if any convertible financial fields are selected
+  const financialFields = [
+    'payment_done', 'delivery_price_brutto', 'delivery_price_netto',
+    'products_total_value_brutto', 'products_total_value_netto',
+    'commission_net', 'commission_gross',
+    'ds_total_brutto', 'ds_total_netto',
+    'ds_products_total_brutto', 'ds_products_total_netto',
+    'ds_delivery_total_brutto', 'ds_delivery_total_netto'
+  ]
+  return config.value.selected_fields.some(f => financialFields.includes(f))
+})
+
+// Currency conversion settings
+const currencyOptions = [
+  { value: 'PLN', label: 'PLN (zloty polski)' },
+  { value: 'EUR', label: 'EUR (euro)' },
+  { value: 'USD', label: 'USD (dolar amerykanski)' },
+  { value: 'GBP', label: 'GBP (funt brytyjski)' },
+  { value: 'CHF', label: 'CHF (frank szwajcarski)' },
+  { value: 'CZK', label: 'CZK (korona czeska)' }
+]
+
+const exchangeRateDateOptions = [
+  { value: 'today', label: 'Dzisiejszy kurs' },
+  { value: 'order_date', label: 'Data zamowienia' },
+  { value: 'invoice_date', label: 'Data faktury' }
+]
+
+function toggleCurrencyConversion() {
+  if (!config.value.settings.currencyConversion) {
+    config.value.settings.currencyConversion = {
+      enabled: true,
+      targetCurrency: 'PLN',
+      exchangeRateSource: 'today'
+    }
+  } else {
+    config.value.settings.currencyConversion.enabled = !config.value.settings.currencyConversion.enabled
+  }
+  // Auto-add converted fields when enabling
+  if (config.value.settings.currencyConversion.enabled) {
+    addConvertedFieldsToSelection()
+  }
+}
+
+function addConvertedFieldsToSelection() {
+  // Map of source fields to their converted versions
+  const conversionMap = {
+    'payment_done': 'payment_done_converted',
+    'delivery_price_brutto': 'delivery_price_brutto_converted',
+    'delivery_price_netto': 'delivery_price_netto_converted',
+    'products_total_value_brutto': 'products_total_value_brutto_converted',
+    'products_total_value_netto': 'products_total_value_netto_converted',
+    'commission_net': 'commission_net_converted',
+    'commission_gross': 'commission_gross_converted',
+    'ds_total_brutto': 'ds_total_brutto_converted',
+    'ds_total_netto': 'ds_total_netto_converted',
+    'ds_products_total_brutto': 'ds_products_total_brutto_converted',
+    'ds_products_total_netto': 'ds_products_total_netto_converted',
+    'ds_delivery_total_brutto': 'ds_delivery_total_brutto_converted',
+    'ds_delivery_total_netto': 'ds_delivery_total_netto_converted'
+  }
+
+  const fieldsToAdd = []
+  for (const sourceField of config.value.selected_fields) {
+    const convertedField = conversionMap[sourceField]
+    if (convertedField && !config.value.selected_fields.includes(convertedField)) {
+      fieldsToAdd.push(convertedField)
+    }
+  }
+
+  if (fieldsToAdd.length > 0) {
+    config.value.selected_fields = [...config.value.selected_fields, ...fieldsToAdd]
+  }
+}
 
 const deliveryTaxOptions = [
   { value: 23, label: '23%' },
@@ -853,7 +995,13 @@ async function loadExistingExport() {
       sheets_config: [{ sheet_url: '', write_mode: 'replace' }],
       schedule_minutes: props.templateData.scheduleMinutes || 15,
       status: 'active',
-      settings: props.templateData.settings || { inventoryPriceFormat: 'brutto', deliveryTaxRate: 23, decimalSeparator: ',' }
+      settings: {
+        inventoryPriceFormat: 'brutto',
+        deliveryTaxRate: 23,
+        decimalSeparator: ',',
+        currencyConversion: { enabled: false, targetCurrency: 'PLN', exchangeRateSource: 'today' },
+        ...props.templateData.settings
+      }
     }
     return
   }
@@ -884,7 +1032,13 @@ async function loadExistingExport() {
         sheets_config: sheetsConfig.length > 0 ? sheetsConfig : [{ sheet_url: '', write_mode: 'replace' }],
         schedule_minutes: scheduleMinutes,
         status: exportData.status || 'active',
-        settings: exportData.settings || { inventoryPriceFormat: 'brutto', deliveryTaxRate: 23, decimalSeparator: ',' }
+        settings: {
+          inventoryPriceFormat: 'brutto',
+          deliveryTaxRate: 23,
+          decimalSeparator: ',',
+          currencyConversion: { enabled: false, targetCurrency: 'PLN', exchangeRateSource: 'today' },
+          ...exportData.settings
+        }
       }
     }
   } catch (error) {
