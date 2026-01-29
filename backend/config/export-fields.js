@@ -116,61 +116,57 @@ module.exports = {
         { key: 'pick_state',   label: 'Status kompletacji',  group: 'Status', plan: 'basic', type: 'number' },
         { key: 'pack_state',   label: 'Status pakowania',    group: 'Status', plan: 'basic', type: 'number' },
 
-        // Dokument sprzedaży 1 (Paragon)
-        { key: 'ds1_id',     label: 'Dokument 1 - ID',              group: 'Dokument sprzedaży 1', plan: 'pro', type: 'number' },
-        { key: 'ds1_type',   label: 'Dokument 1 - Typ',             group: 'Dokument sprzedaży 1', plan: 'pro', type: 'text' },
-        { key: 'ds1_number', label: 'Dokument 1 - Numer',           group: 'Dokument sprzedaży 1', plan: 'pro', type: 'text' },
-        { key: 'ds1_date',   label: 'Dokument 1 - Data wystawienia', group: 'Dokument sprzedaży 1', plan: 'pro', type: 'date' },
+        // ========== DOKUMENT SPRZEDAŻY ==========
+        // Dokument 1 (Paragon)
+        { key: 'ds1_id',     label: 'Dokument 1 - ID',               group: 'Dokument sprzedaży', plan: 'pro', type: 'number' },
+        { key: 'ds1_type',   label: 'Dokument 1 - Typ',              group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        { key: 'ds1_number', label: 'Dokument 1 - Numer',            group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        { key: 'ds1_date',   label: 'Dokument 1 - Data wystawienia', group: 'Dokument sprzedaży', plan: 'pro', type: 'date' },
+        // Dokument 2 (Faktura)
+        { key: 'ds2_id',     label: 'Dokument 2 - ID',               group: 'Dokument sprzedaży', plan: 'pro', type: 'number' },
+        { key: 'ds2_type',   label: 'Dokument 2 - Typ',              group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        { key: 'ds2_number', label: 'Dokument 2 - Numer',            group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        { key: 'ds2_date',   label: 'Dokument 2 - Data wystawienia', group: 'Dokument sprzedaży', plan: 'pro', type: 'date' },
+        // Wartości dokumentu
+        { key: 'ds_total_brutto',          label: 'Suma brutto',            group: 'Dokument sprzedaży', plan: 'pro', type: 'number' },
+        { key: 'ds_total_netto',           label: 'Suma netto',             group: 'Dokument sprzedaży', plan: 'pro', type: 'number' },
+        { key: 'ds_products_total_brutto', label: 'Produkty brutto',        group: 'Dokument sprzedaży', plan: 'pro', type: 'number' },
+        { key: 'ds_products_total_netto',  label: 'Produkty netto',         group: 'Dokument sprzedaży', plan: 'pro', type: 'number' },
+        { key: 'ds_delivery_total_brutto', label: 'Dostawa brutto',         group: 'Dokument sprzedaży', plan: 'pro', type: 'number' },
+        { key: 'ds_delivery_total_netto',  label: 'Dostawa netto',          group: 'Dokument sprzedaży', plan: 'pro', type: 'number' },
+        { key: 'ds_currency',              label: 'Waluta dokumentu',       group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        // Szczegóły dokumentu
+        { key: 'ds_payment_method',  label: 'Metoda płatności',       group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        { key: 'ds_seller',          label: 'Sprzedawca',             group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        { key: 'ds_external_number', label: 'Numer zewnętrzny',       group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        { key: 'ds_date_sell',       label: 'Data sprzedaży',         group: 'Dokument sprzedaży', plan: 'pro', type: 'date' },
+        { key: 'ds_date_pay_to',     label: 'Termin płatności',       group: 'Dokument sprzedaży', plan: 'pro', type: 'date' },
+        // Korekta
+        { key: 'ds_correction_number', label: 'Korekta - numer',      group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        { key: 'ds_correction_reason', label: 'Korekta - powód',      group: 'Dokument sprzedaży', plan: 'pro', type: 'text' },
+        { key: 'ds_correction_date',   label: 'Korekta - data',       group: 'Dokument sprzedaży', plan: 'pro', type: 'date' },
 
-        // Dokument sprzedaży 2 (Faktura)
-        { key: 'ds2_id',     label: 'Dokument 2 - ID',              group: 'Dokument sprzedaży 2', plan: 'pro', type: 'number' },
-        { key: 'ds2_type',   label: 'Dokument 2 - Typ',             group: 'Dokument sprzedaży 2', plan: 'pro', type: 'text' },
-        { key: 'ds2_number', label: 'Dokument 2 - Numer',           group: 'Dokument sprzedaży 2', plan: 'pro', type: 'text' },
-        { key: 'ds2_date',   label: 'Dokument 2 - Data wystawienia', group: 'Dokument sprzedaży 2', plan: 'pro', type: 'date' },
-
-        // Wartości dokumentu sprzedaży (z faktury lub paragonu)
-        { key: 'ds_total_brutto',          label: 'Dokument - suma brutto',     group: 'Wartości dokumentu', plan: 'pro', type: 'number' },
-        { key: 'ds_total_netto',           label: 'Dokument - suma netto',      group: 'Wartości dokumentu', plan: 'pro', type: 'number' },
-        { key: 'ds_products_total_brutto', label: 'Dokument - produkty brutto', group: 'Wartości dokumentu', plan: 'pro', type: 'number' },
-        { key: 'ds_products_total_netto',  label: 'Dokument - produkty netto',  group: 'Wartości dokumentu', plan: 'pro', type: 'number' },
-        { key: 'ds_delivery_total_brutto', label: 'Dokument - dostawa brutto',  group: 'Wartości dokumentu', plan: 'pro', type: 'number' },
-        { key: 'ds_delivery_total_netto',  label: 'Dokument - dostawa netto',   group: 'Wartości dokumentu', plan: 'pro', type: 'number' },
-        { key: 'ds_currency',              label: 'Dokument - waluta',          group: 'Wartości dokumentu', plan: 'pro', type: 'text' },
-
-        // Szczegóły dokumentu sprzedaży
-        { key: 'ds_payment_method',  label: 'Dokument - metoda płatności', group: 'Szczegóły dokumentu', plan: 'pro', type: 'text' },
-        { key: 'ds_seller',          label: 'Dokument - sprzedawca',       group: 'Szczegóły dokumentu', plan: 'pro', type: 'text' },
-        { key: 'ds_external_number', label: 'Dokument - numer zewnętrzny', group: 'Szczegóły dokumentu', plan: 'pro', type: 'text' },
-        { key: 'ds_date_sell',       label: 'Dokument - data sprzedaży',   group: 'Szczegóły dokumentu', plan: 'pro', type: 'date' },
-        { key: 'ds_date_pay_to',     label: 'Dokument - termin płatności', group: 'Szczegóły dokumentu', plan: 'pro', type: 'date' },
-
-        // Korekta dokumentu
-        { key: 'ds_correction_number', label: 'Korekta - numer',  group: 'Korekta', plan: 'pro', type: 'text' },
-        { key: 'ds_correction_reason', label: 'Korekta - powód',  group: 'Korekta', plan: 'pro', type: 'text' },
-        { key: 'ds_correction_date',   label: 'Korekta - data',   group: 'Korekta', plan: 'pro', type: 'date' },
-
-        // Przewalutowanie - wartości dokumentu
-        { key: 'ds_total_brutto_converted',          label: 'Dokument - suma brutto (przelicz.)',     group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'ds_total_netto_converted',           label: 'Dokument - suma netto (przelicz.)',      group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'ds_products_total_brutto_converted', label: 'Dokument - produkty brutto (przelicz.)', group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'ds_products_total_netto_converted',  label: 'Dokument - produkty netto (przelicz.)',  group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'ds_delivery_total_brutto_converted', label: 'Dokument - dostawa brutto (przelicz.)',  group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'ds_delivery_total_netto_converted',  label: 'Dokument - dostawa netto (przelicz.)',   group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-
-        // Przewalutowanie - wartości zamówienia
-        { key: 'payment_done_converted',                    label: 'Zapłacono (przelicz.)',                 group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'delivery_price_brutto_converted',           label: 'Dostawa brutto (przelicz.)',            group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'delivery_price_netto_converted',            label: 'Dostawa netto (przelicz.)',             group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'products_total_value_brutto_converted',     label: 'Produkty - wartość brutto (przelicz.)', group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'products_total_value_netto_converted',      label: 'Produkty - wartość netto (przelicz.)',  group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'commission_net_converted',                  label: 'Prowizja netto (przelicz.)',            group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-        { key: 'commission_gross_converted',                label: 'Prowizja brutto (przelicz.)',           group: 'Przewalutowanie', plan: 'pro', type: 'number' },
-
-        // Przewalutowanie - informacje o kursie
+        // ========== PRZEWALUTOWANIE ==========
+        // Informacje o kursie
         { key: 'converted_target_currency', label: 'Waluta docelowa',  group: 'Przewalutowanie', plan: 'pro', type: 'text' },
         { key: 'converted_exchange_rate',   label: 'Kurs wymiany',     group: 'Przewalutowanie', plan: 'pro', type: 'number' },
         { key: 'converted_exchange_date',   label: 'Data kursu',       group: 'Przewalutowanie', plan: 'pro', type: 'date' },
         { key: 'converted_exchange_source', label: 'Źródło kursu',     group: 'Przewalutowanie', plan: 'pro', type: 'text' },
+        // Przeliczone wartości zamówienia
+        { key: 'payment_done_converted',                label: 'Zapłacono (przelicz.)',          group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'delivery_price_brutto_converted',       label: 'Dostawa brutto (przelicz.)',     group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'delivery_price_netto_converted',        label: 'Dostawa netto (przelicz.)',      group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'products_total_value_brutto_converted', label: 'Produkty brutto (przelicz.)',    group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'products_total_value_netto_converted',  label: 'Produkty netto (przelicz.)',     group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'commission_net_converted',              label: 'Prowizja netto (przelicz.)',     group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'commission_gross_converted',            label: 'Prowizja brutto (przelicz.)',    group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        // Przeliczone wartości dokumentu
+        { key: 'ds_total_brutto_converted',          label: 'Dok. suma brutto (przelicz.)',     group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'ds_total_netto_converted',           label: 'Dok. suma netto (przelicz.)',      group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'ds_products_total_brutto_converted', label: 'Dok. produkty brutto (przelicz.)', group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'ds_products_total_netto_converted',  label: 'Dok. produkty netto (przelicz.)',  group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'ds_delivery_total_brutto_converted', label: 'Dok. dostawa brutto (przelicz.)',  group: 'Przewalutowanie', plan: 'pro', type: 'number' },
+        { key: 'ds_delivery_total_netto_converted',  label: 'Dok. dostawa netto (przelicz.)',   group: 'Przewalutowanie', plan: 'pro', type: 'number' },
 
         // Podsumowanie produktów (agregacje)
         { key: 'products_total_value_brutto',         label: 'Produkty - wartość brutto',      group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
