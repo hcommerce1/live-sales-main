@@ -340,6 +340,7 @@ class BaseLinkerClient {
         get_unconfirmed_orders: filters.get_unconfirmed || false,
         filter_order_source: filters.order_source || undefined,
         filter_order_source_id: filters.order_source_id || undefined,
+        include_commission_data: filters.include_commission_data || undefined,
       };
 
       // Remove undefined values
