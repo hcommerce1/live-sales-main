@@ -137,11 +137,13 @@ module.exports = {
         { key: 'fv_receipt_nip',  label: 'NIP na paragonie',  group: 'Dokumenty sprzedażowe', plan: 'pro', type: 'text' },
 
         // Dokument sprzedaży 1 (Paragon)
+        { key: 'ds1_id',     label: 'Dokument 1 - ID',              group: 'Dokument sprzedaży 1', plan: 'pro', type: 'number' },
         { key: 'ds1_type',   label: 'Dokument 1 - Typ',             group: 'Dokument sprzedaży 1', plan: 'pro', type: 'text' },
         { key: 'ds1_number', label: 'Dokument 1 - Numer',           group: 'Dokument sprzedaży 1', plan: 'pro', type: 'text' },
         { key: 'ds1_date',   label: 'Dokument 1 - Data wystawienia', group: 'Dokument sprzedaży 1', plan: 'pro', type: 'date' },
 
         // Dokument sprzedaży 2 (Faktura)
+        { key: 'ds2_id',     label: 'Dokument 2 - ID',              group: 'Dokument sprzedaży 2', plan: 'pro', type: 'number' },
         { key: 'ds2_type',   label: 'Dokument 2 - Typ',             group: 'Dokument sprzedaży 2', plan: 'pro', type: 'text' },
         { key: 'ds2_number', label: 'Dokument 2 - Numer',           group: 'Dokument sprzedaży 2', plan: 'pro', type: 'text' },
         { key: 'ds2_date',   label: 'Dokument 2 - Data wystawienia', group: 'Dokument sprzedaży 2', plan: 'pro', type: 'date' },

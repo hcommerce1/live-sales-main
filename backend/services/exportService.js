@@ -1976,20 +1976,24 @@ class ExportService {
     const rcpt = docs.receipt || {};
 
     // Dokument sprzedaży 1 = Paragon (slot 1)
+    let ds1_id = null;
     let ds1_type = '';
     let ds1_number = '';
     let ds1_date = null;
     if (rcpt && (rcpt.receipt_full_nr || rcpt.receipt_id)) {
+      ds1_id = rcpt.receipt_id || null;
       ds1_type = 'Paragon';
       ds1_number = rcpt.receipt_full_nr || '';
       ds1_date = rcpt.date_add || null;
     }
 
     // Dokument sprzedaży 2 = Faktura (slot 2)
+    let ds2_id = null;
     let ds2_type = '';
     let ds2_number = '';
     let ds2_date = null;
     if (inv && (inv.number || inv.invoice_id)) {
+      ds2_id = inv.invoice_id || null;
       ds2_type = inv.type === 'correcting' ? 'Korekta' : 'Faktura';
       ds2_number = inv.number || '';
       ds2_date = inv.date_add || null;
@@ -2017,10 +2021,12 @@ class ExportService {
       fv_receipt_date: rcpt.date_add || '',
       fv_receipt_nip: rcpt.nip || '',
       // Dokument sprzedaży 1 (Paragon - slot 1)
+      ds1_id,
       ds1_type,
       ds1_number,
       ds1_date,
       // Dokument sprzedaży 2 (Faktura - slot 2)
+      ds2_id,
       ds2_type,
       ds2_number,
       ds2_date,
