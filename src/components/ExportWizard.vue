@@ -261,7 +261,7 @@
                     class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
                     :class="{
                       'border-blue-500 bg-blue-50 text-blue-700': config.settings.decimalSeparator === '.',
-                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.decimalSeparator !== '.'"
+                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.decimalSeparator !== '.'
                     }"
                     @click="config.settings.decimalSeparator = '.'"
                   >
