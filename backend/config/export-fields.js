@@ -382,6 +382,322 @@ module.exports = {
         { key: 'inv_average_cost_netto',    label: 'Średni koszt netto (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
         { key: 'inv_average_cost_brutto',   label: 'Średni koszt brutto (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
       ]
+    },
+
+    // ----------------------------------------
+    // ZWROTY ZAMÓWIEŃ (order_returns)
+    // ----------------------------------------
+    order_returns: {
+      label: 'Zwroty zamówień',
+      plan: 'pro',
+      apiMethod: 'getOrderReturns',
+      fields: [
+        // Podstawowe
+        { key: 'return_id',          label: 'ID zwrotu',                  group: 'Podstawowe', plan: 'pro', type: 'number' },
+        { key: 'order_id',           label: 'ID zamówienia',              group: 'Podstawowe', plan: 'pro', type: 'number' },
+        { key: 'shop_order_id',      label: 'ID zamówienia w sklepie',    group: 'Podstawowe', plan: 'pro', type: 'number' },
+        { key: 'external_order_id',  label: 'Zewnętrzny ID zamówienia',   group: 'Podstawowe', plan: 'pro', type: 'text' },
+        { key: 'reference_number',   label: 'Numer referencyjny',         group: 'Podstawowe', plan: 'pro', type: 'text' },
+        { key: 'date_add',           label: 'Data utworzenia',            group: 'Podstawowe', plan: 'pro', type: 'date' },
+        { key: 'date_in_status',     label: 'Data zmiany statusu',        group: 'Podstawowe', plan: 'pro', type: 'date' },
+        { key: 'status_id',          label: 'Status zwrotu',              group: 'Podstawowe', plan: 'pro', type: 'select', source: 'return-statuses' },
+        { key: 'fulfillment_status', label: 'Status realizacji',          group: 'Podstawowe', plan: 'pro', type: 'select',
+          options: [
+            { value: 0, label: 'Aktywny' },
+            { value: 1, label: 'Zrealizowany' },
+            { value: 2, label: 'Anulowany' },
+            { value: 5, label: 'Zaakceptowany' }
+          ]
+        },
+
+        // Źródło
+        { key: 'order_return_source',    label: 'Źródło zwrotu',   group: 'Źródło', plan: 'pro', type: 'text' },
+        { key: 'order_return_source_id', label: 'ID źródła',       group: 'Źródło', plan: 'pro', type: 'number' },
+
+        // Dane klienta
+        { key: 'email',                  label: 'Email',                     group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'phone',                  label: 'Telefon',                   group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'user_login',             label: 'Login użytkownika',         group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_fullname',      label: 'Imię i nazwisko',           group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_company',       label: 'Firma',                     group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_address',       label: 'Adres',                     group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_postcode',      label: 'Kod pocztowy',              group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_city',          label: 'Miasto',                    group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_state',         label: 'Województwo',               group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_country',       label: 'Kraj',                      group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_country_code',  label: 'Kod kraju',                 group: 'Dane klienta', plan: 'pro', type: 'text' },
+
+        // Finansowe
+        { key: 'currency',       label: 'Waluta',                  group: 'Finansowe', plan: 'pro', type: 'text' },
+        { key: 'delivery_price', label: 'Koszt dostawy zwrotu',    group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'refunded',       label: 'Status zwrotu pieniędzy', group: 'Finansowe', plan: 'pro', type: 'text' },
+
+        // Dane do przelewu zwrotnego
+        { key: 'refund_account_number', label: 'Numer konta',  group: 'Dane do przelewu', plan: 'pro', type: 'text' },
+        { key: 'refund_iban',           label: 'IBAN',         group: 'Dane do przelewu', plan: 'pro', type: 'text' },
+        { key: 'refund_swift',          label: 'SWIFT/BIC',    group: 'Dane do przelewu', plan: 'pro', type: 'text' },
+
+        // Wysyłka zwrotna
+        { key: 'delivery_package_module', label: 'Kurier zwrotu',           group: 'Wysyłka', plan: 'pro', type: 'text' },
+        { key: 'delivery_package_nr',     label: 'Numer przesyłki zwrotnej', group: 'Wysyłka', plan: 'pro', type: 'text' },
+
+        // Komentarze
+        { key: 'admin_comments', label: 'Komentarz wewnętrzny', group: 'Komentarze', plan: 'pro', type: 'text' },
+        { key: 'extra_field_1',  label: 'Pole dodatkowe 1',     group: 'Komentarze', plan: 'pro', type: 'text' },
+        { key: 'extra_field_2',  label: 'Pole dodatkowe 2',     group: 'Komentarze', plan: 'pro', type: 'text' },
+      ]
+    },
+
+    // ----------------------------------------
+    // PRODUKTY W ZWROCIE (return_products)
+    // ----------------------------------------
+    return_products: {
+      label: 'Produkty w zwrocie',
+      plan: 'pro',
+      apiMethod: 'getOrderReturns',
+      expandFrom: 'products',
+      fields: [
+        // ========== KONTEKST ZWROTU ==========
+        { key: 'return_id',          label: 'ID zwrotu',                  group: 'Zwrot', plan: 'pro', type: 'number' },
+        { key: 'order_id',           label: 'ID zamówienia',              group: 'Zwrot', plan: 'pro', type: 'number' },
+        { key: 'shop_order_id',      label: 'ID zamówienia w sklepie',    group: 'Zwrot', plan: 'pro', type: 'number' },
+        { key: 'external_order_id',  label: 'Zewnętrzny ID zamówienia',   group: 'Zwrot', plan: 'pro', type: 'text' },
+        { key: 'reference_number',   label: 'Numer referencyjny',         group: 'Zwrot', plan: 'pro', type: 'text' },
+        { key: 'date_add',           label: 'Data utworzenia',            group: 'Zwrot', plan: 'pro', type: 'date' },
+        { key: 'date_in_status',     label: 'Data zmiany statusu',        group: 'Zwrot', plan: 'pro', type: 'date' },
+        { key: 'status_id',          label: 'Status zwrotu',              group: 'Zwrot', plan: 'pro', type: 'select', source: 'return-statuses' },
+        { key: 'fulfillment_status', label: 'Status realizacji',          group: 'Zwrot', plan: 'pro', type: 'select',
+          options: [
+            { value: 0, label: 'Aktywny' },
+            { value: 1, label: 'Zrealizowany' },
+            { value: 2, label: 'Anulowany' },
+            { value: 5, label: 'Zaakceptowany' }
+          ]
+        },
+
+        // Źródło zwrotu
+        { key: 'order_return_source',    label: 'Źródło zwrotu',   group: 'Źródło', plan: 'pro', type: 'text' },
+        { key: 'order_return_source_id', label: 'ID źródła',       group: 'Źródło', plan: 'pro', type: 'number' },
+
+        // Dane klienta
+        { key: 'email',                  label: 'Email',             group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'phone',                  label: 'Telefon',           group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'user_login',             label: 'Login użytkownika', group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_fullname',      label: 'Imię i nazwisko',   group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_company',       label: 'Firma',             group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_address',       label: 'Adres',             group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_postcode',      label: 'Kod pocztowy',      group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_city',          label: 'Miasto',            group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_state',         label: 'Województwo',       group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_country',       label: 'Kraj',              group: 'Dane klienta', plan: 'pro', type: 'text' },
+        { key: 'delivery_country_code',  label: 'Kod kraju',         group: 'Dane klienta', plan: 'pro', type: 'text' },
+
+        // Finansowe zwrotu
+        { key: 'currency',       label: 'Waluta',               group: 'Finansowe', plan: 'pro', type: 'text' },
+        { key: 'delivery_price', label: 'Koszt dostawy zwrotu', group: 'Finansowe', plan: 'pro', type: 'number' },
+        { key: 'refunded',       label: 'Status zwrotu pieniędzy', group: 'Finansowe', plan: 'pro', type: 'text' },
+
+        // Dane do przelewu
+        { key: 'refund_account_number', label: 'Numer konta', group: 'Dane do przelewu', plan: 'pro', type: 'text' },
+        { key: 'refund_iban',           label: 'IBAN',        group: 'Dane do przelewu', plan: 'pro', type: 'text' },
+        { key: 'refund_swift',          label: 'SWIFT/BIC',   group: 'Dane do przelewu', plan: 'pro', type: 'text' },
+
+        // Wysyłka zwrotna
+        { key: 'delivery_package_module', label: 'Kurier zwrotu',            group: 'Wysyłka zwrotu', plan: 'pro', type: 'text' },
+        { key: 'delivery_package_nr',     label: 'Numer przesyłki zwrotnej', group: 'Wysyłka zwrotu', plan: 'pro', type: 'text' },
+
+        // Komentarze
+        { key: 'admin_comments', label: 'Komentarz wewnętrzny', group: 'Komentarze', plan: 'pro', type: 'text' },
+        { key: 'extra_field_1',  label: 'Pole dodatkowe 1',     group: 'Komentarze', plan: 'pro', type: 'text' },
+        { key: 'extra_field_2',  label: 'Pole dodatkowe 2',     group: 'Komentarze', plan: 'pro', type: 'text' },
+
+        // ========== POZYCJA ZWROTU ==========
+        { key: 'order_return_product_id', label: 'ID pozycji zwrotu',       group: 'Pozycja zwrotu', plan: 'pro', type: 'number' },
+        { key: 'product_id',              label: 'ID produktu',             group: 'Pozycja zwrotu', plan: 'pro', type: 'text' },
+        { key: 'variant_id',              label: 'ID wariantu',             group: 'Pozycja zwrotu', plan: 'pro', type: 'text' },
+        { key: 'name',                    label: 'Nazwa produktu',          group: 'Pozycja zwrotu', plan: 'pro', type: 'text' },
+        { key: 'sku',                     label: 'SKU',                     group: 'Pozycja zwrotu', plan: 'pro', type: 'text' },
+        { key: 'ean',                     label: 'EAN',                     group: 'Pozycja zwrotu', plan: 'pro', type: 'text' },
+        { key: 'attributes',              label: 'Atrybuty',                group: 'Pozycja zwrotu', plan: 'pro', type: 'text' },
+        { key: 'location',                label: 'Lokalizacja',             group: 'Pozycja zwrotu', plan: 'pro', type: 'text' },
+        { key: 'auction_id',              label: 'ID aukcji',               group: 'Pozycja zwrotu', plan: 'pro', type: 'text' },
+
+        // Wartość pozycji
+        { key: 'quantity',     label: 'Ilość',       group: 'Wartość pozycji', plan: 'pro', type: 'number' },
+        { key: 'price_brutto', label: 'Cena brutto', group: 'Wartość pozycji', plan: 'pro', type: 'number' },
+        { key: 'tax_rate',     label: 'Stawka VAT',  group: 'Wartość pozycji', plan: 'pro', type: 'number' },
+        { key: 'weight',       label: 'Waga',        group: 'Wartość pozycji', plan: 'pro', type: 'number' },
+
+        // Status pozycji
+        { key: 'product_status_id',  label: 'Status pozycji',  group: 'Status pozycji', plan: 'pro', type: 'select', source: 'return-product-statuses' },
+        { key: 'return_reason_id',   label: 'Powód zwrotu',    group: 'Status pozycji', plan: 'pro', type: 'select', source: 'return-reasons' },
+
+        // Magazyn
+        { key: 'storage',      label: 'Typ magazynu', group: 'Magazyn', plan: 'pro', type: 'text' },
+        { key: 'storage_id',   label: 'ID magazynu',  group: 'Magazyn', plan: 'pro', type: 'number' },
+        { key: 'warehouse_id', label: 'ID hurtowni',  group: 'Magazyn', plan: 'pro', type: 'number' },
+        { key: 'bundle_id',    label: 'ID zestawu',   group: 'Magazyn', plan: 'pro', type: 'number' },
+      ]
+    },
+
+    // ----------------------------------------
+    // PRZESYŁKI KURIERSKIE (packages)
+    // ----------------------------------------
+    packages: {
+      label: 'Przesyłki kurierskie',
+      plan: 'basic',
+      apiMethod: 'getOrderPackages',
+      fields: [
+        // Podstawowe
+        { key: 'package_id',           label: 'ID przesyłki',             group: 'Podstawowe', plan: 'basic', type: 'number' },
+        { key: 'order_id',             label: 'ID zamówienia',            group: 'Podstawowe', plan: 'basic', type: 'number' },
+        { key: 'courier_package_nr',   label: 'Numer przesyłki',          group: 'Podstawowe', plan: 'basic', type: 'text' },
+        { key: 'courier_inner_number', label: 'Numer wewnętrzny kuriera', group: 'Podstawowe', plan: 'basic', type: 'text' },
+
+        // Kurier
+        { key: 'courier_code',       label: 'Kod kuriera',         group: 'Kurier', plan: 'basic', type: 'text' },
+        { key: 'courier_other_name', label: 'Alternatywna nazwa kuriera', group: 'Kurier', plan: 'basic', type: 'text' },
+        { key: 'account_id',         label: 'ID konta kuriera',    group: 'Kurier', plan: 'basic', type: 'number' },
+
+        // Status przesyłki
+        { key: 'tracking_status', label: 'Status śledzenia', group: 'Status przesyłki', plan: 'basic', type: 'select',
+          options: [
+            { value: 0,  label: 'Nieznany' },
+            { value: 1,  label: 'Etykieta utworzona' },
+            { value: 2,  label: 'Wysłana' },
+            { value: 3,  label: 'Niedoręczona' },
+            { value: 4,  label: 'W doręczeniu' },
+            { value: 5,  label: 'Doręczona' },
+            { value: 6,  label: 'Zwrot' },
+            { value: 7,  label: 'Awizo' },
+            { value: 8,  label: 'Oczekuje w punkcie' },
+            { value: 9,  label: 'Zgubiona' },
+            { value: 10, label: 'Anulowana' },
+            { value: 11, label: 'W drodze' }
+          ]
+        },
+        { key: 'tracking_status_date',   label: 'Data statusu',        group: 'Status przesyłki', plan: 'basic', type: 'date' },
+        { key: 'tracking_delivery_days', label: 'Dni do doręczenia',   group: 'Status przesyłki', plan: 'basic', type: 'number' },
+        { key: 'tracking_url',           label: 'URL śledzenia',       group: 'Status przesyłki', plan: 'basic', type: 'text' },
+
+        // Typ przesyłki
+        { key: 'package_type', label: 'Typ paczki', group: 'Typ przesyłki', plan: 'basic', type: 'select',
+          options: [
+            { value: 0, label: 'Standardowa' },
+            { value: 1, label: 'List' },
+            { value: 2, label: 'Paleta' },
+            { value: 3, label: 'Inny' }
+          ]
+        },
+        { key: 'is_return', label: 'Przesyłka zwrotna', group: 'Typ przesyłki', plan: 'basic', type: 'boolean' },
+      ]
+    },
+
+    // ----------------------------------------
+    // PARAGONY (receipts)
+    // ----------------------------------------
+    receipts: {
+      label: 'Paragony',
+      plan: 'pro',
+      apiMethod: 'getReceipts',
+      fields: [
+        // Podstawowe
+        { key: 'receipt_id', label: 'ID paragonu',     group: 'Podstawowe', plan: 'pro', type: 'number' },
+        { key: 'order_id',   label: 'ID zamówienia',   group: 'Podstawowe', plan: 'pro', type: 'number' },
+        { key: 'series_id',  label: 'ID serii',        group: 'Podstawowe', plan: 'pro', type: 'number' },
+        { key: 'receipt_nr', label: 'Numer paragonu',  group: 'Podstawowe', plan: 'pro', type: 'text' },
+
+        // Daty
+        { key: 'date_add', label: 'Data wystawienia', group: 'Daty', plan: 'pro', type: 'date' },
+
+        // Dane
+        { key: 'nip',          label: 'NIP na paragonie', group: 'Dane', plan: 'pro', type: 'text' },
+        { key: 'printer_name', label: 'Nazwa drukarki',   group: 'Dane', plan: 'pro', type: 'text' },
+      ]
+    },
+
+    // ----------------------------------------
+    // DOKUMENTY MAGAZYNOWE (inventory_documents)
+    // ----------------------------------------
+    inventory_documents: {
+      label: 'Dokumenty magazynowe',
+      plan: 'pro',
+      apiMethod: 'getInventoryDocuments',
+      fields: [
+        // Podstawowe
+        { key: 'document_id', label: 'ID dokumentu', group: 'Podstawowe', plan: 'pro', type: 'number' },
+        { key: 'document_type', label: 'Typ dokumentu', group: 'Podstawowe', plan: 'pro', type: 'select',
+          options: [
+            { value: 0, label: 'PZ (Przyjęcie zewnętrzne)' },
+            { value: 1, label: 'PW (Przyjęcie wewnętrzne)' },
+            { value: 2, label: 'WZ (Wydanie zewnętrzne)' },
+            { value: 3, label: 'WW (Wydanie wewnętrzne)' },
+            { value: 4, label: 'MM (Przesunięcie międzymagazynowe)' },
+            { value: 5, label: 'BO (Bilans otwarcia)' }
+          ]
+        },
+        { key: 'document_status', label: 'Status', group: 'Podstawowe', plan: 'pro', type: 'select',
+          options: [
+            { value: 0, label: 'Szkic' },
+            { value: 1, label: 'Zatwierdzony' }
+          ]
+        },
+        { key: 'warehouse_id',        label: 'ID magazynu',           group: 'Podstawowe', plan: 'pro', type: 'number' },
+        { key: 'target_warehouse_id', label: 'ID magazynu docelowego', group: 'Podstawowe', plan: 'pro', type: 'number' },
+
+        // Daty
+        { key: 'date_add',     label: 'Data utworzenia',  group: 'Daty', plan: 'pro', type: 'date' },
+        { key: 'date_execute', label: 'Data realizacji',  group: 'Daty', plan: 'pro', type: 'date' },
+
+        // Kontrahent
+        { key: 'contractor', label: 'Kontrahent',       group: 'Kontrahent', plan: 'pro', type: 'text' },
+        { key: 'invoice_no', label: 'Numer faktury',    group: 'Kontrahent', plan: 'pro', type: 'text' },
+      ]
+    },
+
+    // ----------------------------------------
+    // ZAMÓWIENIA ZAKUPOWE (purchase_orders)
+    // ----------------------------------------
+    purchase_orders: {
+      label: 'Zamówienia zakupowe',
+      plan: 'pro',
+      apiMethod: 'getPurchaseOrders',
+      fields: [
+        // Podstawowe
+        { key: 'order_id',        label: 'ID zamówienia zakupowego', group: 'Podstawowe', plan: 'pro', type: 'number' },
+        { key: 'document_number', label: 'Numer dokumentu',          group: 'Podstawowe', plan: 'pro', type: 'text' },
+        { key: 'name',            label: 'Nazwa',                    group: 'Podstawowe', plan: 'pro', type: 'text' },
+        { key: 'status', label: 'Status', group: 'Podstawowe', plan: 'pro', type: 'select',
+          options: [
+            { value: 0, label: 'Szkic' },
+            { value: 1, label: 'Wysłane' },
+            { value: 2, label: 'Odebrane' },
+            { value: 3, label: 'Zrealizowane' },
+            { value: 4, label: 'Częściowo zrealizowane' },
+            { value: 5, label: 'Anulowane' }
+          ]
+        },
+
+        // Dostawca
+        { key: 'supplier_id',   label: 'ID dostawcy',    group: 'Dostawca', plan: 'pro', type: 'number' },
+        { key: 'supplier_name', label: 'Nazwa dostawcy', group: 'Dostawca', plan: 'pro', type: 'text' },
+
+        // Płatnik
+        { key: 'payer_id',   label: 'ID płatnika',    group: 'Płatnik', plan: 'pro', type: 'number' },
+        { key: 'payer_name', label: 'Nazwa płatnika', group: 'Płatnik', plan: 'pro', type: 'text' },
+
+        // Magazyn
+        { key: 'warehouse_id',   label: 'ID magazynu',    group: 'Magazyn', plan: 'pro', type: 'number' },
+        { key: 'warehouse_name', label: 'Nazwa magazynu', group: 'Magazyn', plan: 'pro', type: 'text' },
+
+        // Finansowe
+        { key: 'currency',   label: 'Waluta',         group: 'Finansowe', plan: 'pro', type: 'text' },
+        { key: 'invoice_no', label: 'Numer faktury',  group: 'Finansowe', plan: 'pro', type: 'text' },
+
+        // Dodatkowe
+        { key: 'notes',     label: 'Notatki',   group: 'Dodatkowe', plan: 'pro', type: 'text' },
+        { key: 'series_id', label: 'ID serii',  group: 'Dodatkowe', plan: 'pro', type: 'number' },
+      ]
     }
   },
 
