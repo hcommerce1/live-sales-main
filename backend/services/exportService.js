@@ -1271,6 +1271,15 @@ class ExportService {
       const orders = await client.getOrdersWithPagination(filtersWithCommission);
       const deliveryTaxRate = settings.deliveryTaxRate || 23;
 
+      // Debug: log commission data availability
+      const ordersWithCommission = orders.filter(o => o.commission && (o.commission.net || o.commission.gross));
+      logger.info('Commission data check', {
+        totalOrders: orders.length,
+        ordersWithCommission: ordersWithCommission.length,
+        includeCommissionRequested: filtersWithCommission.include_commission_data,
+        sampleCommission: orders[0]?.commission || null
+      });
+
       // Transform orders to flat structure with all available fields
       const flatOrders = orders.map(order => ({
         order_id: order.order_id,
@@ -1364,15 +1373,31 @@ class ExportService {
         // Fetch inventory data if needed for purchase costs/margin
         if (this.needsInventoryForSummary(selectedFields)) {
           const productIds = new Set();
+          let totalProducts = 0;
+          let productsWithoutId = 0;
           enrichedOrders.forEach(o => {
             const products = o._products || [];
             products.forEach(p => {
-              if (p.product_id) productIds.add(String(p.product_id));
+              totalProducts++;
+              if (p.product_id && p.product_id !== 0 && p.product_id !== '0') {
+                productIds.add(String(p.product_id));
+              } else {
+                productsWithoutId++;
+              }
             });
+          });
+
+          logger.info('Product inventory mapping check', {
+            totalProducts,
+            productsWithValidId: productIds.size,
+            productsWithoutId,
+            percentWithoutId: totalProducts > 0 ? Math.round((productsWithoutId / totalProducts) * 100) : 0
           });
 
           if (productIds.size > 0) {
             inventoryData = await this.fetchInventoryDataForProducts(client, [...productIds]);
+          } else {
+            logger.warn('No products with valid product_id found - purchase costs will be 0');
           }
         }
 
@@ -2163,20 +2188,32 @@ class ExportService {
 
       // Inventory enrichment pipeline
       if (this.needsInventoryEnrichment(selectedFields) && orderProducts.length > 0) {
-        logger.info('Inventory enrichment requested for order_products', {
-          orderProductCount: orderProducts.length,
-          selectedInvFields: selectedFields.filter(f => f.startsWith('inv_'))
-        });
+        // Collect unique product_ids and count products without valid IDs
+        const allProductIds = orderProducts.map(op => op.product_id);
+        const productsWithoutId = allProductIds.filter(id => !id || id === 0 || id === '0').length;
 
-        // Collect unique product_ids
         const uniqueProductIds = [...new Set(
           orderProducts
             .map(op => String(op.product_id))
             .filter(id => id && id !== '0' && id !== 'undefined' && id !== 'null')
         )];
 
+        logger.info('Inventory enrichment requested for order_products', {
+          orderProductCount: orderProducts.length,
+          productsWithValidId: uniqueProductIds.length,
+          productsWithoutId,
+          percentWithoutId: orderProducts.length > 0 ? Math.round((productsWithoutId / orderProducts.length) * 100) : 0,
+          selectedInvFields: selectedFields.filter(f => f.startsWith('inv_'))
+        });
+
         // Fetch inventory data
         const inventoryMap = await this.fetchInventoryDataForProducts(client, uniqueProductIds);
+
+        logger.info('Inventory data merge result', {
+          requestedProducts: uniqueProductIds.length,
+          foundInInventory: inventoryMap.size,
+          missingFromInventory: uniqueProductIds.length - inventoryMap.size
+        });
 
         const inventoryPriceFormat = settings.inventoryPriceFormat || 'brutto';
 
