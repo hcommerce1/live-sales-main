@@ -445,6 +445,7 @@ const steps = [
 ]
 
 const scheduleOptions = [
+  { value: 1, label: '1 min' },
   { value: 5, label: '5 min' },
   { value: 15, label: '15 min' },
   { value: 30, label: '30 min' },
@@ -806,21 +807,26 @@ async function loadExistingExport() {
   try {
     const exportData = await API.exports.get(props.exportId)
     if (exportData) {
+      // Handle both snake_case and camelCase field names from API
+      const selectedFields = exportData.selected_fields || exportData.selectedFields || []
+      const scheduleMinutes = exportData.schedule_minutes || exportData.scheduleMinutes || 15
+      const sheetsConfig = (exportData.sheets_config || exportData.sheets || []).map(s => ({
+        sheet_url: s.sheet_url || s.sheetUrl || '',
+        write_mode: s.write_mode || s.writeMode || 'replace'
+      }))
+
       config.value = {
         id: exportData.id,
         name: exportData.name || 'Nowy eksport',
         description: exportData.description || '',
         dataset: exportData.dataset || 'orders',
-        selected_fields: exportData.selected_fields || [],
+        selected_fields: selectedFields,
         filters: exportData.filters || {
           logic: 'AND',
           groups: [{ logic: 'AND', conditions: [{ field: '', operator: '', value: '' }] }]
         },
-        sheets_config: exportData.sheets?.map(s => ({
-          sheet_url: s.sheet_url || '',
-          write_mode: s.write_mode || 'replace'
-        })) || [{ sheet_url: '', write_mode: 'replace' }],
-        schedule_minutes: exportData.schedule_minutes || 15,
+        sheets_config: sheetsConfig.length > 0 ? sheetsConfig : [{ sheet_url: '', write_mode: 'replace' }],
+        schedule_minutes: scheduleMinutes,
         status: exportData.status || 'active',
         settings: exportData.settings || { inventoryPriceFormat: 'brutto', deliveryTaxRate: 23, decimalSeparator: ',' }
       }
