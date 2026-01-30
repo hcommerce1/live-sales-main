@@ -2006,16 +2006,18 @@ class ExportService {
       return inventoryMap;
     }
 
-    // Dynamically fetch inventory ID from getInventories()
-    let inventoryId;
+    // Fetch all inventories (catalogs)
+    let inventories;
     try {
-      const inventories = await client.getInventories();
+      inventories = await client.getInventories();
       if (!inventories || inventories.length === 0) {
         logger.warn('No inventories found for enrichment, skipping inventory lookup');
         return inventoryMap;
       }
-      inventoryId = inventories[0].inventory_id;
-      logger.info('Using inventory for enrichment', { inventoryId, totalInventories: inventories.length });
+      logger.info('Found inventories for enrichment', {
+        totalInventories: inventories.length,
+        inventoryIds: inventories.map(inv => inv.inventory_id)
+      });
     } catch (error) {
       logger.warn('Failed to fetch inventories for enrichment', { error: error.message });
       return inventoryMap;
@@ -2024,27 +2026,46 @@ class ExportService {
     logger.info('Fetching inventory data for order product enrichment', {
       totalProductIds: productIds.length,
       validProductIds: validIds.length,
-      inventoryId,
+      inventoryCount: inventories.length,
       batchCount: Math.ceil(validIds.length / BATCH_SIZE)
     });
 
-    // Process in batches
-    for (let i = 0; i < validIds.length; i += BATCH_SIZE) {
-      const batch = validIds.slice(i, i + BATCH_SIZE);
+    // Try each inventory (catalog) until we find all products
+    for (const inventory of inventories) {
+      const inventoryId = inventory.inventory_id;
+      const remainingIds = validIds.filter(id => !inventoryMap.has(String(id)));
 
-      try {
-        const batchData = await client.getInventoryProductsData(batch, inventoryId);
+      if (remainingIds.length === 0) {
+        logger.info('All products found, stopping inventory search');
+        break;
+      }
 
-        for (const [productId, data] of Object.entries(batchData)) {
-          inventoryMap.set(String(productId), data);
+      logger.info('Searching inventory for products', {
+        inventoryId,
+        inventoryName: inventory.name,
+        remainingProducts: remainingIds.length
+      });
+
+      // Process in batches for this inventory
+      for (let i = 0; i < remainingIds.length; i += BATCH_SIZE) {
+        const batch = remainingIds.slice(i, i + BATCH_SIZE);
+
+        try {
+          const batchData = await client.getInventoryProductsData(batch, inventoryId);
+
+          for (const [productId, data] of Object.entries(batchData)) {
+            if (!inventoryMap.has(String(productId))) {
+              inventoryMap.set(String(productId), data);
+            }
+          }
+        } catch (error) {
+          logger.warn('Failed to fetch inventory batch for enrichment', {
+            batchStart: i,
+            batchSize: batch.length,
+            inventoryId,
+            error: error.message
+          });
         }
-      } catch (error) {
-        logger.warn('Failed to fetch inventory batch for enrichment', {
-          batchStart: i,
-          batchSize: batch.length,
-          inventoryId,
-          error: error.message
-        });
       }
     }
 
@@ -2223,7 +2244,7 @@ class ExportService {
       ds2_id = inv.invoice_id || null;
       ds2_type = inv.type === 'correcting' ? 'Korekta' : 'Faktura';
       ds2_number = inv.number || '';
-      ds2_date = inv.date_add || null;
+      ds2_date = inv.date_sell || null;
     }
 
     return {
