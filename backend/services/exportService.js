@@ -2324,7 +2324,25 @@ class ExportService {
 
     // Use invoice if available, otherwise fall back to receipt for totals
     const hasInvoice = inv && (inv.invoice_id || inv.number);
+    const hasReceipt = rcpt && (rcpt.receipt_id || rcpt.receipt_full_nr);
     const doc = hasInvoice ? inv : rcpt;
+
+    // Debug logging for first few orders
+    if (order.order_id && !this._docDebugLogged) {
+      this._docDebugLogged = true;
+      logger.info('Document merge debug', {
+        order_id: order.order_id,
+        hasInvoice,
+        hasReceipt,
+        inv_keys: Object.keys(inv),
+        rcpt_keys: Object.keys(rcpt),
+        rcpt_total_price_brutto: rcpt.total_price_brutto,
+        rcpt_products_total_brutto: rcpt.products_total_brutto,
+        rcpt_products_count: rcpt.products?.length,
+        doc_total_price_brutto: doc.total_price_brutto,
+        doc_products_total_brutto: doc.products_total_brutto
+      });
+    }
 
     return {
       ...order,
