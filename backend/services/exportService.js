@@ -2135,6 +2135,39 @@ class ExportService {
   }
 
   /**
+   * Calculate products and delivery totals from invoice items array
+   * @param {Array} items - Invoice items from API
+   * @returns {object} - { products_total_brutto, products_total_netto, delivery_total_brutto, delivery_total_netto }
+   */
+  calculateInvoiceTotals(items = []) {
+    let productsBrutto = 0;
+    let productsNetto = 0;
+    let deliveryBrutto = 0;
+    let deliveryNetto = 0;
+
+    for (const item of items) {
+      const qty = item.quantity || 1;
+      const brutto = (item.price_brutto || 0) * qty;
+      const netto = (item.price_netto || 0) * qty;
+
+      if (item.is_shipment === 1) {
+        deliveryBrutto += brutto;
+        deliveryNetto += netto;
+      } else {
+        productsBrutto += brutto;
+        productsNetto += netto;
+      }
+    }
+
+    return {
+      products_total_brutto: Math.round(productsBrutto * 100) / 100,
+      products_total_netto: Math.round(productsNetto * 100) / 100,
+      delivery_total_brutto: Math.round(deliveryBrutto * 100) / 100,
+      delivery_total_netto: Math.round(deliveryNetto * 100) / 100
+    };
+  }
+
+  /**
    * Fetch sales document data (invoices + receipts) for order enrichment.
    * Builds a Map of order_id -> { invoice, correction, receipt } for fast lookup.
    *
@@ -2149,7 +2182,12 @@ class ExportService {
     // (invoices may be created after order confirmation date)
     let invoices = [];
     try {
-      invoices = await client.getInvoicesWithPagination({});
+      const rawInvoices = await client.getInvoicesWithPagination({});
+      // Enrich invoices with calculated totals from items
+      invoices = rawInvoices.map(inv => ({
+        ...inv,
+        ...this.calculateInvoiceTotals(inv.items)
+      }));
       logger.info('Fetched invoices for order enrichment', { count: invoices.length });
     } catch (error) {
       logger.warn('Failed to fetch invoices for order enrichment', { error: error.message });
