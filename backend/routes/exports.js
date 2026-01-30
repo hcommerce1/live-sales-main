@@ -81,6 +81,134 @@ router.get('/field-definitions', requireCompany, async (req, res) => {
   }
 });
 
+// New field definitions service (v2 - new dataset structure)
+const fieldDefinitionsService = require('../services/export/fieldDefinitionsService');
+
+/**
+ * GET /api/exports/v2/field-definitions
+ * Get field definitions for all datasets (new structure)
+ *
+ * Returns all datasets with field groups, dynamic fields from BaseLinker,
+ * and currency conversion options.
+ *
+ * Query params:
+ * - inventoryId: ID katalogu (dla pól tekstowych produktów)
+ */
+router.get('/v2/field-definitions', requireCompany, async (req, res) => {
+  try {
+    // Get BaseLinker token from company secrets
+    const { PrismaClient } = require('@prisma/client');
+    const { decrypt } = require('../utils/crypto');
+    const prisma = new PrismaClient();
+
+    let token = null;
+
+    if (req.company?.id) {
+      const secret = await prisma.companySecret.findFirst({
+        where: {
+          companyId: req.company.id,
+          type: 'baselinker_token',
+          deletedAt: null
+        }
+      });
+
+      if (secret?.encryptedValue) {
+        try {
+          token = decrypt(secret.encryptedValue);
+        } catch (e) {
+          logger.warn('Failed to decrypt BaseLinker token');
+        }
+      }
+    }
+
+    const options = {};
+
+    if (req.query.inventoryId) {
+      options.inventoryId = parseInt(req.query.inventoryId, 10);
+    }
+
+    // Get field definitions (with dynamic fields if token available)
+    const definitions = await fieldDefinitionsService.getFieldDefinitions(token, options);
+
+    res.json({
+      success: true,
+      data: definitions
+    });
+
+  } catch (error) {
+    logger.error('Failed to get v2 field definitions', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/exports/v2/dataset/:datasetId/fields
+ * Get field definitions for a specific dataset
+ */
+router.get('/v2/dataset/:datasetId/fields', requireCompany, async (req, res) => {
+  try {
+    const { datasetId } = req.params;
+
+    // Get BaseLinker token
+    const { PrismaClient } = require('@prisma/client');
+    const { decrypt } = require('../utils/crypto');
+    const prisma = new PrismaClient();
+
+    let token = null;
+
+    if (req.company?.id) {
+      const secret = await prisma.companySecret.findFirst({
+        where: {
+          companyId: req.company.id,
+          type: 'baselinker_token',
+          deletedAt: null
+        }
+      });
+
+      if (secret?.encryptedValue) {
+        try {
+          token = decrypt(secret.encryptedValue);
+        } catch (e) {
+          logger.warn('Failed to decrypt BaseLinker token');
+        }
+      }
+    }
+
+    const options = {};
+
+    if (req.query.inventoryId) {
+      options.inventoryId = parseInt(req.query.inventoryId, 10);
+    }
+
+    const dataset = await fieldDefinitionsService.getDatasetFieldDefinitions(datasetId, token, options);
+
+    if (!dataset) {
+      return res.status(404).json({
+        success: false,
+        error: `Dataset not found: ${datasetId}`
+      });
+    }
+
+    res.json({
+      success: true,
+      data: dataset
+    });
+
+  } catch (error) {
+    logger.error('Failed to get dataset field definitions', {
+      datasetId: req.params.datasetId,
+      error: error.message
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 /**
  * GET /api/exports
  * Get all export configurations for current company
