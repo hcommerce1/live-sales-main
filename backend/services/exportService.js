@@ -2168,6 +2168,38 @@ class ExportService {
   }
 
   /**
+   * Calculate totals from receipt products array
+   * Note: Receipts don't have is_shipment flag, so all items are treated as products
+   * @param {Array} products - Receipt products from API
+   * @returns {object} - { total_price_brutto, total_price_netto, products_total_brutto, products_total_netto }
+   */
+  calculateReceiptTotals(products = []) {
+    let totalBrutto = 0;
+    let totalNetto = 0;
+
+    for (const item of products) {
+      const qty = item.quantity || 1;
+      const brutto = (item.price_brutto || 0) * qty;
+      const taxRate = item.tax_rate || 0;
+      // Calculate netto from brutto (receipts only have price_brutto)
+      const netto = taxRate > 0 ? brutto / (1 + taxRate / 100) : brutto;
+
+      totalBrutto += brutto;
+      totalNetto += netto;
+    }
+
+    return {
+      total_price_brutto: Math.round(totalBrutto * 100) / 100,
+      total_price_netto: Math.round(totalNetto * 100) / 100,
+      // For receipts, all items are products (no is_shipment flag available)
+      products_total_brutto: Math.round(totalBrutto * 100) / 100,
+      products_total_netto: Math.round(totalNetto * 100) / 100,
+      delivery_total_brutto: 0,
+      delivery_total_netto: 0
+    };
+  }
+
+  /**
    * Fetch sales document data (invoices + receipts) for order enrichment.
    * Builds a Map of order_id -> { invoice, correction, receipt } for fast lookup.
    *
@@ -2196,7 +2228,12 @@ class ExportService {
     // Fetch receipts - no date filter for same reason
     let receipts = [];
     try {
-      receipts = await client.getReceiptsWithPagination({});
+      const rawReceipts = await client.getReceiptsWithPagination({});
+      // Enrich receipts with calculated totals from products
+      receipts = rawReceipts.map(rcpt => ({
+        ...rcpt,
+        ...this.calculateReceiptTotals(rcpt.products)
+      }));
       logger.info('Fetched receipts for order enrichment', { count: receipts.length });
     } catch (error) {
       logger.warn('Failed to fetch receipts for order enrichment', { error: error.message });
@@ -2285,6 +2322,10 @@ class ExportService {
       ds2_date = inv.date_sell || null;
     }
 
+    // Use invoice if available, otherwise fall back to receipt for totals
+    const hasInvoice = inv && (inv.invoice_id || inv.number);
+    const doc = hasInvoice ? inv : rcpt;
+
     return {
       ...order,
       // Dokument sprzedaży 1 (Paragon - slot 1)
@@ -2297,16 +2338,16 @@ class ExportService {
       ds2_type,
       ds2_number,
       ds2_date,
-      // Wartości dokumentu (z faktury, priorytet nad paragonem)
-      ds_total_brutto: inv.total_price_brutto || 0,
-      ds_total_netto: inv.total_price_netto || 0,
-      ds_products_total_brutto: inv.products_total_brutto || 0,
-      ds_products_total_netto: inv.products_total_netto || 0,
-      ds_delivery_total_brutto: inv.delivery_total_brutto || 0,
-      ds_delivery_total_netto: inv.delivery_total_netto || 0,
+      // Wartości dokumentu (z faktury, lub paragonu jeśli brak faktury)
+      ds_total_brutto: doc.total_price_brutto || 0,
+      ds_total_netto: doc.total_price_netto || 0,
+      ds_products_total_brutto: doc.products_total_brutto || 0,
+      ds_products_total_netto: doc.products_total_netto || 0,
+      ds_delivery_total_brutto: doc.delivery_total_brutto || 0,
+      ds_delivery_total_netto: doc.delivery_total_netto || 0,
       ds_currency: inv.currency || order.currency || '',
-      // Szczegóły dokumentu
-      ds_payment_method: inv.payment || '',
+      // Szczegóły dokumentu (tylko z faktury)
+      ds_payment_method: inv.payment || rcpt.payment_method || '',
       ds_seller: inv.seller || '',
       ds_external_number: inv.external_invoice_number || '',
       ds_date_sell: inv.date_sell || '',
