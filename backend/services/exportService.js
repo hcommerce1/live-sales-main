@@ -2469,12 +2469,21 @@ class ExportService {
 
     // Create headers (with backward compatibility for renamed fields)
     const headers = migratedFields.map(({ original, effective }) => {
+      // Handle spacer fields - empty header
+      if (effective === 'spacer' || fieldTypes[effective] === 'spacer') {
+        return '';
+      }
       return fieldLabels[effective] || fieldLabels[original] || original;
     });
 
     // Create data rows
     const data = rawData.map(record => {
       return migratedFields.map(({ original, effective }) => {
+        // Handle spacer fields - always return empty string
+        if (effective === 'spacer' || fieldTypes[effective] === 'spacer') {
+          return '';
+        }
+
         let value = record[effective];
 
         // Format numbers with correct decimal separator

@@ -168,6 +168,9 @@ module.exports = {
         { key: 'ds_delivery_total_brutto_converted', label: 'Dok. dostawa brutto (przelicz.)',  group: 'Przewalutowanie', plan: 'pro', type: 'number' },
         { key: 'ds_delivery_total_netto_converted',  label: 'Dok. dostawa netto (przelicz.)',   group: 'Przewalutowanie', plan: 'pro', type: 'number' },
 
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
+
         // Podsumowanie produktów (agregacje)
         { key: 'products_total_value_brutto',         label: 'Produkty - wartość brutto',      group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
         { key: 'products_total_value_netto',          label: 'Produkty - wartość netto',       group: 'Podsumowanie produktów', plan: 'pro', type: 'number' },
@@ -215,6 +218,9 @@ module.exports = {
         { key: 'purchase_price', label: 'Cena zakupu',      group: 'Finansowe', plan: 'pro', type: 'number' },
         { key: 'profit_margin',  label: 'Marża (%)',        group: 'Finansowe', plan: 'pro', type: 'number' },
         { key: 'average_cost',   label: 'Średni koszt',     group: 'Finansowe', plan: 'pro', type: 'number' },
+
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
       ]
     },
 
@@ -289,6 +295,9 @@ module.exports = {
         // Zewnętrzne
         { key: 'external_invoice_number', label: 'Zewnętrzny numer faktury', group: 'Zewnętrzne', plan: 'pro', type: 'text' },
         { key: 'external_id',             label: 'Zewnętrzne ID',            group: 'Zewnętrzne', plan: 'pro', type: 'number' },
+
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
       ]
     },
 
@@ -417,6 +426,9 @@ module.exports = {
         { key: 'inv_profit_margin',         label: 'Marża % (magazyn)',           group: 'Dane z magazynu', plan: 'pro', type: 'number' },
         { key: 'inv_average_cost_netto',    label: 'Średni koszt netto (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
         { key: 'inv_average_cost_brutto',   label: 'Średni koszt brutto (magazyn)', group: 'Dane z magazynu', plan: 'pro', type: 'number' },
+
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
       ]
     },
 
@@ -481,6 +493,9 @@ module.exports = {
         { key: 'admin_comments', label: 'Komentarz wewnętrzny', group: 'Komentarze', plan: 'pro', type: 'text' },
         { key: 'extra_field_1',  label: 'Pole dodatkowe 1',     group: 'Komentarze', plan: 'pro', type: 'text' },
         { key: 'extra_field_2',  label: 'Pole dodatkowe 2',     group: 'Komentarze', plan: 'pro', type: 'text' },
+
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
       ]
     },
 
@@ -573,6 +588,9 @@ module.exports = {
         { key: 'storage_id',   label: 'ID magazynu',  group: 'Magazyn', plan: 'pro', type: 'number' },
         { key: 'warehouse_id', label: 'ID hurtowni',  group: 'Magazyn', plan: 'pro', type: 'number' },
         { key: 'bundle_id',    label: 'ID zestawu',   group: 'Magazyn', plan: 'pro', type: 'number' },
+
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
       ]
     },
 
@@ -626,6 +644,9 @@ module.exports = {
           ]
         },
         { key: 'is_return', label: 'Przesyłka zwrotna', group: 'Typ przesyłki', plan: 'basic', type: 'boolean' },
+
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
       ]
     },
 
@@ -658,6 +679,9 @@ module.exports = {
         { key: 'products_total_netto',  label: 'Produkty netto',   group: 'Finansowe', plan: 'pro', type: 'number' },
         { key: 'delivery_total_brutto', label: 'Dostawa brutto',   group: 'Finansowe', plan: 'pro', type: 'number' },
         { key: 'delivery_total_netto',  label: 'Dostawa netto',    group: 'Finansowe', plan: 'pro', type: 'number' },
+
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
       ]
     },
 
@@ -697,6 +721,9 @@ module.exports = {
         // Kontrahent
         { key: 'contractor', label: 'Kontrahent',       group: 'Kontrahent', plan: 'pro', type: 'text' },
         { key: 'invoice_no', label: 'Numer faktury',    group: 'Kontrahent', plan: 'pro', type: 'text' },
+
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
       ]
     },
 
@@ -742,6 +769,9 @@ module.exports = {
         // Dodatkowe
         { key: 'notes',     label: 'Notatki',   group: 'Dodatkowe', plan: 'pro', type: 'text' },
         { key: 'series_id', label: 'ID serii',  group: 'Dodatkowe', plan: 'pro', type: 'number' },
+
+        // Separator (pusta kolumna)
+        { key: 'spacer', label: '— Pusta kolumna —', group: 'Separator', plan: 'free', type: 'spacer', multi: true },
       ]
     }
   },
