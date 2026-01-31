@@ -47,8 +47,8 @@
       <div class="flex-1 flex flex-col min-w-0 border border-gray-200 rounded-xl bg-white overflow-hidden">
         <div class="p-3 bg-gray-50 border-b border-gray-200 flex-shrink-0">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold text-gray-900">Dostepne pola</h3>
-            <span class="text-sm text-gray-500">{{ groupedAvailableFields.reduce((sum, g) => sum + g.fields.length, 0) }} pol</span>
+            <h3 class="font-semibold text-gray-900">Dostępne pola</h3>
+            <span class="text-sm text-gray-500">{{ groupedAvailableFields.reduce((sum, g) => sum + g.fields.length, 0) }} pól</span>
           </div>
           <div class="relative">
             <input
@@ -106,7 +106,7 @@
             <h3 class="font-semibold text-blue-900 text-base">Wybrane pola</h3>
             <span class="text-sm font-bold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-full">{{ selectedFields.length }}</span>
           </div>
-          <p class="text-sm text-blue-700 mt-1.5">Przeciagnij aby zmienic kolejnosc</p>
+          <p class="text-sm text-blue-700 mt-1.5">Przeciągnij, aby zmienić kolejność</p>
         </div>
         <div
           class="flex-1 overflow-y-auto p-3"
@@ -153,8 +153,8 @@
             <svg class="w-16 h-16 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
             </svg>
-            <p class="font-medium text-base">Brak wybranych pol</p>
-            <p class="text-sm mt-1">Kliknij na pole po lewej aby je dodac</p>
+            <p class="font-medium text-base">Brak wybranych pól</p>
+            <p class="text-sm mt-1">Kliknij na pole po lewej, aby je dodać</p>
           </div>
         </div>
       </div>
@@ -170,7 +170,7 @@
           Zmiana typu usunie wybrane pola.
         </p>
         <p class="text-sm text-gray-500 mb-6">
-          Jesli potrzebujesz innego typu danych, utworz nowy eksport.
+          Jeśli potrzebujesz innego typu danych, utwórz nowy eksport.
         </p>
 
         <!-- Dataset options in modal (excluding currently selected) -->

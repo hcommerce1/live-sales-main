@@ -3036,7 +3036,7 @@ onBeforeUnmount(() => {
 
                     <!-- Plans Header with Variant Switcher -->
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl font-semibold">Dostepne plany</h2>
+                        <h2 class="text-xl font-semibold">Dostępne plany</h2>
                     </div>
 
                     <!-- Plans Component -->

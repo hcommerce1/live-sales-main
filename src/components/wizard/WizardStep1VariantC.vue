@@ -78,12 +78,12 @@
       <div v-if="selectedDataset" class="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-xl border border-blue-100 dark:border-blue-800">
         <div class="text-center">
           <div class="text-3xl font-bold text-blue-600 dark:text-blue-400">{{ selectedFields.length }}</div>
-          <div class="text-sm text-gray-600 dark:text-gray-300">pol wybranych</div>
-          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">z {{ fields.length }} dostepnych</div>
+          <div class="text-sm text-gray-600 dark:text-gray-300">pól wybranych</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">z {{ fields.length }} dostępnych</div>
         </div>
         <div class="flex gap-2 mt-3">
           <button type="button" class="flex-1 text-xs py-1.5 bg-white dark:bg-gray-700 dark:text-white border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600" @click="selectAll">Wszystkie</button>
-          <button type="button" class="flex-1 text-xs py-1.5 bg-white dark:bg-gray-700 dark:text-white border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600" @click="clearAll">Wyczysc</button>
+          <button type="button" class="flex-1 text-xs py-1.5 bg-white dark:bg-gray-700 dark:text-white border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600" @click="confirmClearAll">Wyczyść</button>
         </div>
       </div>
     </div>
@@ -143,7 +143,7 @@
 
       <!-- Selected fields reorder - improved styling -->
       <div v-if="selectedFields.length > 0" class="mt-4 flex-shrink-0 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <label class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3 block">Kolejnosc kolumn w arkuszu</label>
+        <label class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3 block">Kolejność kolumn w arkuszu</label>
         <div class="flex flex-wrap gap-2.5 p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 max-h-64 min-h-[150px] overflow-y-auto">
           <template v-for="(fieldKey, index) in selectedFields" :key="fieldKey">
             <!-- Drop indicator line before element -->
@@ -382,6 +382,13 @@ function selectAll() {
 
 function clearAll() {
   emit('update:selectedFields', [])
+}
+
+function confirmClearAll() {
+  if (props.selectedFields.length === 0) return
+  if (confirm(`Czy na pewno chcesz wyczyścić wszystkie ${props.selectedFields.length} wybrane pola?`)) {
+    clearAll()
+  }
 }
 
 function getFieldLabel(fieldKey) {
