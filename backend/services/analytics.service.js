@@ -15,7 +15,7 @@ async function getCompanyToken(companyId) {
   if (!secret) {
     throw new Error('BaseLinker token not configured for this company');
   }
-  return secret;
+  return secret.value;
 }
 
 /**
