@@ -1035,7 +1035,7 @@ class ExportService {
           customHeaders: config.settings?.customHeaders || {},
           customFields: config.settings?.customFields || [],
           currencyConversion: config.settings?.currencyConversion || null,
-          inventoryId: config.settings?.inventoryId || null,
+          inventoryId: config.settings?.inventoryId || config.filters?.inventory_ids?.[0] || null,
           storageId: config.settings?.storageId || null,
           integrationId: config.settings?.integrationId || null,
           dataType: config.settings?.dataType || null,
