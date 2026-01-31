@@ -14,13 +14,15 @@ module.exports = {
   icon: 'truck',
 
   // Źródło danych
+  // Purchase orders są globalne per konto - nie wymagają inventory
   primaryQuery: 'getInventoryPurchaseOrders',
   enrichments: ['purchase-items'],
-  requiresInventory: true,
+  requiresInventory: false,
 
-  // Filtry dostępne dla tego datasetu
+  // Filtry dostępne dla tego datasetu (wszystkie opcjonalne)
   availableFilters: [
-    { key: 'inventoryId', label: 'Katalog', type: 'inventory', required: true },
+    { key: 'warehouseId', label: 'Magazyn', type: 'warehouse' },
+    { key: 'supplierId', label: 'Dostawca', type: 'supplier' },
     { key: 'dateFrom', label: 'Data od', type: 'date' },
     { key: 'dateTo', label: 'Data do', type: 'date' },
     { key: 'status', label: 'Status', type: 'select', options: [
@@ -31,9 +33,7 @@ module.exports = {
       { value: '3', label: 'Zakończone' },
       { value: '4', label: 'Częściowo zakończone' },
       { value: '5', label: 'Anulowane' }
-    ]},
-    { key: 'supplierId', label: 'Dostawca', type: 'supplier' },
-    { key: 'warehouseId', label: 'Magazyn', type: 'warehouse' }
+    ]}
   ],
 
   // Grupy pól

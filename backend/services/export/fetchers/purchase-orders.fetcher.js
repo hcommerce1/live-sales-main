@@ -16,8 +16,12 @@ class PurchaseOrdersFetcher extends BaseFetcher {
    * Pobiera zamówienia zakupu z BaseLinker API
    *
    * @param {string} token - Token API BaseLinker
-   * @param {object} filters - Filtry
-   * @param {number} filters.inventoryId - ID katalogu (wymagany)
+   * @param {object} filters - Filtry (wszystkie opcjonalne)
+   * @param {number} [filters.warehouseId] - ID magazynu
+   * @param {number} [filters.supplierId] - ID dostawcy
+   * @param {number} [filters.seriesId] - ID serii dokumentów
+   * @param {string} [filters.dateFrom] - Data od
+   * @param {string} [filters.dateTo] - Data do
    * @param {object} options - Opcje
    * @returns {Promise<Array>} - Tablica znormalizowanych zamówień
    */
@@ -25,14 +29,13 @@ class PurchaseOrdersFetcher extends BaseFetcher {
     this.resetStats();
     this.logFetchStart({ filters, options });
 
-    const inventoryId = filters.inventoryId || options.inventoryId;
-    if (!inventoryId) {
-      throw new Error('inventoryId is required for purchase_orders dataset');
-    }
+    // Purchase orders są globalne per konto BaseLinker - nie wymagają inventoryId
 
     try {
-      const apiFilters = this.convertFilters(filters, inventoryId);
+      const apiFilters = this.convertFilters(filters);
       const maxRecords = options.maxRecords || 10000;
+
+      this.logger.info('PurchaseOrdersFetcher: API filters', { apiFilters });
 
       const allOrders = await this.fetchAllPages(
         async (page) => {
@@ -40,6 +43,8 @@ class PurchaseOrdersFetcher extends BaseFetcher {
             ...apiFilters,
             page: page || 1
           };
+
+          this.logger.info('PurchaseOrdersFetcher: Request params', { params });
 
           const response = await this.baselinkerService.makeRequest(
             token,
@@ -75,12 +80,27 @@ class PurchaseOrdersFetcher extends BaseFetcher {
   }
 
   /**
-   * Konwertuje filtry UI na format API
+   * Konwertuje filtry UI na format API BaseLinker
+   *
+   * Dozwolone parametry getInventoryPurchaseOrders:
+   * - warehouse_id, supplier_id, series_id
+   * - date_from, date_to (Unix timestamp)
+   * - filter_document_number, page
    */
-  convertFilters(filters, inventoryId) {
-    const converted = {
-      inventory_id: inventoryId
-    };
+  convertFilters(filters) {
+    const converted = {};
+
+    if (filters.warehouseId) {
+      converted.warehouse_id = filters.warehouseId;
+    }
+
+    if (filters.supplierId) {
+      converted.supplier_id = filters.supplierId;
+    }
+
+    if (filters.seriesId) {
+      converted.series_id = filters.seriesId;
+    }
 
     if (filters.dateFrom) {
       converted.date_from = this.toUnixTimestamp(filters.dateFrom);
@@ -90,16 +110,8 @@ class PurchaseOrdersFetcher extends BaseFetcher {
       converted.date_to = this.toUnixTimestamp(filters.dateTo);
     }
 
-    if (filters.status !== undefined && filters.status !== '') {
-      converted.status = parseInt(filters.status, 10);
-    }
-
-    if (filters.supplierId) {
-      converted.supplier_id = filters.supplierId;
-    }
-
-    if (filters.warehouseId) {
-      converted.warehouse_id = filters.warehouseId;
+    if (filters.documentNumber) {
+      converted.filter_document_number = filters.documentNumber;
     }
 
     return converted;
