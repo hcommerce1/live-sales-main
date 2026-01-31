@@ -1,12 +1,12 @@
 <template>
   <!-- Full-screen wizard - NO SCROLL, everything visible -->
-  <div class="h-screen flex flex-col bg-gray-50 overflow-hidden">
+  <div class="h-screen flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
 
     <!-- Compact Header -->
-    <div class="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex-shrink-0">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-6">
-          <h1 class="text-lg font-semibold text-gray-900">
+          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
             {{ props.exportId ? 'Edytuj eksport' : 'Nowy eksport' }}
           </h1>
 
@@ -17,9 +17,9 @@
                 type="button"
                 class="flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium transition-all"
                 :class="{
-                  'bg-blue-100 text-blue-700': currentStep === index,
-                  'text-green-600 hover:bg-green-50': currentStep > index,
-                  'text-gray-400': currentStep < index
+                  'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300': currentStep === index,
+                  'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30': currentStep > index,
+                  'text-gray-400 dark:text-gray-500': currentStep < index
                 }"
                 :disabled="currentStep < index"
                 @click="goToStep(index)"
@@ -28,7 +28,7 @@
                   :class="{
                     'bg-blue-600 text-white border-blue-600': currentStep === index,
                     'bg-green-500 text-white border-green-500': currentStep > index,
-                    'border-gray-300 text-gray-400': currentStep < index
+                    'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500': currentStep < index
                   }"
                 >
                   <svg v-if="currentStep > index" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -38,14 +38,14 @@
                 </span>
                 <span class="hidden lg:inline">{{ step.label }}</span>
               </button>
-              <div v-if="index < steps.length - 1" class="w-4 h-px bg-gray-300"/>
+              <div v-if="index < steps.length - 1" class="w-4 h-px bg-gray-300 dark:bg-gray-600"/>
             </template>
           </div>
         </div>
 
         <button
           type="button"
-          class="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-gray-100 rounded transition-colors"
+          class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
           @click="cancelWizard"
           title="Zamknij"
         >
@@ -61,31 +61,31 @@
       <!-- Loading -->
       <div v-if="isLoading" class="h-full flex items-center justify-center">
         <div class="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent"></div>
-        <span class="ml-3 text-gray-500">Wczytywanie...</span>
+        <span class="ml-3 text-gray-500 dark:text-gray-400">Wczytywanie...</span>
       </div>
 
       <!-- Step 1: Dataset & Fields - A/B TEST VARIANTS -->
       <div v-else-if="currentStep === 0" class="h-full flex flex-col">
         <!-- Variant Toggle (Akordeony / Dual Panel) -->
         <div class="flex-shrink-0 mb-4 flex items-center justify-end">
-          <div class="flex border border-gray-200 rounded-lg overflow-hidden">
+          <div class="flex border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
             <button
               type="button"
               @click="setVariant('C')"
               class="px-4 py-2 text-sm font-medium transition-all duration-200"
               :class="activeVariant === 'C'
                 ? 'bg-indigo-500 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'"
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'"
             >
               Akordeony
             </button>
             <button
               type="button"
               @click="setVariant('D')"
-              class="px-4 py-2 text-sm font-medium transition-all duration-200 border-l border-gray-200"
+              class="px-4 py-2 text-sm font-medium transition-all duration-200 border-l border-gray-200 dark:border-gray-700"
               :class="activeVariant === 'D'
                 ? 'bg-indigo-500 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'"
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'"
             >
               Dual Panel
             </button>
@@ -93,32 +93,32 @@
         </div>
 
         <!-- External storage selection for products_external dataset -->
-        <div v-if="requiresStorage" class="flex-shrink-0 mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-          <label class="block text-sm font-medium text-purple-800 mb-2">
+        <div v-if="requiresStorage" class="flex-shrink-0 mb-4 p-4 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded-lg">
+          <label class="block text-sm font-medium text-purple-800 dark:text-purple-300 mb-2">
             Wybierz magazyn zewnętrzny
           </label>
           <select
             v-model="config.settings.storageId"
-            class="w-full md:w-80 px-3 py-2 border border-purple-300 rounded-lg text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none bg-white"
+            class="w-full md:w-80 px-3 py-2 border border-purple-300 dark:border-purple-600 rounded-lg text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800 outline-none bg-white dark:bg-gray-800 dark:text-gray-200"
           >
             <option :value="null" disabled>-- Wybierz magazyn --</option>
             <option v-for="storage in externalStorages" :key="storage.storage_id" :value="storage.storage_id">
               {{ storage.name }} ({{ storage.type }})
             </option>
           </select>
-          <p v-if="externalStorages.length === 0" class="text-sm text-purple-600 mt-2">
+          <p v-if="externalStorages.length === 0" class="text-sm text-purple-600 dark:text-purple-400 mt-2">
             Brak zewnętrznych magazynów. Sprawdź konfigurację w BaseLinker.
           </p>
         </div>
 
         <!-- Data type selection for basic_data dataset -->
-        <div v-if="requiresDataType" class="flex-shrink-0 mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <label class="block text-sm font-medium text-green-800 mb-2">
+        <div v-if="requiresDataType" class="flex-shrink-0 mb-4 p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg">
+          <label class="block text-sm font-medium text-green-800 dark:text-green-300 mb-2">
             Wybierz typ danych
           </label>
           <select
             v-model="config.settings.dataType"
-            class="w-full md:w-80 px-3 py-2 border border-green-300 rounded-lg text-sm focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none bg-white"
+            class="w-full md:w-80 px-3 py-2 border border-green-300 dark:border-green-600 rounded-lg text-sm focus:border-green-500 focus:ring-2 focus:ring-green-200 dark:focus:ring-green-800 outline-none bg-white dark:bg-gray-800 dark:text-gray-200"
           >
             <option :value="null" disabled>-- Wybierz typ danych --</option>
             <option v-for="dt in currentDatasetConfig.dataTypes" :key="dt.id" :value="dt.id">
@@ -143,21 +143,21 @@
 
       <!-- Step 2: Target Sheets (was Step 3) -->
       <div v-else-if="currentStep === 1" class="h-full flex flex-col">
-        <p class="text-sm text-gray-500 mb-4 flex-shrink-0">
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 flex-shrink-0">
           Podaj link do arkusza Google Sheets.
         </p>
 
         <!-- Duplicate URL warning -->
-        <div v-if="duplicateSheetWarning" class="p-3 bg-red-50 border border-red-300 rounded-lg mb-4 flex-shrink-0">
+        <div v-if="duplicateSheetWarning" class="p-3 bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg mb-4 flex-shrink-0">
           <div class="flex items-start gap-3">
             <svg class="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
             </svg>
             <div>
-              <p class="text-sm font-medium text-red-800">
+              <p class="text-sm font-medium text-red-800 dark:text-red-300">
                 {{ duplicateInSameExport ? 'Zduplikowany arkusz w tym eksporcie!' : 'Ten arkusz jest już używany!' }}
               </p>
-              <p class="text-sm text-red-700 mt-1">
+              <p class="text-sm text-red-700 dark:text-red-400 mt-1">
                 {{ duplicateInSameExport
                   ? 'Ten sam arkusz (ta sama zakładka) nie może być użyty wielokrotnie w jednym eksporcie.'
                   : 'Każdy eksport musi mieć unikalny arkusz docelowy.' }}
@@ -182,27 +182,27 @@
           <!-- Left: Form -->
           <div class="flex flex-col gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Nazwa eksportu</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Nazwa eksportu</label>
               <input
                 v-model="config.name"
                 type="text"
                 placeholder="np. Zamówienia dzienne"
-                class="w-full px-4 py-3 border border-gray-200 rounded-lg text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 outline-none bg-white dark:bg-gray-800 dark:text-gray-200"
               />
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Opis (opcjonalny)</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Opis (opcjonalny)</label>
               <textarea
                 v-model="config.description"
                 rows="3"
                 placeholder="Krótki opis eksportu..."
-                class="w-full px-4 py-3 border border-gray-200 rounded-lg text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none resize-none"
+                class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 outline-none resize-none bg-white dark:bg-gray-800 dark:text-gray-200"
               />
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Częstotliwość</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Częstotliwość</label>
               <div class="flex flex-wrap gap-2">
                 <button
                   v-for="option in scheduleOptions"
@@ -210,8 +210,8 @@
                   type="button"
                   class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
                   :class="{
-                    'border-blue-500 bg-blue-50 text-blue-700': config.schedule_minutes === option.value,
-                    'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.schedule_minutes !== option.value
+                    'border-blue-500 bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': config.schedule_minutes === option.value,
+                    'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700': config.schedule_minutes !== option.value
                   }"
                   @click="config.schedule_minutes = option.value"
                 >
@@ -221,43 +221,43 @@
             </div>
 
             <!-- Inventory selection for products dataset (multi-select) - moved from Step 1 -->
-            <div v-if="requiresInventory" class="border border-blue-200 bg-blue-50/50 rounded-lg p-4">
-              <label class="block text-sm font-medium text-blue-900 mb-2">
+            <div v-if="requiresInventory" class="border border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/30 rounded-lg p-4">
+              <label class="block text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
                 Wybierz katalogi produktów
-                <span class="font-normal text-blue-600">(można wybrać wiele)</span>
+                <span class="font-normal text-blue-600 dark:text-blue-400">(można wybrać wiele)</span>
               </label>
-              <div v-if="inventories.length > 0" class="space-y-1 max-h-48 overflow-y-auto border border-blue-200 rounded-lg bg-white p-2">
+              <div v-if="inventories.length > 0" class="space-y-1 max-h-48 overflow-y-auto border border-blue-200 dark:border-blue-700 rounded-lg bg-white dark:bg-gray-800 p-2">
                 <label
                   v-for="inv in inventories"
                   :key="inv.inventory_id"
-                  class="flex items-center gap-2 p-2 hover:bg-blue-50 rounded cursor-pointer transition-colors"
+                  class="flex items-center gap-2 p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded cursor-pointer transition-colors"
                 >
                   <input
                     type="checkbox"
                     :value="inv.inventory_id"
                     v-model="config.filters.inventory_ids"
-                    class="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                    class="w-4 h-4 rounded border-blue-300 dark:border-blue-600 text-blue-600 focus:ring-blue-500"
                   >
-                  <span class="text-sm text-gray-700">{{ inv.name }}</span>
-                  <span class="text-xs text-gray-400">(ID: {{ inv.inventory_id }})</span>
+                  <span class="text-sm text-gray-700 dark:text-gray-300">{{ inv.name }}</span>
+                  <span class="text-xs text-gray-400 dark:text-gray-500">(ID: {{ inv.inventory_id }})</span>
                 </label>
               </div>
-              <p v-if="inventories.length === 0" class="text-sm text-blue-600 mt-2">
+              <p v-if="inventories.length === 0" class="text-sm text-blue-600 dark:text-blue-400 mt-2">
                 Brak katalogów. Upewnij się, że masz skonfigurowaną integrację z BaseLinker.
               </p>
-              <p v-if="config.filters.inventory_ids?.length > 0" class="text-xs text-blue-700 mt-2">
+              <p v-if="config.filters.inventory_ids?.length > 0" class="text-xs text-blue-700 dark:text-blue-400 mt-2">
                 Wybrano: {{ config.filters.inventory_ids.length }} katalog(ów)
               </p>
             </div>
 
             <!-- Settings: Netto/Brutto (order_products only) -->
-            <div v-if="showSettingsSection" class="border border-blue-200 bg-blue-50/50 rounded-lg p-4 space-y-4">
-              <h4 class="text-sm font-semibold text-blue-900">Ustawienia przeliczania cen</h4>
+            <div v-if="showSettingsSection" class="border border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/30 rounded-lg p-4 space-y-4">
+              <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-300">Ustawienia przeliczania cen</h4>
 
               <!-- Delivery VAT rate -->
               <div v-if="showDeliveryTaxSetting">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Stawka VAT na dostawę</label>
-                <p class="text-xs text-gray-500 mb-2">BaseLinker nie podaje stawki VAT dostawy — wybierz odpowiednią stawkę</p>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stawka VAT na dostawę</label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">BaseLinker nie podaje stawki VAT dostawy — wybierz odpowiednią stawkę</p>
                 <div class="flex flex-wrap gap-2">
                   <button
                     v-for="opt in deliveryTaxOptions"
@@ -265,8 +265,8 @@
                     type="button"
                     class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
                     :class="{
-                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.deliveryTaxRate === opt.value,
-                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.deliveryTaxRate !== opt.value
+                      'border-blue-500 bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': config.settings.deliveryTaxRate === opt.value,
+                      'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700': config.settings.deliveryTaxRate !== opt.value
                     }"
                     @click="config.settings.deliveryTaxRate = opt.value"
                   >
@@ -277,15 +277,15 @@
 
               <!-- Inventory price format -->
               <div v-if="showInventoryPriceFormatSetting">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Ceny zakupowe w magazynie są zapisane jako</label>
-                <p class="text-xs text-gray-500 mb-2">Sprawdź ustawienia w panelu BaseLinker</p>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ceny zakupowe w magazynie są zapisane jako</label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Sprawdź ustawienia w panelu BaseLinker</p>
                 <div class="flex gap-2">
                   <button
                     type="button"
                     class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
                     :class="{
-                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.inventoryPriceFormat === 'netto',
-                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.inventoryPriceFormat !== 'netto'
+                      'border-blue-500 bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': config.settings.inventoryPriceFormat === 'netto',
+                      'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700': config.settings.inventoryPriceFormat !== 'netto'
                     }"
                     @click="config.settings.inventoryPriceFormat = 'netto'"
                   >
@@ -295,8 +295,8 @@
                     type="button"
                     class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
                     :class="{
-                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.inventoryPriceFormat === 'brutto',
-                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.inventoryPriceFormat !== 'brutto'
+                      'border-blue-500 bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': config.settings.inventoryPriceFormat === 'brutto',
+                      'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700': config.settings.inventoryPriceFormat !== 'brutto'
                     }"
                     @click="config.settings.inventoryPriceFormat = 'brutto'"
                   >
@@ -307,15 +307,15 @@
 
               <!-- Decimal separator format -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Format liczb w arkuszu</label>
-                <p class="text-xs text-gray-500 mb-2">Wybierz separator dziesiętny zgodny z ustawieniami Twojego arkusza Google</p>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Format liczb w arkuszu</label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Wybierz separator dziesiętny zgodny z ustawieniami Twojego arkusza Google</p>
                 <div class="flex gap-2">
                   <button
                     type="button"
                     class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
                     :class="{
-                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.decimalSeparator === ',',
-                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.decimalSeparator !== ','
+                      'border-blue-500 bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': config.settings.decimalSeparator === ',',
+                      'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700': config.settings.decimalSeparator !== ','
                     }"
                     @click="config.settings.decimalSeparator = ','"
                   >
@@ -325,8 +325,8 @@
                     type="button"
                     class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
                     :class="{
-                      'border-blue-500 bg-blue-50 text-blue-700': config.settings.decimalSeparator === '.',
-                      'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.decimalSeparator !== '.'
+                      'border-blue-500 bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': config.settings.decimalSeparator === '.',
+                      'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700': config.settings.decimalSeparator !== '.'
                     }"
                     @click="config.settings.decimalSeparator = '.'"
                   >
@@ -336,12 +336,12 @@
               </div>
 
               <!-- Currency conversion (orders only) -->
-              <div v-if="showCurrencyConversionSetting" class="border-t border-blue-200 pt-4 mt-4">
+              <div v-if="showCurrencyConversionSetting" class="border-t border-blue-200 dark:border-blue-700 pt-4 mt-4">
                 <div class="flex items-center gap-3 mb-3">
                   <button
                     type="button"
                     class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                    :class="config.settings.currencyConversion?.enabled ? 'bg-blue-600' : 'bg-gray-200'"
+                    :class="config.settings.currencyConversion?.enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'"
                     @click="toggleCurrencyConversion"
                   >
                     <span
@@ -349,16 +349,16 @@
                       :class="config.settings.currencyConversion?.enabled ? 'translate-x-5' : 'translate-x-0'"
                     />
                   </button>
-                  <label class="text-sm font-medium text-gray-700">Przewalutowanie</label>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Przewalutowanie</label>
                 </div>
 
                 <div v-if="config.settings.currencyConversion?.enabled" class="space-y-4 pl-14">
                   <!-- Target currency -->
                   <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Waluta docelowa</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Waluta docelowa</label>
                     <select
                       v-model="config.settings.currencyConversion.targetCurrency"
-                      class="w-full md:w-48 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none bg-white"
+                      class="w-full md:w-48 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 outline-none bg-white dark:bg-gray-800 dark:text-gray-200"
                     >
                       <option v-for="opt in currencyOptions" :key="opt.value" :value="opt.value">
                         {{ opt.label }}
@@ -368,8 +368,8 @@
 
                   <!-- Exchange rate date source -->
                   <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Data kursu wymiany</label>
-                    <p class="text-xs text-gray-500 mb-2">Wybierz ktora data ma byc uzyta do pobrania kursu NBP</p>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data kursu wymiany</label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Wybierz ktora data ma byc uzyta do pobrania kursu NBP</p>
                     <div class="flex flex-wrap gap-2">
                       <button
                         v-for="opt in exchangeRateDateOptions"
@@ -377,8 +377,8 @@
                         type="button"
                         class="px-4 py-2 rounded-lg border text-sm font-medium transition-all"
                         :class="{
-                          'border-blue-500 bg-blue-50 text-blue-700': config.settings.currencyConversion?.exchangeRateSource === opt.value,
-                          'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50': config.settings.currencyConversion?.exchangeRateSource !== opt.value
+                          'border-blue-500 bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': config.settings.currencyConversion?.exchangeRateSource === opt.value,
+                          'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700': config.settings.currencyConversion?.exchangeRateSource !== opt.value
                         }"
                         @click="config.settings.currencyConversion.exchangeRateSource = opt.value"
                       >
@@ -387,7 +387,7 @@
                     </div>
                   </div>
 
-                  <p class="text-xs text-gray-500">
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
                     Kursy wymiany pobierane sa z Narodowego Banku Polskiego (NBP).
                     Przeliczone wartosci pojawia sie w dodatkowych kolumnach.
                   </p>
@@ -397,28 +397,28 @@
           </div>
 
           <!-- Right: Summary -->
-          <div class="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 class="text-sm font-semibold text-gray-900 mb-4">Podsumowanie konfiguracji</h3>
+          <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4">Podsumowanie konfiguracji</h3>
             <div class="space-y-3">
-              <div class="flex justify-between py-2 border-b border-gray-100">
-                <span class="text-gray-600">Typ danych</span>
-                <span class="font-medium text-gray-900">{{ getDatasetLabel(config.dataset) }}</span>
+              <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                <span class="text-gray-600 dark:text-gray-400">Typ danych</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ getDatasetLabel(config.dataset) }}</span>
               </div>
-              <div v-if="requiresInventory" class="flex justify-between py-2 border-b border-gray-100">
-                <span class="text-gray-600">Katalogi</span>
-                <span class="font-medium text-gray-900">{{ getInventoryNames(config.filters?.inventory_ids) }}</span>
+              <div v-if="requiresInventory" class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                <span class="text-gray-600 dark:text-gray-400">Katalogi</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ getInventoryNames(config.filters?.inventory_ids) }}</span>
               </div>
-              <div class="flex justify-between py-2 border-b border-gray-100">
-                <span class="text-gray-600">Liczba pól</span>
-                <span class="font-medium text-gray-900">{{ config.selected_fields.length }}</span>
+              <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                <span class="text-gray-600 dark:text-gray-400">Liczba pól</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ config.selected_fields.length }}</span>
               </div>
-              <div class="flex justify-between py-2 border-b border-gray-100">
-                <span class="text-gray-600">Filtry</span>
-                <span class="font-medium text-gray-900">{{ getFilterSummary() }}</span>
+              <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                <span class="text-gray-600 dark:text-gray-400">Filtry</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ getFilterSummary() }}</span>
               </div>
               <div class="flex justify-between py-2">
-                <span class="text-gray-600">Arkusze docelowe</span>
-                <span class="font-medium text-gray-900">{{ config.sheets_config?.length || 1 }}</span>
+                <span class="text-gray-600 dark:text-gray-400">Arkusze docelowe</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ config.sheets_config?.length || 1 }}</span>
               </div>
             </div>
           </div>
@@ -427,11 +427,11 @@
     </div>
 
     <!-- Compact Footer -->
-    <div class="bg-white border-t border-gray-200 px-6 py-3 flex-shrink-0">
+    <div class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-3 flex-shrink-0">
       <div class="flex items-center justify-between">
         <button
           type="button"
-          class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+          class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           @click="cancelWizard"
         >
           Anuluj
@@ -441,7 +441,7 @@
           <button
             v-if="currentStep > 0"
             type="button"
-            class="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            class="px-5 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
             @click="prevStep"
           >
             Wstecz

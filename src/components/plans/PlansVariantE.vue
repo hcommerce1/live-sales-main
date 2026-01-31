@@ -4,9 +4,9 @@
     <div
       v-for="plan in plans"
       :key="plan.id"
-      class="relative bg-white rounded-xl shadow-sm border-2 p-6 flex flex-col"
+      class="relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 p-6 flex flex-col"
       :class="[
-        plan.id === currentPlanId ? 'border-blue-500' : 'border-gray-200',
+        plan.id === currentPlanId ? 'border-blue-500' : 'border-gray-200 dark:border-gray-700',
         plan.id === 'basic' ? 'md:-mt-2 md:mb-2 md:shadow-lg' : ''
       ]"
     >
@@ -23,22 +23,22 @@
              :class="planStyles[plan.id].iconBg">
           <component :is="planStyles[plan.id].icon" class="w-7 h-7" :class="planStyles[plan.id].iconColor" />
         </div>
-        <div v-if="plan.id === currentPlanId" class="text-xs text-blue-600 font-medium mb-1">AKTUALNY PLAN</div>
-        <h3 class="text-xl font-bold text-gray-900">{{ plan.name }}</h3>
-        <p class="text-sm text-gray-500 mt-1">{{ planStyles[plan.id].tagline }}</p>
+        <div v-if="plan.id === currentPlanId" class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">AKTUALNY PLAN</div>
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white">{{ plan.name }}</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ planStyles[plan.id].tagline }}</p>
       </div>
 
       <!-- Price -->
-      <div class="text-center my-5 py-4 border-y border-gray-100">
-        <div class="text-4xl font-bold" :class="plan.price?.monthlyRaw === 0 ? 'text-gray-600' : 'text-gray-900'">
+      <div class="text-center my-5 py-4 border-y border-gray-100 dark:border-gray-700">
+        <div class="text-4xl font-bold" :class="plan.price?.monthlyRaw === 0 ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-white'">
           {{ getPlanPrice(plan) }}
-          <span v-if="plan.price?.monthlyRaw > 0" class="text-base font-normal text-gray-500">brutto</span>
+          <span v-if="plan.price?.monthlyRaw > 0" class="text-base font-normal text-gray-500 dark:text-gray-400">brutto</span>
         </div>
-        <div v-if="plan.price?.monthlyRaw > 0" class="text-sm text-gray-500 mt-1">
+        <div v-if="plan.price?.monthlyRaw > 0" class="text-sm text-gray-500 dark:text-gray-400 mt-1">
           {{ formatNettoPrice(plan) }} netto / {{ selectedInterval === 'monthly' ? 'miesiac' : 'rok' }}
         </div>
         <div v-if="selectedInterval === 'yearly' && plan.price?.monthlyRaw > 0" class="mt-2">
-          <span class="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">
+          <span class="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 text-xs font-medium px-2 py-1 rounded-full">
             <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
             </svg>
@@ -51,21 +51,21 @@
       <div class="flex-1 space-y-3">
         <div v-for="feature in getHighlightedFeatures(plan)" :key="feature.label"
              class="flex items-center gap-3 p-2 rounded-lg"
-             :class="feature.highlighted ? 'bg-indigo-50' : ''">
+             :class="feature.highlighted ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''">
           <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-               :class="feature.available ? 'bg-green-100' : 'bg-gray-100'">
-            <svg v-if="feature.available" class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+               :class="feature.available ? 'bg-green-100 dark:bg-green-900/50' : 'bg-gray-100 dark:bg-gray-700'">
+            <svg v-if="feature.available" class="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
             </svg>
-            <svg v-else class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg v-else class="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
             </svg>
           </div>
           <div class="flex-1">
-            <span class="text-sm" :class="feature.available ? 'text-gray-900' : 'text-gray-400'">
+            <span class="text-sm" :class="feature.available ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'">
               {{ feature.label }}
             </span>
-            <span v-if="feature.value" class="ml-1 text-sm font-medium text-indigo-700">{{ feature.value }}</span>
+            <span v-if="feature.value" class="ml-1 text-sm font-medium text-indigo-700 dark:text-indigo-400">{{ feature.value }}</span>
           </div>
         </div>
       </div>
@@ -82,10 +82,10 @@
       >
         Rozpocznij z {{ plan.name }}
       </button>
-      <div v-else-if="plan.id === currentPlanId" class="mt-6 w-full bg-gray-100 text-gray-600 px-6 py-3 rounded-lg text-center font-medium">
+      <div v-else-if="plan.id === currentPlanId" class="mt-6 w-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-6 py-3 rounded-lg text-center font-medium">
         Twoj aktualny plan
       </div>
-      <div v-else class="mt-6 w-full border-2 border-gray-200 text-gray-500 px-6 py-3 rounded-lg text-center font-medium hover:border-gray-300 cursor-pointer transition-colors">
+      <div v-else class="mt-6 w-full border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 px-6 py-3 rounded-lg text-center font-medium hover:border-gray-300 dark:hover:border-gray-500 cursor-pointer transition-colors">
         Kontynuuj za darmo
       </div>
     </div>
@@ -132,20 +132,20 @@ const CrownIcon = {
 const planStyles = {
   free: {
     icon: RocketIcon,
-    iconBg: 'bg-gray-100',
-    iconColor: 'text-gray-600',
+    iconBg: 'bg-gray-100 dark:bg-gray-700',
+    iconColor: 'text-gray-600 dark:text-gray-400',
     tagline: 'Na start - sprawdz mozliwosci'
   },
   basic: {
     icon: StarIcon,
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-600',
+    iconBg: 'bg-blue-100 dark:bg-blue-900/50',
+    iconColor: 'text-blue-600 dark:text-blue-400',
     tagline: 'Idealne dla rozwijajacych sie sklepow'
   },
   pro: {
     icon: CrownIcon,
-    iconBg: 'bg-amber-100',
-    iconColor: 'text-amber-600',
+    iconBg: 'bg-amber-100 dark:bg-amber-900/50',
+    iconColor: 'text-amber-600 dark:text-amber-400',
     tagline: 'Pelna moc bez ograniczen'
   }
 }

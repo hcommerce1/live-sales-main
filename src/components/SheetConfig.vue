@@ -1,17 +1,17 @@
 <template>
   <div class="space-y-4">
     <!-- Service account info -->
-    <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-      <p class="text-sm text-blue-800 mb-2">
+    <div class="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+      <p class="text-sm text-blue-800 dark:text-blue-300 mb-2">
         <strong>Ważne:</strong> Udostępnij arkusz dla konta serwisowego:
       </p>
       <div
-        class="flex items-center gap-2 bg-white rounded px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+        class="flex items-center gap-2 bg-white dark:bg-gray-800 rounded px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         @click="copyEmail"
         :title="emailCopied ? 'Skopiowano!' : 'Kliknij aby skopiowac'"
       >
-        <code class="text-xs text-gray-700 flex-1 truncate">{{ serviceAccountEmail }}</code>
-        <span class="text-gray-400">
+        <code class="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{{ serviceAccountEmail }}</code>
+        <span class="text-gray-400 dark:text-gray-500">
           <svg v-if="!emailCopied" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
           </svg>
@@ -20,7 +20,7 @@
           </svg>
         </span>
       </div>
-      <p class="text-xs text-blue-600 mt-1">Uprawnienia: Edytor</p>
+      <p class="text-xs text-blue-600 dark:text-blue-400 mt-1">Uprawnienia: Edytor</p>
     </div>
 
     <!-- Sheets list -->
@@ -28,15 +28,15 @@
       <div
         v-for="(sheet, index) in sheets"
         :key="index"
-        class="p-4 bg-gray-50 border border-gray-200 rounded-lg"
+        class="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg"
       >
         <!-- Header -->
         <div class="flex items-center justify-between mb-3">
-          <span class="text-sm font-medium text-gray-700">Arkusz {{ index + 1 }}</span>
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Arkusz {{ index + 1 }}</span>
           <button
             v-if="sheets.length > 1"
             type="button"
-            class="text-gray-400 hover:text-red-500 transition-colors"
+            class="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
             @click="removeSheet(index)"
             title="Usuń"
           >
@@ -48,17 +48,17 @@
 
         <!-- URL input -->
         <div class="mb-3">
-          <label class="block text-xs font-medium text-gray-600 mb-1">URL arkusza</label>
+          <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">URL arkusza</label>
           <div class="relative">
             <input
               v-model="sheet.sheet_url"
               type="text"
               placeholder="https://docs.google.com/spreadsheets/d/..."
-              class="w-full px-3 py-2 pr-8 border rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              class="w-full px-3 py-2 pr-8 border rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 dark:text-gray-200"
               :class="{
-                'border-green-400 bg-green-50': sheet.urlStatus === 'valid',
-                'border-red-400 bg-red-50': sheet.urlStatus === 'invalid',
-                'border-gray-200': !sheet.urlStatus
+                'border-green-400 bg-green-50 dark:bg-green-900/30 dark:border-green-600': sheet.urlStatus === 'valid',
+                'border-red-400 bg-red-50 dark:bg-red-900/30 dark:border-red-600': sheet.urlStatus === 'invalid',
+                'border-gray-200 dark:border-gray-600': !sheet.urlStatus
               }"
               @input="validateUrl(sheet)"
             />
@@ -73,17 +73,17 @@
               </svg>
             </span>
           </div>
-          <p v-if="sheet.extractedGid" class="text-xs text-gray-500 mt-1">
+          <p v-if="sheet.extractedGid" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Zakładka: gid={{ sheet.extractedGid }}
           </p>
-          <p v-if="sheet.urlStatus === 'invalid'" class="text-xs text-red-500 mt-1">
+          <p v-if="sheet.urlStatus === 'invalid'" class="text-xs text-red-500 dark:text-red-400 mt-1">
             Nieprawidłowy URL arkusza
           </p>
         </div>
 
         <!-- Write mode -->
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-2">Tryb zapisu</label>
+          <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Tryb zapisu</label>
           <div class="flex gap-3">
             <label class="flex items-center gap-2 cursor-pointer">
               <input
@@ -92,7 +92,7 @@
                 value="replace"
                 class="w-4 h-4 text-blue-600"
               />
-              <span class="text-sm text-gray-700">Zastąp</span>
+              <span class="text-sm text-gray-700 dark:text-gray-300">Zastąp</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
               <input
@@ -101,7 +101,7 @@
                 value="append"
                 class="w-4 h-4 text-blue-600"
               />
-              <span class="text-sm text-gray-700">Dopisuj</span>
+              <span class="text-sm text-gray-700 dark:text-gray-300">Dopisuj</span>
             </label>
           </div>
         </div>
@@ -112,13 +112,13 @@
     <button
       v-if="sheets.length < maxSheets"
       type="button"
-      class="w-full py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors"
+      class="w-full py-2 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
       @click="addSheet"
     >
       + Dodaj arkusz
     </button>
 
-    <p v-if="sheets.length >= maxSheets" class="text-xs text-gray-400 text-center">
+    <p v-if="sheets.length >= maxSheets" class="text-xs text-gray-400 dark:text-gray-500 text-center">
       Limit {{ maxSheets }} arkuszy
     </p>
   </div>
