@@ -92,8 +92,14 @@ class CryptoService {
 
       return plaintext;
     } catch (error) {
-      logger.error('Decryption failed', { error: error.message });
-      throw new Error('Decryption failed');
+      logger.error('Decryption failed', {
+        error: error.message,
+        partsCount: encrypted ? encrypted.split(':').length : 0
+      });
+      const decryptError = new Error('Decryption failed');
+      decryptError.code = 'DECRYPTION_FAILED';
+      decryptError.cause = error;
+      throw decryptError;
     }
   }
 

@@ -22,9 +22,35 @@ const FIELD_DEFINITIONS = {};
 
 // Field definitions service (new dataset structure)
 const fieldDefinitionsService = require('../services/export/fieldDefinitionsService');
-const { decrypt } = require('../utils/crypto');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const companySecretService = require('../services/companySecret.service');
+
+/**
+ * Helper to get BaseLinker token using the unified secret service.
+ * Returns null if token not configured, throws on decryption failure.
+ */
+async function getBaseLinkerToken(companyId) {
+  if (!companyId) return null;
+
+  try {
+    const secretResult = await companySecretService.getSecret(
+      companyId,
+      companySecretService.SECRET_TYPES.BASELINKER_TOKEN
+    );
+    return secretResult?.value || null;
+  } catch (error) {
+    if (error.message === 'DECRYPTION_FAILED') {
+      const decryptError = new Error('Token decryption failed');
+      decryptError.code = 'TOKEN_DECRYPTION_FAILED';
+      throw decryptError;
+    }
+    if (error.message === 'SECRET_NOT_FOUND') {
+      return null; // Token not configured yet
+    }
+    throw error;
+  }
+}
 
 // Apply company context to all routes
 router.use(companyContextMiddleware);
@@ -38,24 +64,19 @@ router.use(companyContextMiddleware);
  */
 router.get('/field-definitions', requireCompany, async (req, res) => {
   try {
-    // Get BaseLinker token from company secrets
+    // Get BaseLinker token using unified secret service
     let token = null;
-
-    if (req.company?.id) {
-      const secret = await prisma.companySecret.findFirst({
-        where: {
-          companyId: req.company.id,
-          secretType: 'baselinker_token'
-        }
-      });
-
-      if (secret?.encryptedValue) {
-        try {
-          token = decrypt(secret.encryptedValue);
-        } catch (e) {
-          logger.warn('Failed to decrypt BaseLinker token');
-        }
+    try {
+      token = await getBaseLinkerToken(req.company?.id);
+    } catch (error) {
+      if (error.code === 'TOKEN_DECRYPTION_FAILED') {
+        return res.status(500).json({
+          success: false,
+          error: 'Token decryption failed. Please re-enter your BaseLinker token in Settings.',
+          code: 'TOKEN_DECRYPTION_FAILED'
+        });
       }
+      throw error;
     }
 
     // Get field definitions from service
@@ -149,24 +170,19 @@ router.get('/field-definitions', requireCompany, async (req, res) => {
  */
 router.get('/v2/field-definitions', requireCompany, async (req, res) => {
   try {
-    // Get BaseLinker token from company secrets
+    // Get BaseLinker token using unified secret service
     let token = null;
-
-    if (req.company?.id) {
-      const secret = await prisma.companySecret.findFirst({
-        where: {
-          companyId: req.company.id,
-          secretType: 'baselinker_token'
-        }
-      });
-
-      if (secret?.encryptedValue) {
-        try {
-          token = decrypt(secret.encryptedValue);
-        } catch (e) {
-          logger.warn('Failed to decrypt BaseLinker token');
-        }
+    try {
+      token = await getBaseLinkerToken(req.company?.id);
+    } catch (error) {
+      if (error.code === 'TOKEN_DECRYPTION_FAILED') {
+        return res.status(500).json({
+          success: false,
+          error: 'Token decryption failed. Please re-enter your BaseLinker token in Settings.',
+          code: 'TOKEN_DECRYPTION_FAILED'
+        });
       }
+      throw error;
     }
 
     const options = {};
@@ -200,24 +216,19 @@ router.get('/v2/dataset/:datasetId/fields', requireCompany, async (req, res) => 
   try {
     const { datasetId } = req.params;
 
-    // Get BaseLinker token
+    // Get BaseLinker token using unified secret service
     let token = null;
-
-    if (req.company?.id) {
-      const secret = await prisma.companySecret.findFirst({
-        where: {
-          companyId: req.company.id,
-          secretType: 'baselinker_token'
-        }
-      });
-
-      if (secret?.encryptedValue) {
-        try {
-          token = decrypt(secret.encryptedValue);
-        } catch (e) {
-          logger.warn('Failed to decrypt BaseLinker token');
-        }
+    try {
+      token = await getBaseLinkerToken(req.company?.id);
+    } catch (error) {
+      if (error.code === 'TOKEN_DECRYPTION_FAILED') {
+        return res.status(500).json({
+          success: false,
+          error: 'Token decryption failed. Please re-enter your BaseLinker token in Settings.',
+          code: 'TOKEN_DECRYPTION_FAILED'
+        });
       }
+      throw error;
     }
 
     const options = {};
