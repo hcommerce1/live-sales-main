@@ -1379,12 +1379,12 @@ class ExportService {
       const deliveryTaxRate = settings.deliveryTaxRate || 23;
 
       // Debug: log commission data availability
-      const ordersWithCommission = orders.filter(o => o.commission && (o.commission.net || o.commission.gross));
+      const ordersWithCommission = orders.filter(o => o.commission_data && (o.commission_data.commission_net || o.commission_data.commission_gross));
       logger.info('Commission data check', {
         totalOrders: orders.length,
         ordersWithCommission: ordersWithCommission.length,
         includeCommissionRequested: filtersWithCommission.include_commission_data,
-        sampleCommission: orders[0]?.commission || null
+        sampleCommission: orders[0]?.commission_data || null
       });
 
       // Transform orders to flat structure with all available fields
@@ -1445,9 +1445,9 @@ class ExportService {
         pick_state: order.pick_state,
         pack_state: order.pack_state,
         // Commission data (marketplace fees)
-        commission_net: order.commission?.net || null,
-        commission_gross: order.commission?.gross || null,
-        commission_currency: order.commission?.currency || null,
+        commission_net: order.commission_data?.commission_net || null,
+        commission_gross: order.commission_data?.commission_gross || null,
+        commission_currency: order.commission_data?.currency || null,
         // Store products for enrichment pipelines
         _products: order.products
       }));
@@ -2556,9 +2556,9 @@ class ExportService {
             pack_state: order.pack_state,
 
             // === Prowizja marketplace ===
-            commission_net: order.commission?.net || null,
-            commission_gross: order.commission?.gross || null,
-            commission_currency: order.commission?.currency || null,
+            commission_net: order.commission_data?.commission_net || null,
+            commission_gross: order.commission_data?.commission_gross || null,
+            commission_currency: order.commission_data?.currency || null,
 
             // === Pozycja zamówienia (produkt) ===
             order_product_id: product.order_product_id,
