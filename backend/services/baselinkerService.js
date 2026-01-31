@@ -607,6 +607,73 @@ class BaselinkerService {
     const response = await this.makeRequest(userToken, 'getSeries', {});
     return response.series || [];
   }
+
+  /**
+   * Get all inventory products with pagination support
+   * Fetches all products from an inventory (up to maxRecords)
+   * @param {string} userToken - User's BaseLinker API token
+   * @param {number} inventoryId - Inventory ID
+   * @param {object} filters - Product filters
+   * @param {number} maxRecords - Maximum records to fetch (default 10000)
+   * @returns {Promise<Array>} - List of all products
+   */
+  async getInventoryProductsListAll(userToken, inventoryId, filters = {}, maxRecords = 10000) {
+    const BATCH_SIZE = 1000; // BaseLinker returns up to 1000 products per page
+    let allProducts = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore && allProducts.length < maxRecords) {
+      const parameters = {
+        inventory_id: inventoryId,
+        filter_id: filters.filter_id || null,
+        filter_category_id: filters.category_id || null,
+        filter_ean: filters.ean || null,
+        filter_sku: filters.sku || null,
+        filter_name: filters.name || null,
+        filter_price_from: filters.price_from || null,
+        filter_price_to: filters.price_to || null,
+        filter_quantity_from: filters.quantity_from || null,
+        filter_quantity_to: filters.quantity_to || null,
+        page: page,
+      };
+
+      // Remove null values
+      Object.keys(parameters).forEach(key => {
+        if (parameters[key] === null) {
+          delete parameters[key];
+        }
+      });
+
+      const response = await this.makeRequest(userToken, 'getInventoryProductsList', parameters);
+      const batch = response.products || [];
+
+      if (Object.keys(batch).length === 0) {
+        hasMore = false;
+      } else {
+        // Products come as object with product_id as key
+        const productArray = Object.entries(batch).map(([id, product]) => ({
+          id: parseInt(id),
+          ...product
+        }));
+        allProducts = allProducts.concat(productArray);
+        page++;
+        hasMore = productArray.length >= BATCH_SIZE;
+      }
+
+      // Rate limiting
+      if (hasMore) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+
+    logger.info(`Fetched ${allProducts.length} products with pagination`, {
+      inventoryId,
+      pageCount: page - 1
+    });
+
+    return allProducts;
+  }
 }
 
 module.exports = new BaselinkerService();

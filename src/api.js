@@ -751,6 +751,71 @@ export const API = {
   },
 
   // ============================================
+  // ANALYTICS MODULE
+  // ============================================
+  analytics: {
+    /**
+     * Get orders summary with aggregation by time periods
+     * @param {string} dateFrom - Start date (YYYY-MM-DD)
+     * @param {string} dateTo - End date (YYYY-MM-DD)
+     * @param {string} granularity - 'day' | 'week' | 'month'
+     * @param {string} groupBy - Optional grouping field
+     */
+    async getOrdersSummary(dateFrom, dateTo, granularity = 'day', groupBy = null) {
+      const params = new URLSearchParams({ dateFrom, dateTo, granularity });
+      if (groupBy) params.append('groupBy', groupBy);
+      return API.request(`/api/analytics/orders/summary?${params}`);
+    },
+
+    /**
+     * Compare two time periods
+     */
+    async getOrdersComparison(currentFrom, currentTo, previousFrom, previousTo) {
+      const params = new URLSearchParams({ currentFrom, currentTo, previousFrom, previousTo });
+      return API.request(`/api/analytics/orders/comparison?${params}`);
+    },
+
+    /**
+     * Get top selling products
+     * @param {string} dateFrom - Start date
+     * @param {string} dateTo - End date
+     * @param {number} limit - Max products to return
+     * @param {string} sortBy - 'value' | 'quantity'
+     */
+    async getTopProducts(dateFrom, dateTo, limit = 10, sortBy = 'value') {
+      const params = new URLSearchParams({ dateFrom, dateTo, limit: String(limit), sortBy });
+      return API.request(`/api/analytics/products/top?${params}`);
+    },
+
+    /**
+     * Get sales channels breakdown
+     */
+    async getChannels(dateFrom, dateTo) {
+      const params = new URLSearchParams({ dateFrom, dateTo });
+      return API.request(`/api/analytics/channels?${params}`);
+    },
+
+    /**
+     * Get stock forecast based on recent sales
+     * @param {number} inventoryId - Inventory ID
+     * @param {number} daysForAverage - Days to calculate average sales (default 7)
+     */
+    async getStockForecast(inventoryId, daysForAverage = 7) {
+      const params = new URLSearchParams({ inventoryId: String(inventoryId), daysForAverage: String(daysForAverage) });
+      return API.request(`/api/analytics/products/stock-forecast?${params}`);
+    },
+
+    /**
+     * Get KPI summary with trends
+     * Returns orderCount, totalValue, avgBasket with trends vs previous period
+     */
+    async getKPI(dateFrom, dateTo) {
+      const params = new URLSearchParams({ dateFrom, dateTo });
+      return API.request(`/api/analytics/kpi?${params}`);
+    },
+  },
+
+  // ============================================
   // FEATURES MODULE
   // ============================================
   features: {

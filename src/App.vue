@@ -14,6 +14,9 @@ import SecurityTab from './components/SecurityTab.vue'
 // Plans component (single view - A/B test concluded, using Highlights variant)
 import PlansView from './components/plans/PlansVariantE.vue'
 
+// Dashboard component
+import DashboardPage from './components/dashboard/DashboardPage.vue'
+
 // Pinia stores
 import { useAuthStore } from './stores/auth'
 import { useExportsStore } from './stores/exports'
@@ -2733,23 +2736,8 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <!-- DASHBOARDY ANALITYCZNE (Placeholder) -->
-            <div v-if="currentPage === 'dashboards'" class="p-4 md:p-8">
-                <h1 class="text-2xl md:text-3xl font-bold mb-2 dark:text-white">Dashboardy analityczne</h1>
-                <p class="text-gray-600 dark:text-gray-400 mb-8">Gotowe wizualizacje i raporty na podstawie Twoich danych</p>
-
-                <div class="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl border border-purple-200 dark:border-purple-800 p-8 text-center">
-                    <div class="w-16 h-16 bg-purple-100 dark:bg-purple-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                        </svg>
-                    </div>
-                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Wkrotce dostepne</h2>
-                    <p class="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-                        Automatycznie generowane dashboardy z wykresami sprzedazy, trendami i kluczowymi wskaznikami Twojego biznesu.
-                    </p>
-                </div>
-            </div>
+            <!-- DASHBOARDY ANALITYCZNE -->
+            <DashboardPage v-if="currentPage === 'dashboards'" />
 
             <!-- SUBSKRYPCJA (PR F3.1 - Enhanced) -->
             <div v-if="currentPage === 'subscription'" class="p-4 md:p-8">

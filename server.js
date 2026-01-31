@@ -22,6 +22,7 @@ const featuresRoutes = require('./backend/routes/features');
 const teamRoutes = require('./backend/routes/team');
 const companyRoutes = require('./backend/routes/company');
 const integrationsRoutes = require('./backend/routes/integrations');
+const analyticsRoutes = require('./backend/routes/analytics');
 
 // Import middleware
 const { publicLimiter } = require('./backend/middleware/rateLimiter');
@@ -195,6 +196,7 @@ app.use('/api/features', featuresRoutes);                                    // 
 app.use('/api/team', noCacheHeaders, authMiddleware.authenticate(), teamRoutes);            // Protected - team management
 app.use('/api/company', noCacheHeaders, companyRoutes);                                       // Mixed: lookup/register public, rest protected
 app.use('/api/integrations', noCacheHeaders, authMiddleware.authenticate(), integrationsRoutes); // Protected - integration management
+app.use('/api/analytics', noCacheHeaders, authMiddleware.authenticate(), analyticsRoutes);       // Protected - analytics dashboards
 
 // Health check endpoint with database status
 app.get('/health', async (req, res) => {
