@@ -195,6 +195,10 @@ async function fetchDynamicFields(source, token, options = {}) {
 
       case 'priceGroups': {
         const priceGroups = await baselinkerService.getInventoryPriceGroups(token);
+        logger.info('Fetched price groups from BaseLinker', {
+          count: priceGroups.length,
+          groups: priceGroups.map(g => ({ id: g.price_group_id, name: g.name, currency: g.currency }))
+        });
         return priceGroups.map(group => ({
           key: `price_group_${group.price_group_id}`,
           label: `Cena: ${group.name || `Grupa ${group.price_group_id}`}`,
@@ -240,8 +244,9 @@ async function fetchDynamicFields(source, token, options = {}) {
     }
 
   } catch (error) {
-    logger.warn(`Failed to fetch dynamic fields from ${source}`, {
-      error: error.message
+    logger.error(`Failed to fetch dynamic fields from ${source}`, {
+      error: error.message,
+      stack: error.stack
     });
     return [];
   }
@@ -270,8 +275,9 @@ async function fetchAllDynamicFields(token) {
 
   try {
     result.priceGroups = await fetchDynamicFields('priceGroups', token);
+    logger.info('Price groups loaded for field definitions', { count: result.priceGroups.length });
   } catch (err) {
-    logger.warn('Failed to fetch price groups', { error: err.message });
+    logger.error('Failed to fetch price groups', { error: err.message, stack: err.stack });
   }
 
   try {

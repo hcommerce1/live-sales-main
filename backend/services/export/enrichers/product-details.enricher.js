@@ -151,15 +151,23 @@ class ProductDetailsEnricher extends BaseEnricher {
 
       // Koszty
       average_cost: this.parseNumber(details.average_cost),
+      additional_cost: this.parseNumber(details.average_landed_cost) - this.parseNumber(details.average_cost),
       average_landed_cost: this.parseNumber(details.average_landed_cost),
 
       // Lokalizacje
       locations_json: details.locations ? JSON.stringify(details.locations) : null,
 
-      // Obrazy
+      // Obrazy (do 10)
       image_url_1: images['1'] || null,
       image_url_2: images['2'] || null,
       image_url_3: images['3'] || null,
+      image_url_4: images['4'] || null,
+      image_url_5: images['5'] || null,
+      image_url_6: images['6'] || null,
+      image_url_7: images['7'] || null,
+      image_url_8: images['8'] || null,
+      image_url_9: images['9'] || null,
+      image_url_10: images['10'] || null,
       images_count: Object.keys(images).length,
 
       // Warianty

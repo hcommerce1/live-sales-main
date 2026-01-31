@@ -60,10 +60,31 @@ router.get('/field-definitions', requireCompany, async (req, res) => {
 
     // Get field definitions from service
     const definitions = await fieldDefinitionsService.getFieldDefinitions(token);
+    const dynamicFields = definitions.dynamicFields || {};
+
+    // Log dynamic fields for debugging
+    logger.info('Dynamic fields loaded for field-definitions', {
+      priceGroupsCount: (dynamicFields.priceGroups || []).length,
+      warehousesCount: (dynamicFields.warehouses || []).length,
+      orderExtraFieldsCount: (dynamicFields.orderExtraFields || []).length
+    });
 
     // Transform to format expected by frontend
     const datasets = {};
     for (const ds of definitions.datasets) {
+      // Merge dynamic fields into field groups
+      const enrichedFieldGroups = ds.fieldGroups.map(group => {
+        if (group.dynamic && group.source) {
+          // Find matching dynamic fields for this source
+          const sourceFields = dynamicFields[group.source] || [];
+          return {
+            ...group,
+            fields: [...group.fields, ...sourceFields.map(f => ({ ...f, group: group.label }))]
+          };
+        }
+        return group;
+      });
+
       datasets[ds.id] = {
         id: ds.id,
         label: ds.label || ds.name,
@@ -75,10 +96,10 @@ router.get('/field-definitions', requireCompany, async (req, res) => {
         dataTypes: ds.dataTypes || [],
         availableFilters: ds.availableFilters || [],
         // Flatten fieldGroups to fields array for frontend compatibility
-        fields: ds.fieldGroups.flatMap(g =>
+        fields: enrichedFieldGroups.flatMap(g =>
           g.fields.map(f => ({ ...f, group: g.label }))
         ),
-        fieldGroups: ds.fieldGroups
+        fieldGroups: enrichedFieldGroups
       };
     }
 

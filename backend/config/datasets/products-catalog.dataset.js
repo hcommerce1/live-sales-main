@@ -112,6 +112,7 @@ module.exports = {
       label: 'Koszty',
       fields: [
         { key: 'average_cost', label: 'Średni koszt', type: 'number', description: 'Średni koszt zakupu', enrichment: 'product-details' },
+        { key: 'additional_cost', label: 'Koszt dodatkowy', type: 'number', description: 'Koszty dodatkowe (landed - average)', enrichment: 'product-details' },
         { key: 'average_landed_cost', label: 'Średni koszt całkowity', type: 'number', description: 'Średni koszt z kosztami dodatkowymi', enrichment: 'product-details' }
       ]
     },
@@ -187,6 +188,13 @@ module.exports = {
         { key: 'image_url_1', label: 'Obraz 1', type: 'text', description: 'URL pierwszego obrazu', enrichment: 'product-details' },
         { key: 'image_url_2', label: 'Obraz 2', type: 'text', enrichment: 'product-details' },
         { key: 'image_url_3', label: 'Obraz 3', type: 'text', enrichment: 'product-details' },
+        { key: 'image_url_4', label: 'Obraz 4', type: 'text', enrichment: 'product-details' },
+        { key: 'image_url_5', label: 'Obraz 5', type: 'text', enrichment: 'product-details' },
+        { key: 'image_url_6', label: 'Obraz 6', type: 'text', enrichment: 'product-details' },
+        { key: 'image_url_7', label: 'Obraz 7', type: 'text', enrichment: 'product-details' },
+        { key: 'image_url_8', label: 'Obraz 8', type: 'text', enrichment: 'product-details' },
+        { key: 'image_url_9', label: 'Obraz 9', type: 'text', enrichment: 'product-details' },
+        { key: 'image_url_10', label: 'Obraz 10', type: 'text', enrichment: 'product-details' },
         { key: 'images_count', label: 'Liczba obrazów', type: 'number', enrichment: 'product-details' }
       ]
     },
