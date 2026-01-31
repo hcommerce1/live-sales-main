@@ -6,6 +6,7 @@
  */
 
 const BaseFetcher = require('./BaseFetcher');
+const logger = require('../../../utils/logger');
 
 class PurchaseOrdersFetcher extends BaseFetcher {
   constructor() {
@@ -35,7 +36,7 @@ class PurchaseOrdersFetcher extends BaseFetcher {
       const apiFilters = this.convertFilters(filters);
       const maxRecords = options.maxRecords || 10000;
 
-      this.logger.info('PurchaseOrdersFetcher: API filters', { apiFilters });
+      logger.info('PurchaseOrdersFetcher: API filters', { apiFilters });
 
       const allOrders = await this.fetchAllPages(
         async (page) => {
@@ -44,7 +45,7 @@ class PurchaseOrdersFetcher extends BaseFetcher {
             page: page || 1
           };
 
-          this.logger.info('PurchaseOrdersFetcher: Request params', { params });
+          logger.info('PurchaseOrdersFetcher: Request params', { params });
 
           const response = await this.baselinkerService.makeRequest(
             token,
