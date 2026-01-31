@@ -45,8 +45,7 @@ router.get('/field-definitions', requireCompany, async (req, res) => {
       const secret = await prisma.companySecret.findFirst({
         where: {
           companyId: req.company.id,
-          secretType: 'baselinker_token',
-          deletedAt: null
+          secretType: 'baselinker_token'
         }
       });
 
@@ -136,8 +135,7 @@ router.get('/v2/field-definitions', requireCompany, async (req, res) => {
       const secret = await prisma.companySecret.findFirst({
         where: {
           companyId: req.company.id,
-          secretType: 'baselinker_token',
-          deletedAt: null
+          secretType: 'baselinker_token'
         }
       });
 
@@ -188,8 +186,7 @@ router.get('/v2/dataset/:datasetId/fields', requireCompany, async (req, res) => 
       const secret = await prisma.companySecret.findFirst({
         where: {
           companyId: req.company.id,
-          secretType: 'baselinker_token',
-          deletedAt: null
+          secretType: 'baselinker_token'
         }
       });
 
