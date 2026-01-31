@@ -17,20 +17,14 @@ const { requireOwnership } = require('../middleware/resourceOwnership');
 // Rate limiting for export runs
 const { exportLimiter } = require('../middleware/rateLimiter');
 
-// Export fields configuration (centralized in config file)
-const exportFields = require('../config/export-fields');
-
-// Legacy FIELD_DEFINITIONS for backward compatibility
-// New code should use exportFields.validateFieldsForPlan()
+// Legacy FIELD_DEFINITIONS - cleared, no plan-based restrictions
 const FIELD_DEFINITIONS = {};
-// Build from exportFields for backward compatibility
-for (const [datasetKey, dataset] of Object.entries(exportFields.datasets)) {
-  for (const field of dataset.fields) {
-    FIELD_DEFINITIONS[field.key] = {
-      higher_plan: field.plan === 'pro'
-    };
-  }
-}
+
+// Field definitions service (new dataset structure)
+const fieldDefinitionsService = require('../services/export/fieldDefinitionsService');
+const { decrypt } = require('../utils/crypto');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 // Apply company context to all routes
 router.use(companyContextMiddleware);
@@ -44,32 +38,74 @@ router.use(companyContextMiddleware);
  */
 router.get('/field-definitions', requireCompany, async (req, res) => {
   try {
-    // Get user's plan from subscription
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
-
-    let userPlan = 'free';
+    // Get BaseLinker token from company secrets
+    let token = null;
 
     if (req.company?.id) {
-      const subscription = await prisma.subscription.findUnique({
-        where: { companyId: req.company.id },
-        select: { planId: true, status: true }
+      const secret = await prisma.companySecret.findFirst({
+        where: {
+          companyId: req.company.id,
+          type: 'baselinker_token',
+          deletedAt: null
+        }
       });
 
-      // Only active/trialing subscriptions count
-      if (subscription && ['active', 'trialing'].includes(subscription.status)) {
-        userPlan = subscription.planId || 'free';
+      if (secret?.encryptedValue) {
+        try {
+          token = decrypt(secret.encryptedValue);
+        } catch (e) {
+          logger.warn('Failed to decrypt BaseLinker token');
+        }
       }
     }
 
-    // Get full config based on plan
-    const config = exportFields.getFullConfig(userPlan);
+    // Get field definitions from service
+    const definitions = await fieldDefinitionsService.getFieldDefinitions(token);
+
+    // Transform to format expected by frontend
+    const datasets = {};
+    for (const ds of definitions.datasets) {
+      datasets[ds.id] = {
+        id: ds.id,
+        label: ds.label || ds.name,
+        description: ds.description,
+        requiresInventory: ds.requiresInventory || false,
+        requiresStorage: ds.requiresStorage || false,
+        requiresIntegration: ds.requiresIntegration || false,
+        requiresDataType: ds.requiresDataType || false,
+        dataTypes: ds.dataTypes || [],
+        availableFilters: ds.availableFilters || [],
+        // Flatten fieldGroups to fields array for frontend compatibility
+        fields: ds.fieldGroups.flatMap(g =>
+          g.fields.map(f => ({ ...f, group: g.label }))
+        ),
+        fieldGroups: ds.fieldGroups
+      };
+    }
+
+    // Filter operators
+    const operators = [
+      { value: '=', label: 'równe' },
+      { value: '!=', label: 'różne od' },
+      { value: '>', label: 'większe niż' },
+      { value: '>=', label: 'większe lub równe' },
+      { value: '<', label: 'mniejsze niż' },
+      { value: '<=', label: 'mniejsze lub równe' },
+      { value: 'contains', label: 'zawiera' },
+      { value: 'not_contains', label: 'nie zawiera' },
+      { value: 'starts_with', label: 'zaczyna się od' },
+      { value: 'ends_with', label: 'kończy się na' }
+    ];
 
     res.json({
       success: true,
       data: {
-        currentPlan: userPlan,
-        ...config
+        currentPlan: 'free',
+        operators,
+        datasets,
+        dynamicFields: definitions.dynamicFields || {},
+        supportedCurrencies: definitions.supportedCurrencies || ['PLN', 'EUR', 'USD', 'GBP'],
+        currencyRateSources: definitions.currencyRateSources || []
       }
     });
   } catch (error) {
@@ -80,9 +116,6 @@ router.get('/field-definitions', requireCompany, async (req, res) => {
     });
   }
 });
-
-// New field definitions service (v2 - new dataset structure)
-const fieldDefinitionsService = require('../services/export/fieldDefinitionsService');
 
 /**
  * GET /api/exports/v2/field-definitions
@@ -97,10 +130,6 @@ const fieldDefinitionsService = require('../services/export/fieldDefinitionsServ
 router.get('/v2/field-definitions', requireCompany, async (req, res) => {
   try {
     // Get BaseLinker token from company secrets
-    const { PrismaClient } = require('@prisma/client');
-    const { decrypt } = require('../utils/crypto');
-    const prisma = new PrismaClient();
-
     let token = null;
 
     if (req.company?.id) {
@@ -153,10 +182,6 @@ router.get('/v2/dataset/:datasetId/fields', requireCompany, async (req, res) => 
     const { datasetId } = req.params;
 
     // Get BaseLinker token
-    const { PrismaClient } = require('@prisma/client');
-    const { decrypt } = require('../utils/crypto');
-    const prisma = new PrismaClient();
-
     let token = null;
 
     if (req.company?.id) {

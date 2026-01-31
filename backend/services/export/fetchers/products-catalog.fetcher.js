@@ -2,13 +2,10 @@
  * Products Catalog Fetcher
  *
  * Pobiera produkty z katalogu BaseLinker (getInventoryProductsList).
- * Dataset: products_catalog
- *
- * Wymaga podania inventory_id (ID katalogu).
+ * Wymaga inventoryId. Obsługuje paginację przez page number (1000/page).
  */
 
 const BaseFetcher = require('./BaseFetcher');
-const logger = require('../../../utils/logger');
 
 class ProductsCatalogFetcher extends BaseFetcher {
   constructor() {
@@ -17,214 +14,216 @@ class ProductsCatalogFetcher extends BaseFetcher {
 
   /**
    * Pobiera produkty z katalogu BaseLinker
-   * @param {string} token - Token BaseLinker
-   * @param {Object} filters - Filtry
-   * @param {Object} options - Opcje (inventoryId wymagany)
-   * @returns {Promise<Object[]>}
+   *
+   * @param {string} token - Token API BaseLinker
+   * @param {object} filters - Filtry
+   * @param {number} filters.inventoryId - ID katalogu (wymagany)
+   * @param {number} filters.categoryId - ID kategorii
+   * @param {string} filters.sku - Filtr SKU
+   * @param {string} filters.ean - Filtr EAN
+   * @param {string} filters.name - Filtr nazwy
+   * @param {number} filters.priceFrom - Cena od
+   * @param {number} filters.priceTo - Cena do
+   * @param {number} filters.stockFrom - Stan od
+   * @param {number} filters.stockTo - Stan do
+   * @param {object} options - Opcje
+   * @returns {Promise<Array>} - Tablica znormalizowanych produktów
    */
   async fetch(token, filters = {}, options = {}) {
-    if (!options.inventoryId) {
+    this.resetStats();
+    this.logFetchStart({ filters, options });
+
+    // Walidacja wymaganego inventoryId
+    const inventoryId = filters.inventoryId || options.inventoryId;
+    if (!inventoryId) {
       throw new Error('inventoryId is required for products_catalog dataset');
     }
 
-    this.logFetchStart({ filters, inventoryId: options.inventoryId });
+    try {
+      const apiFilters = this.convertFilters(filters, inventoryId);
+      const maxRecords = options.maxRecords || 10000;
 
-    const client = this.getBaseLinkerClient(token);
-    const apiFilters = this.convertFilters(filters);
+      // Pobierz produkty z paginacją przez page number
+      const allProducts = await this.fetchAllPages(
+        async (page) => {
+          const params = {
+            ...apiFilters,
+            page: page || 1
+          };
 
-    // Pobierz produkty z paginacją
-    const products = await this.fetchAllPages(async (page) => {
-      const params = {
-        inventory_id: options.inventoryId,
-        ...apiFilters,
-        page: page || 1
-      };
+          const response = await this.baselinkerService.makeRequest(
+            token,
+            'getInventoryProductsList',
+            params
+          );
 
-      // BaseLinker API: getInventoryProductsList
-      const response = await client.makeRequest('getInventoryProductsList', params);
+          // API zwraca obiekt products: { id: {...}, id2: {...} }
+          const productsObj = response.products || {};
+          const products = this.objectToArray(productsObj);
 
-      if (!response || !response.products) {
-        return { data: [], nextPageToken: null };
-      }
+          // Oblicz nextPageToken
+          // BaseLinker zwraca 1000 produktów na stronę
+          let nextPageToken = null;
+          if (products.length === 1000) {
+            nextPageToken = (page || 1) + 1;
+          }
 
-      const productsArray = Object.entries(response.products).map(([id, product]) => ({
-        product_id: id,
-        ...product
-      }));
+          return {
+            data: products,
+            nextPageToken
+          };
+        },
+        maxRecords
+      );
 
-      // Następna strona jeśli jest 1000 rekordów (limit API)
-      const nextPageToken = productsArray.length === 1000
-        ? (page || 1) + 1
-        : null;
+      // Normalizuj wszystkie produkty
+      const normalizedProducts = allProducts.map(product => this.normalize(product));
 
-      return {
-        data: productsArray,
-        nextPageToken
-      };
-    });
+      this.logFetchComplete(normalizedProducts.length);
 
-    // Normalizuj dane produktów
-    const normalizedProducts = products.map(product => this.normalizeProduct(product, options.inventoryId));
+      return normalizedProducts;
 
-    this.logFetchComplete(normalizedProducts.length);
-
-    return normalizedProducts;
+    } catch (error) {
+      this.logError('Fetch failed', error);
+      throw error;
+    }
   }
 
   /**
-   * Normalizuje strukturę produktu
-   * @param {Object} product - Surowy produkt z API
-   * @param {number} inventoryId - ID katalogu
-   * @returns {Object}
+   * Konwertuje filtry UI na format API BaseLinker
    */
-  normalizeProduct(product, inventoryId) {
-    // Oblicz stany magazynowe
-    const stocks = product.stock || {};
-    const stockTotal = Object.values(stocks).reduce((sum, s) => sum + (Number(s.stock) || 0), 0);
-    const reservedTotal = Object.values(stocks).reduce((sum, s) => sum + (Number(s.reserved) || 0), 0);
-    const availableTotal = stockTotal - reservedTotal;
+  convertFilters(filters, inventoryId) {
+    const converted = {
+      inventory_id: inventoryId
+    };
 
-    // Stany per magazyn (max 3)
-    const warehouseIds = Object.keys(stocks).slice(0, 3);
-    const stockWarehouse1 = stocks[warehouseIds[0]]?.stock || 0;
-    const stockWarehouse2 = stocks[warehouseIds[1]]?.stock || 0;
-    const stockWarehouse3 = stocks[warehouseIds[2]]?.stock || 0;
+    if (filters.categoryId) {
+      converted.filter_category_id = filters.categoryId;
+    }
 
-    // Ceny
+    if (filters.sku) {
+      converted.filter_sku = filters.sku;
+    }
+
+    if (filters.ean) {
+      converted.filter_ean = filters.ean;
+    }
+
+    if (filters.name) {
+      converted.filter_name = filters.name;
+    }
+
+    if (filters.priceFrom !== undefined && filters.priceFrom !== null) {
+      converted.filter_price_from = filters.priceFrom;
+    }
+
+    if (filters.priceTo !== undefined && filters.priceTo !== null) {
+      converted.filter_price_to = filters.priceTo;
+    }
+
+    if (filters.stockFrom !== undefined && filters.stockFrom !== null) {
+      converted.filter_stock_from = filters.stockFrom;
+    }
+
+    if (filters.stockTo !== undefined && filters.stockTo !== null) {
+      converted.filter_stock_to = filters.stockTo;
+    }
+
+    return converted;
+  }
+
+  /**
+   * Normalizuje produkt z API do standardowego formatu
+   *
+   * @param {object} product - Surowy produkt z API
+   * @returns {object} - Znormalizowany produkt
+   */
+  normalize(product) {
+    // Oblicz cenę domyślną (pierwsza cena z listy)
     const prices = product.prices || {};
-    const defaultPrice = prices[Object.keys(prices)[0]] || {};
+    const priceValues = Object.values(prices);
+    const priceDefault = priceValues.length > 0 ? priceValues[0] : null;
 
-    // Ceny grupowe
-    const priceGroups = {};
-    Object.entries(prices).forEach(([groupId, priceData], index) => {
-      if (index < 3) {
-        priceGroups[`price_group_${index + 1}`] = Number(priceData.price_brutto) || 0;
-      }
-    });
+    // Oblicz łączny stan
+    const stock = product.stock || {};
+    const stockTotal = Object.values(stock).reduce((sum, qty) => sum + this.parseNumber(qty), 0);
 
     return {
       // Identyfikatory
-      product_id: product.product_id,
-      sku: product.sku || '',
-      ean: product.ean || '',
-      manufacturer_code: product.manufacturer_code || '',
+      id: product.id || product._key,
+      sku: product.sku || null,
+      ean: product.ean || null,
+      asin: product.asin || null,
 
-      // Podstawowe
-      name: product.name || '',
-      description: product.description || '',
-      description_extra1: product.description_extra1 || '',
-      description_extra2: product.description_extra2 || '',
+      // Podstawowe (nazwa z getInventoryProductsList)
+      name: product.name || null,
 
-      // Klasyfikacja
-      category_id: product.category_id,
-      category_name: '', // Wypełni enricher jeśli potrzebne
-      manufacturer_id: product.manufacturer_id,
-      manufacturer_name: product.manufacturer || '',
-      tags: Array.isArray(product.tags) ? product.tags.join(', ') : (product.tags || ''),
+      // Placeholder dla danych z getInventoryProductsData (enrichment)
+      description: null,
+      description_extra1: null,
+      description_extra2: null,
+      is_bundle: null,
 
-      // Ceny
-      price_brutto: Number(defaultPrice.price_brutto) || 0,
-      price_netto: Number(defaultPrice.price_netto) || 0,
-      tax_rate: Number(product.tax_rate) || 23,
-      purchase_price_brutto: Number(product.price_brutto_purchase) || 0,
-      purchase_price_netto: Number(product.price_netto_purchase) || 0,
-      average_cost: Number(product.average_cost) || 0,
+      // Klasyfikacja (enrichment)
+      category_id: null,
+      category_name: null,
+      manufacturer_id: null,
+      manufacturer_name: null,
+      tags: null,
+      star: null,
 
-      // Stany magazynowe
+      // Wymiary (enrichment)
+      weight: null,
+      height: null,
+      width: null,
+      length: null,
+
+      // Podatki (enrichment)
+      tax_rate: null,
+
+      // Koszty (enrichment)
+      average_cost: null,
+      average_landed_cost: null,
+
+      // Ceny podstawowe (z getInventoryProductsList)
+      price_default: priceDefault,
+      prices_json: Object.keys(prices).length > 0 ? JSON.stringify(prices) : null,
+
+      // Placeholder dla cen wg grup (enrichment)
+      price_group_1: null,
+      price_group_2: null,
+      price_group_3: null,
+
+      // Stany podstawowe (z getInventoryProductsList)
       stock_total: stockTotal,
-      stock_available: availableTotal,
-      stock_reserved: reservedTotal,
-      stock_warehouse_1: stockWarehouse1,
-      stock_warehouse_2: stockWarehouse2,
-      stock_warehouse_3: stockWarehouse3,
+      stock_json: Object.keys(stock).length > 0 ? JSON.stringify(stock) : null,
 
-      // Wymiary i waga
-      weight: Number(product.weight) || 0,
-      height: Number(product.height) || 0,
-      width: Number(product.width) || 0,
-      length: Number(product.length) || 0,
+      // Placeholder dla stanów wg magazynów (enrichment)
+      stock_warehouse_1: null,
+      stock_warehouse_2: null,
+      stock_warehouse_3: null,
 
-      // Media
-      image_url: product.images?.[0] || '',
-      images_count: product.images?.length || 0,
+      // Lokalizacje (enrichment)
+      locations_json: null,
 
-      // Lokalizacja
-      location: product.locations?.[Object.keys(product.locations || {})[0]] || '',
+      // Obrazy (enrichment)
+      image_url_1: null,
+      image_url_2: null,
+      image_url_3: null,
+      images_count: null,
 
-      // Warianty
-      has_variants: product.is_bundle === false && (product.variants?.length > 0 || false),
-      variants_count: product.variants?.length || 0,
+      // Warianty (enrichment)
+      has_variants: null,
+      variants_count: null,
+      variants_json: null,
 
-      // Ceny grupowe
-      ...priceGroups,
+      // Cechy (enrichment)
+      features_json: null,
 
-      // Pola tekstowe (dynamiczne)
-      ...this.extractTextFields(product),
-
-      // Metadata
-      _inventoryId: inventoryId,
-      _stocks: stocks
+      // Raw data for enrichment
+      _prices: prices,
+      _stock: stock
     };
-  }
-
-  /**
-   * Wyciąga pola tekstowe (text_field_*)
-   * @param {Object} product
-   * @returns {Object}
-   */
-  extractTextFields(product) {
-    const textFields = {};
-
-    for (const key of Object.keys(product)) {
-      if (key.startsWith('text_field_')) {
-        textFields[key] = product[key] || '';
-      }
-    }
-
-    // Obsłuż również zagnieżdżone text_fields
-    if (product.text_fields && typeof product.text_fields === 'object') {
-      for (const [key, value] of Object.entries(product.text_fields)) {
-        textFields[`text_field_${key}`] = value || '';
-      }
-    }
-
-    return textFields;
-  }
-
-  /**
-   * Konwertuje filtry specyficzne dla produktów
-   * @param {Object} filters
-   * @returns {Object}
-   */
-  convertFilters(filters) {
-    const apiFilters = {};
-
-    // Filtr po kategorii
-    if (filters.categoryId) {
-      apiFilters.filter_category_id = filters.categoryId;
-    }
-
-    // Filtr po SKU
-    if (filters.sku) {
-      apiFilters.filter_sku = filters.sku;
-    }
-
-    // Filtr po EAN
-    if (filters.ean) {
-      apiFilters.filter_ean = filters.ean;
-    }
-
-    // Filtr po nazwie
-    if (filters.name) {
-      apiFilters.filter_name = filters.name;
-    }
-
-    // Filtr po producencie
-    if (filters.manufacturerId) {
-      apiFilters.filter_manufacturer_id = filters.manufacturerId;
-    }
-
-    return apiFilters;
   }
 }
 

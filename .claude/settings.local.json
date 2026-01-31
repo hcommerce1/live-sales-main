@@ -6,7 +6,10 @@
       "Bash(npx jest:*)",
       "Bash(export PATH:*)",
       "Bash(git stash:*)",
-      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\":*)"
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\":*)",
+      "Bash(for dir in */)",
+      "Bash(test \")",
+      "Bash(npx prisma db push:*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\huber\\OneDrive\\Pulpit\\VS CODE\\live-sales-main (1)"

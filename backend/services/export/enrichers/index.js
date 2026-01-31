@@ -2,53 +2,33 @@
  * Enricher Registry
  *
  * Rejestruje i zarządza enricherami.
- * Każdy enricher wzbogaca dane o dodatkowe informacje
- * z osobnych zapytań API.
+ * Enrichery wzbogacają dane pobrane przez fetchery o dodatkowe informacje
+ * z innych endpointów API BaseLinker.
  */
 
 const PackagesEnricher = require('./packages.enricher');
 const DocumentsEnricher = require('./documents.enricher');
-const InventoryEnricher = require('./inventory.enricher');
-const CurrencyEnricher = require('./currency.enricher');
-const TrackingEnricher = require('./tracking.enricher');
-const LabelsEnricher = require('./labels.enricher');
-const CreditEnricher = require('./credit.enricher');
+const ProductDetailsEnricher = require('./product-details.enricher');
+const StockEnricher = require('./stock.enricher');
+const PaymentsEnricher = require('./payments.enricher');
 
-/**
- * Mapa enrichmentName -> Enricher instance
- */
+// Instancje enricherów - lazy initialization
 const enrichers = {
   packages: new PackagesEnricher(),
   documents: new DocumentsEnricher(),
-  inventory: new InventoryEnricher(),
-  currency: new CurrencyEnricher(),
-  tracking: new TrackingEnricher(),
-  labels: new LabelsEnricher(),
-  credit: new CreditEnricher()
+  'product-details': new ProductDetailsEnricher(),
+  stock: new StockEnricher(),
+  payments: new PaymentsEnricher()
 };
 
-/**
- * Pobiera enricher po nazwie
- * @param {string} enrichmentName
- * @returns {Object|null}
- */
 function get(enrichmentName) {
   return enrichers[enrichmentName] || null;
 }
 
-/**
- * Sprawdza czy enricher istnieje
- * @param {string} enrichmentName
- * @returns {boolean}
- */
 function has(enrichmentName) {
   return enrichmentName in enrichers;
 }
 
-/**
- * Zwraca listę wszystkich zarejestrowanych enricherów
- * @returns {string[]}
- */
 function getRegisteredEnrichers() {
   return Object.keys(enrichers);
 }

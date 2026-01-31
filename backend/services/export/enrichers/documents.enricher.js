@@ -1,14 +1,12 @@
 /**
  * Documents Enricher
  *
- * Wzbogaca zamówienia o dokumenty sprzedaży (max 2 dokumenty na zamówienie).
- * Używa API: getOrderInvoices (lub getInvoices z filtrem order_id)
- *
- * Dodaje pola ds1_* i ds2_*.
+ * Wzbogaca zamówienia o dane dokumentów sprzedaży (faktury, paragony).
+ * Używa API getInvoices i getReceipts.
+ * Dodaje pola ds_* dla pierwszego dokumentu, ds2_* dla drugiego.
  */
 
 const BaseEnricher = require('./BaseEnricher');
-const logger = require('../../../utils/logger');
 
 class DocumentsEnricher extends BaseEnricher {
   constructor() {
@@ -16,169 +14,217 @@ class DocumentsEnricher extends BaseEnricher {
   }
 
   /**
-   * Wzbogaca zamówienia o dokumenty sprzedaży
-   * @param {Object[]} orders - Zamówienia do wzbogacenia
-   * @param {string} token - Token BaseLinker
-   * @param {Object} options - Opcje
-   * @returns {Promise<Object[]>}
+   * Wzbogaca zamówienia o dane dokumentów sprzedaży
+   *
+   * @param {Array} records - Tablica zamówień
+   * @param {string} token - Token API BaseLinker
+   * @param {object} options - Opcje
+   * @returns {Promise<Array>} - Wzbogacone zamówienia
    */
-  async enrich(orders, token, options = {}) {
-    this.logEnrichStart(orders.length);
+  async enrich(records, token, options = {}) {
+    this.resetStats();
+    this.logEnrichStart(records.length);
 
-    const client = this.getBaseLinkerClient(token);
+    try {
+      // Pobierz unikalne order_id
+      const orderIds = this.getUniqueValues(records, 'order_id');
 
-    // Pobierz ID wszystkich zamówień
-    const orderIds = this.getUniqueValues(orders, 'order_id');
+      if (orderIds.length === 0) {
+        this.logEnrichComplete(0);
+        return records;
+      }
 
-    // Pobierz dokumenty dla wszystkich zamówień (batch)
-    const documentsMap = await this.fetchDocumentsForOrders(client, orderIds);
+      // Pobierz faktury i paragony
+      const [invoicesMap, receiptsMap] = await Promise.all([
+        this.fetchInvoicesForOrders(orderIds, token),
+        this.fetchReceiptsForOrders(orderIds, token)
+      ]);
 
-    // Wzbogać każde zamówienie
-    const enrichedOrders = orders.map(order => {
-      const documents = documentsMap.get(order.order_id) || [];
-      return this.enrichOrderWithDocuments(order, documents);
-    });
+      // Wzbogać rekordy
+      const enrichedRecords = records.map(record => {
+        const orderId = record.order_id;
+        const invoices = invoicesMap.get(orderId) || [];
+        const receipts = receiptsMap.get(orderId) || [];
 
-    this.logEnrichComplete(enrichedOrders.length);
+        // Połącz dokumenty (faktury mają priorytet)
+        const documents = [
+          ...invoices.map(inv => ({ ...inv, docType: 'invoice' })),
+          ...receipts.map(rec => ({ ...rec, docType: 'receipt' }))
+        ];
 
-    return enrichedOrders;
+        // Spłaszcz dokumenty do pól ds_*, ds2_*
+        const documentFields = this.flattenDocumentsToFields(documents);
+
+        return {
+          ...record,
+          ...documentFields
+        };
+      });
+
+      this.logEnrichComplete(enrichedRecords.length);
+
+      return enrichedRecords;
+
+    } catch (error) {
+      this.logError('Enrichment failed', error);
+      throw error;
+    }
   }
 
   /**
-   * Pobiera dokumenty dla wielu zamówień
-   * @param {Object} client - Klient BaseLinker
-   * @param {number[]} orderIds - ID zamówień
-   * @returns {Promise<Map<number, Object[]>>}
+   * Pobiera faktury dla zamówień
+   *
+   * @param {Array<number>} orderIds - Lista ID zamówień
+   * @param {string} token - Token API BaseLinker
+   * @returns {Promise<Map>} - Mapa: order_id -> Array<invoice>
    */
-  async fetchDocumentsForOrders(client, orderIds) {
-    const documentsMap = new Map();
-
-    // Inicjalizuj pustą mapę
-    for (const orderId of orderIds) {
-      documentsMap.set(orderId, []);
-    }
+  async fetchInvoicesForOrders(orderIds, token) {
+    const invoicesMap = new Map();
 
     try {
-      // Pobierz wszystkie faktury (limit 1000)
-      const response = await client.makeRequest('getInvoices', {
-        // Pobieramy dokumenty z ostatnich 90 dni dla optymalizacji
-        date_from: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60),
-        get_external: true
-      });
+      this.stats.apiCalls++;
 
-      if (!response || !response.invoices) {
-        return documentsMap;
-      }
+      // Pobierz wszystkie faktury z ostatnich 90 dni (typowy zakres)
+      // W przyszłości można optymalizować przez date range z zamówień
+      const allInvoices = await this.baselinkerService.getInvoicesWithPagination(
+        token,
+        {},
+        10000
+      );
 
-      const invoices = Array.isArray(response.invoices)
-        ? response.invoices
-        : Object.values(response.invoices);
-
-      // Grupuj dokumenty po order_id
-      for (const invoice of invoices) {
+      // Grupuj faktury po order_id
+      for (const invoice of allInvoices) {
         const orderId = invoice.order_id;
-
-        if (orderId && documentsMap.has(orderId)) {
-          documentsMap.get(orderId).push(invoice);
+        if (orderId && orderIds.includes(orderId)) {
+          if (!invoicesMap.has(orderId)) {
+            invoicesMap.set(orderId, []);
+          }
+          invoicesMap.get(orderId).push(invoice);
         }
       }
 
     } catch (error) {
-      logger.warn('Failed to fetch invoices', { error: error.message });
+      this.logError('Failed to fetch invoices', error);
     }
 
-    return documentsMap;
+    return invoicesMap;
   }
 
   /**
-   * Wzbogaca zamówienie o dokumenty sprzedaży
-   * @param {Object} order - Zamówienie
-   * @param {Object[]} documents - Lista dokumentów
-   * @returns {Object}
+   * Pobiera paragony dla zamówień
+   *
+   * @param {Array<number>} orderIds - Lista ID zamówień
+   * @param {string} token - Token API BaseLinker
+   * @returns {Promise<Map>} - Mapa: order_id -> Array<receipt>
    */
-  enrichOrderWithDocuments(order, documents) {
-    const enriched = { ...order };
+  async fetchReceiptsForOrders(orderIds, token) {
+    const receiptsMap = new Map();
 
-    // Sortuj dokumenty po dacie (najnowsze najpierw)
-    const sortedDocs = [...documents].sort((a, b) => {
-      return (b.date_add || 0) - (a.date_add || 0);
-    });
+    try {
+      this.stats.apiCalls++;
 
-    // Najpierw szukaj faktury/paragonu (dokument główny)
-    const mainDoc = sortedDocs.find(d => d.type !== 'correction') || sortedDocs[0];
+      // Pobierz paragony
+      const allReceipts = await this.baselinkerService.getReceipts(token, {});
 
-    // Potem szukaj korekty
-    const correctionDoc = sortedDocs.find(d => d.type === 'correction');
+      // Grupuj paragony po order_id
+      for (const receipt of allReceipts) {
+        const orderId = receipt.order_id;
+        if (orderId && orderIds.includes(orderId)) {
+          if (!receiptsMap.has(orderId)) {
+            receiptsMap.set(orderId, []);
+          }
+          receiptsMap.get(orderId).push(receipt);
+        }
+      }
 
-    // Przypisz: ds1 = główny dokument, ds2 = korekta (jeśli jest)
-    const doc1 = mainDoc || null;
-    const doc2 = correctionDoc || (sortedDocs[1] !== mainDoc ? sortedDocs[1] : null);
-
-    // Mapuj dokument 1
-    this.mapDocumentToFields(enriched, doc1, 'ds1_');
-
-    // Mapuj dokument 2
-    this.mapDocumentToFields(enriched, doc2, 'ds2_');
-
-    return enriched;
-  }
-
-  /**
-   * Mapuje dokument na pola z prefixem
-   * @param {Object} record - Rekord do wzbogacenia
-   * @param {Object|null} doc - Dokument
-   * @param {string} prefix - Prefix pól (ds1_ lub ds2_)
-   */
-  mapDocumentToFields(record, doc, prefix) {
-    if (doc) {
-      record[`${prefix}id`] = doc.invoice_id || doc.id;
-      record[`${prefix}type`] = this.mapDocumentType(doc.type);
-      record[`${prefix}number`] = doc.number || doc.invoice_fullnumber || '';
-      record[`${prefix}date`] = doc.date_add || doc.date_issue || null;
-      record[`${prefix}date_sell`] = doc.date_sale || null;
-      record[`${prefix}total_brutto`] = Number(doc.total_price_brutto) || 0;
-      record[`${prefix}total_netto`] = Number(doc.total_price_netto) || 0;
-      record[`${prefix}total_vat`] = (Number(doc.total_price_brutto) || 0) - (Number(doc.total_price_netto) || 0);
-      record[`${prefix}currency`] = doc.currency || 'PLN';
-      record[`${prefix}exchange_rate`] = Number(doc.exchange_rate) || null;
-      record[`${prefix}buyer_name`] = doc.buyer_name || doc.invoice_company || doc.invoice_fullname || '';
-      record[`${prefix}buyer_nip`] = doc.buyer_nip || doc.invoice_nip || '';
-      record[`${prefix}external`] = doc.is_external === true || doc.is_external === 1 || doc.external_invoice === true;
-    } else {
-      // Puste pola
-      record[`${prefix}id`] = null;
-      record[`${prefix}type`] = '';
-      record[`${prefix}number`] = '';
-      record[`${prefix}date`] = null;
-      record[`${prefix}date_sell`] = null;
-      record[`${prefix}total_brutto`] = null;
-      record[`${prefix}total_netto`] = null;
-      record[`${prefix}total_vat`] = null;
-      record[`${prefix}currency`] = '';
-      record[`${prefix}exchange_rate`] = null;
-      record[`${prefix}buyer_name`] = '';
-      record[`${prefix}buyer_nip`] = '';
-      record[`${prefix}external`] = null;
+    } catch (error) {
+      this.logError('Failed to fetch receipts', error);
     }
+
+    return receiptsMap;
   }
 
   /**
-   * Mapuje typ dokumentu na czytelną nazwę
-   * @param {string} type
-   * @returns {string}
+   * Spłaszcza tablicę dokumentów do pól ds_*, ds2_*
+   *
+   * @param {Array} documents - Tablica dokumentów (faktury + paragony)
+   * @returns {object} - Obiekt z polami ds_*, ds2_*
    */
-  mapDocumentType(type) {
-    const typeMap = {
-      'vat': 'invoice',
-      'invoice': 'invoice',
-      'receipt': 'receipt',
-      'paragon': 'receipt',
-      'correction': 'correction',
-      'korekta': 'correction',
-      'proforma': 'proforma'
+  flattenDocumentsToFields(documents) {
+    const result = {
+      // Dokument 1
+      ds_type: null,
+      ds_number: null,
+      ds_date_add: null,
+      ds_total_brutto: null,
+      ds_total_netto: null,
+      // Dokument 2
+      ds2_type: null,
+      ds2_number: null,
+      ds2_date_add: null
     };
 
-    return typeMap[String(type).toLowerCase()] || type || '';
+    if (!documents || documents.length === 0) {
+      return result;
+    }
+
+    // Dokument 1
+    const doc1 = documents[0];
+    if (doc1) {
+      result.ds_type = this.getDocumentType(doc1);
+      result.ds_number = this.getDocumentNumber(doc1);
+      result.ds_date_add = this.fromUnixTimestamp(doc1.date_add);
+      result.ds_total_brutto = this.parseNumber(doc1.total_price_brutto);
+      result.ds_total_netto = this.parseNumber(doc1.total_price_netto);
+    }
+
+    // Dokument 2
+    const doc2 = documents[1];
+    if (doc2) {
+      result.ds2_type = this.getDocumentType(doc2);
+      result.ds2_number = this.getDocumentNumber(doc2);
+      result.ds2_date_add = this.fromUnixTimestamp(doc2.date_add);
+    }
+
+    return result;
+  }
+
+  /**
+   * Pobiera typ dokumentu
+   *
+   * @param {object} document - Dokument
+   * @returns {string} - Typ dokumentu
+   */
+  getDocumentType(document) {
+    if (document.docType === 'receipt') {
+      return 'Paragon';
+    }
+
+    // Faktury
+    const typeMap = {
+      'normal': 'Faktura VAT',
+      'pro_forma': 'Faktura pro forma',
+      'receipt': 'Paragon',
+      'correction': 'Faktura korygująca',
+      'margin': 'Faktura marża',
+      'advance': 'Faktura zaliczkowa'
+    };
+
+    return typeMap[document.type] || 'Faktura';
+  }
+
+  /**
+   * Pobiera numer dokumentu
+   *
+   * @param {object} document - Dokument
+   * @returns {string|null} - Numer dokumentu
+   */
+  getDocumentNumber(document) {
+    if (document.docType === 'receipt') {
+      return document.receipt_full_nr || document.receipt_nr || null;
+    }
+
+    return document.full_number || document.number || null;
   }
 }
 

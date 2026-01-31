@@ -1,14 +1,14 @@
 /**
  * Shipments Fetcher
  *
- * Pobiera przesyłki z BaseLinker API (getOrderPackages).
- * Dataset: shipments
+ * Pobiera przesyłki kurierskie poprzez:
+ * 1. Pobieranie zamówień (getOrders)
+ * 2. Dla każdego zamówienia - getOrderPackages
  *
- * Może pobierać przesyłki dla wszystkich zamówień lub konkretnych.
+ * Zwraca tylko zamówienia które mają przesyłki.
  */
 
 const BaseFetcher = require('./BaseFetcher');
-const logger = require('../../../utils/logger');
 
 class ShipmentsFetcher extends BaseFetcher {
   constructor() {
@@ -16,188 +16,208 @@ class ShipmentsFetcher extends BaseFetcher {
   }
 
   /**
-   * Pobiera przesyłki z BaseLinker
-   * @param {string} token - Token BaseLinker
-   * @param {Object} filters - Filtry
-   * @param {Object} options - Opcje
-   * @returns {Promise<Object[]>}
+   * Pobiera przesyłki z BaseLinker API
+   *
+   * @param {string} token - Token API BaseLinker
+   * @param {object} filters - Filtry
+   * @param {object} options - Opcje
+   * @returns {Promise<Array>} - Tablica znormalizowanych przesyłek
    */
   async fetch(token, filters = {}, options = {}) {
-    this.logFetchStart({ filters });
+    this.resetStats();
+    this.logFetchStart({ filters, options });
 
-    const client = this.getBaseLinkerClient(token);
+    try {
+      const maxRecords = options.maxRecords || 10000;
 
-    // Najpierw pobieramy zamówienia, potem przesyłki dla każdego
-    // BaseLinker nie ma endpointu do pobierania wszystkich przesyłek na raz
+      // 1. Pobierz zamówienia
+      const orders = await this.fetchOrders(token, filters, maxRecords);
 
-    const apiFilters = this.convertFilters(filters);
+      // 2. Dla każdego zamówienia pobierz przesyłki
+      const allShipments = [];
 
-    // Pobierz zamówienia z paginacją
-    const orders = await this.fetchAllPages(async (lastOrderId) => {
-      const params = {
-        ...apiFilters,
-        get_unconfirmed_orders: false
-      };
+      const batchSize = 20; // Przetwarzaj 20 zamówień naraz
 
-      if (lastOrderId) {
-        params.order_id = lastOrderId;
-      }
+      for (let i = 0; i < orders.length && allShipments.length < maxRecords; i += batchSize) {
+        const batch = orders.slice(i, i + batchSize);
 
-      const response = await client.getOrders(params);
+        const promises = batch.map(async (order) => {
+          try {
+            this.stats.apiCalls++;
+            const packages = await this.baselinkerService.getOrderPackages(token, order.order_id);
 
-      if (!response || !response.orders) {
-        return { data: [], nextPageToken: null };
-      }
+            return packages.map(pkg => ({
+              ...pkg,
+              _order: order
+            }));
+          } catch (error) {
+            this.logError(`Failed to get packages for order ${order.order_id}`, error);
+            return [];
+          }
+        });
 
-      const ordersArray = Object.values(response.orders);
+        const results = await Promise.all(promises);
 
-      const nextPageToken = ordersArray.length === 100
-        ? ordersArray[ordersArray.length - 1].order_id
-        : null;
-
-      return {
-        data: ordersArray,
-        nextPageToken
-      };
-    });
-
-    // Zbierz wszystkie przesyłki ze wszystkich zamówień
-    const allShipments = [];
-
-    for (const order of orders) {
-      // Pobierz szczegóły przesyłek dla zamówienia
-      try {
-        const packagesResponse = await client.getOrderPackages(order.order_id);
-
-        if (packagesResponse && packagesResponse.packages) {
-          const packages = Array.isArray(packagesResponse.packages)
-            ? packagesResponse.packages
-            : Object.values(packagesResponse.packages);
-
+        for (const packages of results) {
           for (const pkg of packages) {
-            allShipments.push(this.normalizeShipment(pkg, order));
+            if (allShipments.length < maxRecords) {
+              allShipments.push(this.normalize(pkg, pkg._order, filters));
+            }
           }
         }
-      } catch (error) {
-        logger.warn(`Failed to fetch packages for order ${order.order_id}`, {
-          error: error.message
-        });
+
+        // Rate limiting
+        if (i + batchSize < orders.length) {
+          await this.rateLimit(200);
+        }
       }
+
+      // Filtruj po statusie śledzenia jeśli podano
+      let filteredShipments = allShipments;
+      if (filters.trackingStatus) {
+        const statusFilter = parseInt(filters.trackingStatus, 10);
+        filteredShipments = allShipments.filter(s => s.tracking_status === statusFilter);
+      }
+
+      // Filtruj po kurierze jeśli podano
+      if (filters.courierCode) {
+        filteredShipments = filteredShipments.filter(
+          s => s.courier_code === filters.courierCode
+        );
+      }
+
+      this.logFetchComplete(filteredShipments.length);
+
+      return filteredShipments;
+
+    } catch (error) {
+      this.logError('Fetch failed', error);
+      throw error;
     }
-
-    this.logFetchComplete(allShipments.length);
-
-    return allShipments;
   }
 
   /**
-   * Normalizuje strukturę przesyłki
-   * @param {Object} pkg - Surowa przesyłka z API
-   * @param {Object} order - Zamówienie (dla kontekstu)
-   * @returns {Object}
+   * Pobiera zamówienia z filtracją
    */
-  normalizeShipment(pkg, order) {
+  async fetchOrders(token, filters, maxRecords) {
+    const apiFilters = this.convertOrderFilters(filters);
+    const allOrders = [];
+    let lastDateConfirmed = apiFilters.date_from || 0;
+    let hasMore = true;
+
+    while (hasMore && allOrders.length < maxRecords) {
+      this.stats.apiCalls++;
+
+      const params = {
+        ...apiFilters,
+        date_confirmed_from: lastDateConfirmed
+      };
+
+      delete params.date_from;
+
+      const response = await this.baselinkerService.makeRequest(token, 'getOrders', params);
+      const orders = response.orders || [];
+
+      if (orders.length === 0) {
+        hasMore = false;
+      } else {
+        allOrders.push(...orders);
+
+        const lastOrder = orders[orders.length - 1];
+        lastDateConfirmed = lastOrder.date_confirmed + 1;
+        hasMore = orders.length === 100;
+      }
+
+      if (hasMore) {
+        await this.rateLimit(100);
+      }
+    }
+
+    return allOrders;
+  }
+
+  /**
+   * Konwertuje filtry dla zamówień
+   */
+  convertOrderFilters(filters) {
+    const converted = {};
+
+    if (filters.dateFrom) {
+      converted.date_from = this.toUnixTimestamp(filters.dateFrom);
+    }
+
+    if (filters.dateTo) {
+      converted.date_to = this.toUnixTimestamp(filters.dateTo);
+    }
+
+    return converted;
+  }
+
+  /**
+   * Normalizuje przesyłkę
+   */
+  normalize(pkg, order, filters) {
     return {
       // Podstawowe
       package_id: pkg.package_id,
       order_id: order.order_id,
-      courier_code: pkg.courier_code || '',
-      courier_name: '', // Wypełni transformer/context
-      tracking_number: pkg.tracking_number || pkg.courier_package_nr || '',
-      tracking_url: this.buildTrackingUrl(pkg.courier_code, pkg.tracking_number || pkg.courier_package_nr),
+      courier_code: pkg.courier_code || null,
+      courier_package_nr: pkg.courier_package_nr || null,
 
-      // Daty
-      date_add: pkg.date_add,
-      date_sent: pkg.date_sent,
-      date_delivered: pkg.date_delivered,
+      // Kurier
+      courier_other_name: pkg.courier_other_name || null,
+      courier_inner_number: pkg.courier_inner_number || null,
+      account_id: pkg.account_id || null,
 
-      // Status
-      status: pkg.status || '',
-      status_code: pkg.status_code || '',
-      is_delivered: pkg.is_delivered === true || pkg.is_delivered === 1,
-      is_return: pkg.is_return === true || pkg.is_return === 1,
+      // Śledzenie
+      tracking_status: pkg.tracking_status,
+      tracking_status_name: this.mapTrackingStatus(pkg.tracking_status),
+      tracking_status_date: this.fromUnixTimestamp(pkg.tracking_status_date),
+      tracking_delivery_days: pkg.tracking_delivery_days || null,
+      tracking_url: pkg.tracking_url || null,
 
-      // Parametry przesyłki
-      weight: Number(pkg.weight) || 0,
-      size_x: Number(pkg.size_x) || 0,
-      size_y: Number(pkg.size_y) || 0,
-      size_z: Number(pkg.size_z) || 0,
-      cod_value: Number(pkg.cod_value) || 0,
-      insurance_value: Number(pkg.insurance_value) || 0,
+      // Typ
+      package_type: pkg.package_type || null,
+      is_return: pkg.is_return || false,
 
-      // Adres doręczenia (z zamówienia)
-      receiver_name: order.delivery_fullname || '',
-      receiver_address: order.delivery_address || '',
-      receiver_city: order.delivery_city || '',
-      receiver_postcode: order.delivery_postcode || '',
-      receiver_country: order.delivery_country || '',
-      receiver_phone: order.phone || '',
-      receiver_email: order.email || '',
+      // Placeholder dla enrichmentu
+      weight: null,
+      width: null,
+      height: null,
+      length: null,
+      cod_value: null,
+      insurance_value: null,
+      tracking_history_json: null,
 
-      // Punkt odbioru
-      pickup_point_id: order.delivery_point_id || '',
-      pickup_point_name: order.delivery_point_name || '',
-      pickup_point_address: order.delivery_point_address || '',
-
-      // Tracking (placeholder - wypełni enricher)
-      tracking_last_status: null,
-      tracking_last_date: null,
-      tracking_last_location: null,
-      tracking_events_count: null,
-
-      // Dokumenty (placeholder - wypełni enricher)
-      has_label: null,
-      label_url: null,
-      has_protocol: null,
-      protocol_url: null,
-
-      // Metadata
-      _originalPackage: pkg,
-      _order: {
-        order_id: order.order_id,
-        currency: order.currency
-      }
+      // Dane zamówienia
+      order_date: this.fromUnixTimestamp(order.date_add),
+      order_status_id: order.order_status_id,
+      delivery_fullname: order.delivery_fullname || null,
+      delivery_city: order.delivery_city || null,
+      delivery_country: order.delivery_country || null
     };
   }
 
   /**
-   * Buduje URL do śledzenia przesyłki
-   * @param {string} courierCode
-   * @param {string} trackingNumber
-   * @returns {string}
+   * Mapuje status śledzenia na nazwę
    */
-  buildTrackingUrl(courierCode, trackingNumber) {
-    if (!trackingNumber) return '';
-
-    const trackingUrls = {
-      'inpost': `https://inpost.pl/sledzenie-przesylek?number=${trackingNumber}`,
-      'dpd': `https://www.dpd.com.pl/tracking?number=${trackingNumber}`,
-      'dhl': `https://www.dhl.com/pl-pl/home/tracking.html?tracking-id=${trackingNumber}`,
-      'ups': `https://www.ups.com/track?tracknum=${trackingNumber}`,
-      'fedex': `https://www.fedex.com/fedextrack/?trknbr=${trackingNumber}`,
-      'gls': `https://gls-group.eu/PL/pl/sledzenie-paczek?match=${trackingNumber}`,
-      'pocztex': `https://www.pocztex.pl/sledzenie-przesylki/?numer=${trackingNumber}`,
-      'orlen_paczka': `https://nadaj.orlenpaczka.pl/sledzenie?number=${trackingNumber}`
+  mapTrackingStatus(status) {
+    const statusMap = {
+      0: 'Nieznany',
+      1: 'Etykieta utworzona',
+      2: 'Wysłana',
+      3: 'Niedoręczona',
+      4: 'W doręczeniu',
+      5: 'Doręczona',
+      6: 'Zwrot',
+      7: 'Awizo',
+      8: 'Czeka w punkcie',
+      9: 'Zagubiona',
+      10: 'Anulowana',
+      11: 'W drodze'
     };
 
-    const code = String(courierCode).toLowerCase();
-    return trackingUrls[code] || '';
-  }
-
-  /**
-   * Konwertuje filtry specyficzne dla przesyłek
-   * @param {Object} filters
-   * @returns {Object}
-   */
-  convertFilters(filters) {
-    const apiFilters = super.convertFilters(filters);
-
-    // Filtr po kurierze
-    if (filters.courierCode) {
-      apiFilters.delivery_package_module = filters.courierCode;
-    }
-
-    return apiFilters;
+    return statusMap[status] || `Status ${status}`;
   }
 }
 

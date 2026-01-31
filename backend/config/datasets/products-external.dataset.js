@@ -1,82 +1,124 @@
 /**
- * Dataset: PRODUKTY - ZEWNĘTRZNE (products_external)
+ * Dataset: PRODUKTY - ZEWNĘTRZNY (External Storage Products)
  *
- * Lista produktów z zewnętrznych magazynów (hurtownie).
- * Jeden wiersz = jeden produkt.
+ * Główne API: getExternalStorageProductsList
+ * Enrichmenty: external-details, external-prices, external-quantity
  *
- * API: getExternalStorageProductsList
+ * Produkty z zewnętrznych magazynów (sklepy, hurtownie).
+ * Wymaga wyboru magazynu zewnętrznego (storageId).
  */
 
 module.exports = {
   id: 'products_external',
-  label: 'Produkty - Zewnętrzne',
-  description: 'Lista produktów z zewnętrznych magazynów (hurtownie)',
+  label: 'Produkty - Zewnętrzny',
+  description: 'Eksport produktów z zewnętrznych magazynów (sklepy, hurtownie)',
   icon: 'external-link',
 
+  // Źródło danych
   primaryQuery: 'getExternalStorageProductsList',
-  enrichments: [],
+  enrichments: ['external-details', 'external-prices', 'external-quantity'],
+  requiresInventory: false,
+  requiresStorage: true, // Wymaga wyboru magazynu zewnętrznego
 
-  // Wymaga wyboru zewnętrznego magazynu
-  requiresExternalStorage: true,
+  // Filtry dostępne dla tego datasetu
+  availableFilters: [
+    { key: 'storageId', label: 'Magazyn zewnętrzny', type: 'externalStorage', required: true },
+    { key: 'categoryId', label: 'Kategoria', type: 'externalCategory' },
+    { key: 'sku', label: 'SKU', type: 'text' },
+    { key: 'ean', label: 'EAN', type: 'text' },
+    { key: 'name', label: 'Nazwa (zawiera)', type: 'text' },
+    { key: 'priceFrom', label: 'Cena od', type: 'number' },
+    { key: 'priceTo', label: 'Cena do', type: 'number' },
+    { key: 'stockFrom', label: 'Stan od', type: 'number' },
+    { key: 'stockTo', label: 'Stan do', type: 'number' }
+  ],
 
+  // Grupy pól
   fieldGroups: [
-    // 6.1 IDENTYFIKATORY
+    // ========================================
+    // IDENTYFIKATORY
+    // ========================================
     {
       id: 'identifiers',
       label: 'Identyfikatory',
       fields: [
-        { key: 'product_id', label: 'ID produktu', type: 'text', description: 'Identyfikator w zewnętrznym magazynie' },
-        { key: 'storage_id', label: 'ID magazynu', type: 'text', description: 'Identyfikator zewnętrznego magazynu' },
-        { key: 'storage_name', label: 'Nazwa magazynu', type: 'text', description: 'Nazwa hurtowni/dostawcy', computed: true },
-        { key: 'sku', label: 'SKU', type: 'text', description: 'Kod SKU' },
-        { key: 'ean', label: 'EAN', type: 'text', description: 'Kod kreskowy' }
+        { key: 'product_id', label: 'ID produktu', type: 'text', description: 'ID produktu w zewnętrznym magazynie' },
+        { key: 'sku', label: 'SKU', type: 'text' },
+        { key: 'ean', label: 'EAN', type: 'text' },
+        { key: 'asin', label: 'ASIN', type: 'text' }
       ]
     },
 
-    // 6.2 PODSTAWOWE
+    // ========================================
+    // PODSTAWOWE
+    // ========================================
     {
       id: 'basic',
       label: 'Podstawowe',
       fields: [
-        { key: 'name', label: 'Nazwa', type: 'text', description: 'Nazwa produktu' },
-        { key: 'description', label: 'Opis', type: 'text', description: 'Opis produktu' },
-        { key: 'category', label: 'Kategoria', type: 'text', description: 'Kategoria w zewnętrznym magazynie' },
-        { key: 'manufacturer', label: 'Producent', type: 'text', description: 'Producent/marka' }
+        { key: 'name', label: 'Nazwa', type: 'text' },
+        { key: 'category_id', label: 'ID kategorii', type: 'text' }
       ]
     },
 
-    // 6.3 CENY
+    // ========================================
+    // CENY
+    // ========================================
     {
-      id: 'prices',
+      id: 'pricing',
       label: 'Ceny',
       fields: [
-        { key: 'price_brutto', label: 'Cena brutto', type: 'number', description: 'Cena zakupu brutto' },
-        { key: 'price_netto', label: 'Cena netto', type: 'number', description: 'Cena zakupu netto' },
-        { key: 'price_retail', label: 'Cena detaliczna', type: 'number', description: 'Sugerowana cena sprzedaży' }
+        { key: 'price_brutto', label: 'Cena brutto', type: 'number' },
+        { key: 'price_netto', label: 'Cena netto', type: 'number' },
+        { key: 'tax_rate', label: 'Stawka VAT', type: 'number' }
       ]
     },
 
-    // 6.4 DOSTĘPNOŚĆ
+    // ========================================
+    // STANY
+    // ========================================
     {
-      id: 'availability',
-      label: 'Dostępność',
+      id: 'stock',
+      label: 'Stany',
       fields: [
-        { key: 'quantity', label: 'Ilość', type: 'number', description: 'Dostępna ilość u dostawcy' },
-        { key: 'available', label: 'Dostępny', type: 'boolean', description: 'Czy produkt jest dostępny' },
-        { key: 'delivery_time', label: 'Czas dostawy', type: 'text', description: 'Przewidywany czas dostawy' }
+        { key: 'quantity', label: 'Ilość', type: 'number' }
       ]
     },
 
-    // 6.5 WYMIARY
+    // ========================================
+    // WARIANTY
+    // ========================================
     {
-      id: 'dimensions',
-      label: 'Wymiary',
+      id: 'variants',
+      label: 'Warianty',
       fields: [
-        { key: 'weight', label: 'Waga', type: 'number', description: 'Waga w kg' },
-        { key: 'height', label: 'Wysokość', type: 'number', description: 'Wysokość w cm' },
-        { key: 'width', label: 'Szerokość', type: 'number', description: 'Szerokość w cm' },
-        { key: 'length', label: 'Długość', type: 'number', description: 'Długość w cm' }
+        { key: 'has_variants', label: 'Ma warianty', type: 'boolean' },
+        { key: 'variants_count', label: 'Liczba wariantów', type: 'number' },
+        { key: 'variants_json', label: 'Warianty (JSON)', type: 'text' }
+      ]
+    },
+
+    // ========================================
+    // SZCZEGÓŁY (enrichment)
+    // ========================================
+    {
+      id: 'details',
+      label: 'Szczegóły',
+      description: 'Dodatkowe dane - wymaga enrichmentu',
+      fields: [
+        { key: 'description', label: 'Opis', type: 'text', enrichment: 'external-details' },
+        { key: 'weight', label: 'Waga', type: 'number', enrichment: 'external-details' },
+        { key: 'image_url', label: 'URL obrazu', type: 'text', enrichment: 'external-details' }
       ]
     }
+  ],
+
+  // Primary key
+  primaryKey: 'product_id',
+
+  // Sort options
+  sortOptions: [
+    { key: 'product_id', label: 'ID produktu', direction: 'asc' },
+    { key: 'name', label: 'Nazwa', direction: 'asc' }
   ]
 };

@@ -1,98 +1,140 @@
 /**
- * Dataset: DOKUMENTY MAGAZYNOWE (warehouse_docs)
+ * Dataset: DOKUMENTY MAGAZYNOWE (Warehouse Documents)
  *
- * WZ, PZ, RW, PW, BO - dokumenty magazynowe.
- * Jeden wiersz = jeden dokument.
+ * Główne API: getInventoryDocuments
+ * Enrichmenty: document-items
  *
- * API: getInventoryDocuments
+ * Dokumenty magazynowe: PZ, PW, WZ, RW, MM, BO.
  */
 
 module.exports = {
   id: 'warehouse_docs',
   label: 'Dokumenty magazynowe',
-  description: 'WZ, PZ, RW, PW, BO - dokumenty magazynowe',
-  icon: 'archive',
+  description: 'Eksport dokumentów magazynowych (PZ, PW, WZ, RW, MM, BO)',
+  icon: 'clipboard',
 
+  // Źródło danych
   primaryQuery: 'getInventoryDocuments',
-  enrichments: [],
+  enrichments: ['document-items'],
+  requiresInventory: true,
 
+  // Filtry dostępne dla tego datasetu
+  availableFilters: [
+    { key: 'inventoryId', label: 'Katalog', type: 'inventory', required: true },
+    { key: 'dateFrom', label: 'Data od', type: 'date' },
+    { key: 'dateTo', label: 'Data do', type: 'date' },
+    { key: 'documentType', label: 'Typ dokumentu', type: 'select', options: [
+      { value: '', label: 'Wszystkie' },
+      { value: '0', label: 'PZ - Przyjęcie zewnętrzne' },
+      { value: '1', label: 'PW - Przyjęcie wewnętrzne' },
+      { value: '2', label: 'WZ - Wydanie zewnętrzne' },
+      { value: '3', label: 'RW - Rozchód wewnętrzny' },
+      { value: '4', label: 'MM - Przesunięcie międzymagazynowe' },
+      { value: '5', label: 'BO - Bilans otwarcia' }
+    ]},
+    { key: 'warehouseId', label: 'Magazyn', type: 'warehouse' },
+    { key: 'seriesId', label: 'Seria numeracji', type: 'documentSeries' }
+  ],
+
+  // Grupy pól
   fieldGroups: [
-    // 4.1 PODSTAWOWE
+    // ========================================
+    // PODSTAWOWE
+    // ========================================
     {
       id: 'basic',
       label: 'Podstawowe',
       fields: [
-        { key: 'document_id', label: 'ID dokumentu', type: 'number', description: 'Unikalny identyfikator dokumentu' },
-        { key: 'type', label: 'Typ dokumentu', type: 'text', description: 'WZ (wydanie), PZ (przyjęcie), RW (rozchód), PW (przychód), BO (bilans)' },
-        { key: 'series_id', label: 'ID serii', type: 'number', description: 'Seria numeracji dokumentu' },
-        { key: 'number', label: 'Numer dokumentu', type: 'text', description: 'Pełny numer (np. WZ/2024/01/001)' },
-        { key: 'date_add', label: 'Data utworzenia', type: 'datetime', description: 'Kiedy utworzono dokument' },
-        { key: 'date_document', label: 'Data dokumentu', type: 'date', description: 'Data operacji magazynowej' }
+        { key: 'document_id', label: 'ID dokumentu', type: 'number' },
+        { key: 'document_type', label: 'Typ dokumentu', type: 'number', description: '0=PZ, 1=PW, 2=WZ, 3=RW, 4=MM, 5=BO' },
+        { key: 'document_type_name', label: 'Nazwa typu', type: 'text', computed: true },
+        { key: 'document_status', label: 'Status', type: 'number', description: '0=szkic, 1=zatwierdzony' },
+        { key: 'document_status_name', label: 'Nazwa statusu', type: 'text', computed: true },
+        { key: 'full_number', label: 'Pełny numer', type: 'text' },
+        { key: 'description', label: 'Opis', type: 'text' }
       ]
     },
 
-    // 4.2 MAGAZYN
+    // ========================================
+    // DATY
+    // ========================================
+    {
+      id: 'dates',
+      label: 'Daty',
+      fields: [
+        { key: 'date_created', label: 'Data utworzenia', type: 'datetime' },
+        { key: 'date_confirmed', label: 'Data zatwierdzenia', type: 'datetime' }
+      ]
+    },
+
+    // ========================================
+    // MAGAZYN
+    // ========================================
     {
       id: 'warehouse',
       label: 'Magazyn',
       fields: [
-        { key: 'warehouse_id', label: 'ID magazynu', type: 'number', description: 'Identyfikator magazynu' },
-        { key: 'warehouse_name', label: 'Nazwa magazynu', type: 'text', description: 'Nazwa magazynu', computed: true },
-        { key: 'inventory_id', label: 'ID katalogu', type: 'number', description: 'Katalog produktów, którego dotyczy' }
+        { key: 'warehouse_id', label: 'ID magazynu', type: 'text', description: 'Magazyn źródłowy' },
+        { key: 'warehouse_id2', label: 'ID magazynu docelowego', type: 'text', description: 'Dla przesunięć MM' }
       ]
     },
 
-    // 4.3 KONTRAHENT
+    // ========================================
+    // KIERUNEK
+    // ========================================
     {
-      id: 'contractor',
-      label: 'Kontrahent',
+      id: 'direction',
+      label: 'Kierunek',
       fields: [
-        { key: 'contractor_id', label: 'ID kontrahenta', type: 'number', description: 'Identyfikator dostawcy/odbiorcy' },
-        { key: 'contractor_name', label: 'Nazwa kontrahenta', type: 'text', description: 'Nazwa firmy' },
-        { key: 'contractor_nip', label: 'NIP kontrahenta', type: 'text', description: 'NIP kontrahenta' }
+        { key: 'direction', label: 'Kierunek', type: 'number', description: '0=przyjęcie, 1=wydanie' },
+        { key: 'direction_name', label: 'Nazwa kierunku', type: 'text', computed: true }
       ]
     },
 
-    // 4.4 WARTOŚCI
+    // ========================================
+    // WARTOŚCI
+    // ========================================
     {
-      id: 'values',
+      id: 'totals',
       label: 'Wartości',
       fields: [
-        { key: 'total_value_brutto', label: 'Wartość brutto', type: 'number', description: 'Łączna wartość z VAT' },
-        { key: 'total_value_netto', label: 'Wartość netto', type: 'number', description: 'Łączna wartość bez VAT' },
-        { key: 'total_quantity', label: 'Łączna ilość', type: 'number', description: 'Suma sztuk na dokumencie' },
-        { key: 'currency', label: 'Waluta', type: 'text', description: 'Waluta dokumentu' }
+        { key: 'items_count', label: 'Liczba pozycji', type: 'number' },
+        { key: 'total_quantity', label: 'Łączna ilość', type: 'number' },
+        { key: 'total_price', label: 'Łączna wartość', type: 'number' }
       ]
     },
 
-    // 4.5 POWIĄZANIA
+    // ========================================
+    // SERIA
+    // ========================================
     {
-      id: 'relations',
-      label: 'Powiązania',
+      id: 'series',
+      label: 'Seria',
       fields: [
-        { key: 'order_id', label: 'Zamówienie', type: 'number', description: 'Powiązane zamówienie (jeśli WZ)' },
-        { key: 'purchase_order_id', label: 'Zamówienie zakupu', type: 'number', description: 'Powiązane PO (jeśli PZ)' },
-        { key: 'related_document_id', label: 'Dokument powiązany', type: 'number', description: 'Inny powiązany dokument' }
+        { key: 'document_series_id', label: 'ID serii', type: 'number' }
       ]
     },
 
-    // 4.6 POZYCJE (AGREGOWANE)
+    // ========================================
+    // POZYCJE (enrichment: document-items)
+    // ========================================
     {
-      id: 'items_summary',
-      label: 'Pozycje',
+      id: 'items',
+      label: 'Pozycje dokumentu',
+      description: 'Szczegółowe pozycje - wymaga enrichmentu',
       fields: [
-        { key: 'items_count', label: 'Liczba pozycji', type: 'number', description: 'Ile różnych produktów', computed: true },
-        { key: 'items_skus', label: 'SKU produktów', type: 'text', description: 'Lista SKU oddzielona przecinkiem', computed: true }
-      ]
-    },
-
-    // 4.7 KOMENTARZE
-    {
-      id: 'comments',
-      label: 'Komentarze',
-      fields: [
-        { key: 'comments', label: 'Komentarze', type: 'text', description: 'Uwagi do dokumentu' }
+        { key: 'items_summary', label: 'Podsumowanie pozycji', type: 'text' },
+        { key: 'items_json', label: 'Pozycje (JSON)', type: 'text', enrichment: 'document-items' }
       ]
     }
+  ],
+
+  // Primary key
+  primaryKey: 'document_id',
+
+  // Sort options
+  sortOptions: [
+    { key: 'date_created', label: 'Data utworzenia', direction: 'desc' },
+    { key: 'document_id', label: 'ID dokumentu', direction: 'desc' }
   ]
 };

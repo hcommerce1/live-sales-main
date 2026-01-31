@@ -1,14 +1,11 @@
 /**
  * Warehouse Documents Fetcher
  *
- * Pobiera dokumenty magazynowe z BaseLinker API (getInventoryDocuments).
- * Dataset: warehouse_docs
- *
- * Typy dokumentów: WZ, PZ, RW, PW, BO
+ * Pobiera dokumenty magazynowe z API BaseLinker (getInventoryDocuments).
+ * Typy: PZ, PW, WZ, RW, MM, BO.
  */
 
 const BaseFetcher = require('./BaseFetcher');
-const logger = require('../../../utils/logger');
 
 class WarehouseDocsFetcher extends BaseFetcher {
   constructor() {
@@ -16,158 +13,183 @@ class WarehouseDocsFetcher extends BaseFetcher {
   }
 
   /**
-   * Pobiera dokumenty magazynowe z BaseLinker
-   * @param {string} token - Token BaseLinker
-   * @param {Object} filters - Filtry
-   * @param {Object} options - Opcje (inventoryId)
-   * @returns {Promise<Object[]>}
+   * Pobiera dokumenty magazynowe z BaseLinker API
+   *
+   * @param {string} token - Token API BaseLinker
+   * @param {object} filters - Filtry
+   * @param {number} filters.inventoryId - ID katalogu (wymagany)
+   * @param {string} filters.dateFrom - Data od
+   * @param {string} filters.dateTo - Data do
+   * @param {number} filters.documentType - Typ dokumentu (0-5)
+   * @param {string} filters.warehouseId - ID magazynu
+   * @param {number} filters.seriesId - ID serii
+   * @param {object} options - Opcje
+   * @returns {Promise<Array>} - Tablica znormalizowanych dokumentów
    */
   async fetch(token, filters = {}, options = {}) {
-    this.logFetchStart({ filters, inventoryId: options.inventoryId });
+    this.resetStats();
+    this.logFetchStart({ filters, options });
 
-    const client = this.getBaseLinkerClient(token);
-    const apiFilters = this.convertFilters(filters);
-
-    // Dodaj inventory_id jeśli podano
-    if (options.inventoryId) {
-      apiFilters.inventory_id = options.inventoryId;
+    const inventoryId = filters.inventoryId || options.inventoryId;
+    if (!inventoryId) {
+      throw new Error('inventoryId is required for warehouse_docs dataset');
     }
 
-    // Pobierz dokumenty z paginacją
-    const documents = await this.fetchAllPages(async (lastDocumentId) => {
-      const params = { ...apiFilters };
+    try {
+      const apiFilters = this.convertFilters(filters, inventoryId);
+      const maxRecords = options.maxRecords || 10000;
 
-      if (lastDocumentId) {
-        params.document_id = lastDocumentId;
-      }
+      const allDocuments = await this.fetchAllPages(
+        async (lastId) => {
+          const params = { ...apiFilters };
 
-      // BaseLinker API: getInventoryDocuments
-      const response = await client.makeRequest('getInventoryDocuments', params);
+          if (lastId) {
+            params.id_from = lastId;
+          }
 
-      if (!response || !response.documents) {
-        return { data: [], nextPageToken: null };
-      }
+          const response = await this.baselinkerService.makeRequest(
+            token,
+            'getInventoryDocuments',
+            params
+          );
 
-      const documentsArray = Object.values(response.documents);
+          const documents = response.documents || [];
 
-      const nextPageToken = documentsArray.length === 100
-        ? documentsArray[documentsArray.length - 1].document_id
-        : null;
+          let nextPageToken = null;
+          if (documents.length === 100) {
+            const lastDoc = documents[documents.length - 1];
+            nextPageToken = lastDoc.document_id + 1;
+          }
 
-      return {
-        data: documentsArray,
-        nextPageToken
-      };
-    });
+          return {
+            data: documents,
+            nextPageToken
+          };
+        },
+        maxRecords
+      );
 
-    // Normalizuj dane dokumentów
-    const normalizedDocs = documents.map(doc => this.normalizeDocument(doc));
+      const normalizedDocuments = allDocuments.map(doc => this.normalize(doc));
 
-    this.logFetchComplete(normalizedDocs.length);
+      this.logFetchComplete(normalizedDocuments.length);
 
-    return normalizedDocs;
+      return normalizedDocuments;
+
+    } catch (error) {
+      this.logError('Fetch failed', error);
+      throw error;
+    }
   }
 
   /**
-   * Normalizuje strukturę dokumentu
-   * @param {Object} doc - Surowy dokument z API
-   * @returns {Object}
+   * Konwertuje filtry UI na format API
    */
-  normalizeDocument(doc) {
-    // Agreguj pozycje dokumentu
-    const items = doc.items || [];
-    const itemsCount = items.length;
-    const totalQuantity = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    const itemsSkus = items.map(item => item.sku).filter(Boolean).join(', ');
+  convertFilters(filters, inventoryId) {
+    const converted = {
+      inventory_id: inventoryId
+    };
 
+    if (filters.dateFrom) {
+      converted.date_from = this.toUnixTimestamp(filters.dateFrom);
+    }
+
+    if (filters.dateTo) {
+      converted.date_to = this.toUnixTimestamp(filters.dateTo);
+    }
+
+    if (filters.documentType !== undefined && filters.documentType !== '') {
+      converted.document_type = parseInt(filters.documentType, 10);
+    }
+
+    if (filters.warehouseId) {
+      converted.warehouse_id = filters.warehouseId;
+    }
+
+    if (filters.seriesId) {
+      converted.series_id = filters.seriesId;
+    }
+
+    return converted;
+  }
+
+  /**
+   * Normalizuje dokument magazynowy
+   */
+  normalize(doc) {
     return {
       // Podstawowe
       document_id: doc.document_id,
-      type: this.mapDocumentType(doc.type),
-      series_id: doc.series_id,
-      number: doc.number || '',
-      date_add: doc.date_add,
-      date_document: doc.date_document,
+      document_type: doc.document_type,
+      document_type_name: this.mapDocumentType(doc.document_type),
+      document_status: doc.document_status,
+      document_status_name: this.mapDocumentStatus(doc.document_status),
+      full_number: doc.full_number || null,
+      description: doc.description || null,
+
+      // Daty
+      date_created: this.fromUnixTimestamp(doc.date_created),
+      date_confirmed: this.fromUnixTimestamp(doc.date_confirmed),
 
       // Magazyn
-      warehouse_id: doc.warehouse_id,
-      warehouse_name: '', // Wypełni transformer/enricher
-      inventory_id: doc.inventory_id,
+      warehouse_id: doc.warehouse_id || null,
+      warehouse_id2: doc.warehouse_id2 || null,
 
-      // Kontrahent
-      contractor_id: doc.contractor_id,
-      contractor_name: doc.contractor_name || '',
-      contractor_nip: doc.contractor_nip || '',
+      // Kierunek
+      direction: doc.direction,
+      direction_name: this.mapDirection(doc.direction),
 
       // Wartości
-      total_value_brutto: Number(doc.total_value_brutto) || 0,
-      total_value_netto: Number(doc.total_value_netto) || 0,
-      total_quantity: totalQuantity,
-      currency: doc.currency || 'PLN',
+      items_count: doc.items_count || 0,
+      total_quantity: this.parseNumber(doc.total_quantity),
+      total_price: this.parseNumber(doc.total_price),
 
-      // Powiązania
-      order_id: doc.order_id || null,
-      purchase_order_id: doc.purchase_order_id || null,
-      related_document_id: doc.related_document_id || null,
+      // Seria
+      document_series_id: doc.document_series_id || null,
 
-      // Pozycje (agregowane)
-      items_count: itemsCount,
-      items_skus: itemsSkus,
-
-      // Komentarze
-      comments: doc.comments || '',
-
-      // Oryginalne pozycje (do ewentualnego enrichment)
-      _items: items
+      // Pozycje (placeholder dla enrichmentu)
+      items_summary: null,
+      items_json: null
     };
   }
 
   /**
-   * Mapuje typ dokumentu na czytelną nazwę
-   * @param {string|number} type
-   * @returns {string}
+   * Mapuje typ dokumentu na nazwę
    */
   mapDocumentType(type) {
     const typeMap = {
-      'wz': 'WZ',
-      'pz': 'PZ',
-      'rw': 'RW',
-      'pw': 'PW',
-      'bo': 'BO',
-      '1': 'WZ',
-      '2': 'PZ',
-      '3': 'RW',
-      '4': 'PW',
-      '5': 'BO'
+      0: 'PZ - Przyjęcie zewnętrzne',
+      1: 'PW - Przyjęcie wewnętrzne',
+      2: 'WZ - Wydanie zewnętrzne',
+      3: 'RW - Rozchód wewnętrzny',
+      4: 'MM - Przesunięcie międzymagazynowe',
+      5: 'BO - Bilans otwarcia'
     };
 
-    return typeMap[String(type).toLowerCase()] || String(type);
+    return typeMap[type] || `Typ ${type}`;
   }
 
   /**
-   * Konwertuje filtry specyficzne dla dokumentów
-   * @param {Object} filters
-   * @returns {Object}
+   * Mapuje status dokumentu na nazwę
    */
-  convertFilters(filters) {
-    const apiFilters = super.convertFilters(filters);
+  mapDocumentStatus(status) {
+    const statusMap = {
+      0: 'Szkic',
+      1: 'Zatwierdzony'
+    };
 
-    // Filtr po typie dokumentu
-    if (filters.documentType) {
-      apiFilters.type = filters.documentType;
-    }
+    return statusMap[status] || `Status ${status}`;
+  }
 
-    // Filtr po magazynie
-    if (filters.warehouseId) {
-      apiFilters.warehouse_id = filters.warehouseId;
-    }
+  /**
+   * Mapuje kierunek na nazwę
+   */
+  mapDirection(direction) {
+    const directionMap = {
+      0: 'Przyjęcie',
+      1: 'Wydanie'
+    };
 
-    // Filtr po serii
-    if (filters.seriesId) {
-      apiFilters.series_id = filters.seriesId;
-    }
-
-    return apiFilters;
+    return directionMap[direction] || null;
   }
 }
 

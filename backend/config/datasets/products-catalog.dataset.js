@@ -1,148 +1,236 @@
 /**
- * Dataset: PRODUKTY - KATALOG (products_catalog)
+ * Dataset: PRODUKTY - KATALOG (Products Catalog)
  *
- * Lista produktów z katalogów BaseLinker.
- * Jeden wiersz = jeden produkt.
+ * Główne API: getInventoryProductsList + getInventoryProductsData
+ * Enrichmenty: prices, stock
  *
- * API: getInventoryProductsList + getInventoryProductsData
+ * Produkty z katalogu BaseLinker (magazyn wewnętrzny).
+ * Wymaga wyboru katalogu (inventoryId).
  */
 
 module.exports = {
   id: 'products_catalog',
   label: 'Produkty - Katalog',
-  description: 'Lista produktów z katalogów BaseLinker',
-  icon: 'package',
+  description: 'Eksport produktów z katalogu BaseLinker (magazyn wewnętrzny)',
+  icon: 'box',
 
+  // Źródło danych
   primaryQuery: 'getInventoryProductsList',
-  enrichments: ['prices', 'stock'],
+  enrichments: ['product-details', 'prices', 'stock'],
+  requiresInventory: true, // Wymaga wyboru katalogu
 
-  // Wymaga wyboru katalogu
-  requiresInventory: true,
+  // Filtry dostępne dla tego datasetu
+  availableFilters: [
+    { key: 'inventoryId', label: 'Katalog', type: 'inventory', required: true },
+    { key: 'categoryId', label: 'Kategoria', type: 'category' },
+    { key: 'sku', label: 'SKU', type: 'text' },
+    { key: 'ean', label: 'EAN', type: 'text' },
+    { key: 'name', label: 'Nazwa (zawiera)', type: 'text' },
+    { key: 'priceFrom', label: 'Cena od', type: 'number' },
+    { key: 'priceTo', label: 'Cena do', type: 'number' },
+    { key: 'stockFrom', label: 'Stan od', type: 'number' },
+    { key: 'stockTo', label: 'Stan do', type: 'number' }
+  ],
 
+  // Grupy pól
   fieldGroups: [
-    // 5.1 IDENTYFIKATORY
+    // ========================================
+    // IDENTYFIKATORY
+    // ========================================
     {
       id: 'identifiers',
       label: 'Identyfikatory',
       fields: [
-        { key: 'product_id', label: 'ID produktu', type: 'text', description: 'Unikalny identyfikator w BaseLinker' },
-        { key: 'sku', label: 'SKU', type: 'text', description: 'Kod magazynowy produktu' },
-        { key: 'ean', label: 'EAN', type: 'text', description: 'Kod kreskowy' },
-        { key: 'manufacturer_code', label: 'Kod producenta', type: 'text', description: 'Kod/symbol nadany przez producenta' }
+        { key: 'id', label: 'ID produktu', type: 'number', description: 'Unikalny ID produktu w BaseLinker' },
+        { key: 'sku', label: 'SKU', type: 'text', description: 'Numer magazynowy' },
+        { key: 'ean', label: 'EAN', type: 'text', description: 'Kod EAN' },
+        { key: 'asin', label: 'ASIN', type: 'text', description: 'Kod ASIN (Amazon)' }
       ]
     },
 
-    // 5.2 PODSTAWOWE
+    // ========================================
+    // PODSTAWOWE
+    // ========================================
     {
       id: 'basic',
       label: 'Podstawowe',
       fields: [
         { key: 'name', label: 'Nazwa', type: 'text', description: 'Nazwa produktu' },
-        { key: 'description', label: 'Opis', type: 'text', description: 'Pełny opis produktu' },
-        { key: 'description_extra1', label: 'Opis dodatkowy 1', type: 'text', description: 'Dodatkowe pole opisowe' },
-        { key: 'description_extra2', label: 'Opis dodatkowy 2', type: 'text', description: 'Dodatkowe pole opisowe' }
+        { key: 'description', label: 'Opis', type: 'text', description: 'Opis produktu', enrichment: 'product-details' },
+        { key: 'description_extra1', label: 'Opis dodatkowy 1', type: 'text', enrichment: 'product-details' },
+        { key: 'description_extra2', label: 'Opis dodatkowy 2', type: 'text', enrichment: 'product-details' },
+        { key: 'is_bundle', label: 'Jest zestawem', type: 'boolean', description: 'Czy produkt jest zestawem', enrichment: 'product-details' }
       ]
     },
 
-    // 5.3 KLASYFIKACJA
+    // ========================================
+    // KLASYFIKACJA
+    // ========================================
     {
       id: 'classification',
       label: 'Klasyfikacja',
       fields: [
-        { key: 'category_id', label: 'ID kategorii', type: 'number', description: 'Identyfikator kategorii' },
-        { key: 'category_name', label: 'Kategoria', type: 'text', description: 'Nazwa kategorii produktu', computed: true },
-        { key: 'manufacturer_id', label: 'ID producenta', type: 'number', description: 'Identyfikator producenta' },
-        { key: 'manufacturer_name', label: 'Producent', type: 'text', description: 'Nazwa producenta/marki', computed: true },
-        { key: 'tags', label: 'Tagi', type: 'text', description: 'Tagi produktu oddzielone przecinkami' }
+        { key: 'category_id', label: 'ID kategorii', type: 'number', enrichment: 'product-details' },
+        { key: 'category_name', label: 'Nazwa kategorii', type: 'text', computed: true },
+        { key: 'manufacturer_id', label: 'ID producenta', type: 'number', enrichment: 'product-details' },
+        { key: 'manufacturer_name', label: 'Nazwa producenta', type: 'text', computed: true },
+        { key: 'tags', label: 'Tagi', type: 'text', description: 'Tagi produktu (rozdzielone przecinkami)', enrichment: 'product-details' },
+        { key: 'star', label: 'Gwiazdka', type: 'number', description: 'Oznaczenie gwiazdką (0-5)', enrichment: 'product-details' }
       ]
     },
 
-    // 5.4 CENY
-    {
-      id: 'prices',
-      label: 'Ceny',
-      fields: [
-        { key: 'price_brutto', label: 'Cena brutto', type: 'number', description: 'Cena sprzedaży z VAT' },
-        { key: 'price_netto', label: 'Cena netto', type: 'number', description: 'Cena sprzedaży bez VAT', computed: true },
-        { key: 'tax_rate', label: 'Stawka VAT', type: 'number', description: 'Stawka VAT (23, 8, 5, 0)' },
-        { key: 'purchase_price_brutto', label: 'Cena zakupu brutto', type: 'number', description: 'Koszt zakupu z VAT' },
-        { key: 'purchase_price_netto', label: 'Cena zakupu netto', type: 'number', description: 'Koszt zakupu bez VAT' },
-        { key: 'average_cost', label: 'Średni koszt', type: 'number', description: 'Średnia ważona kosztu zakupu' }
-      ]
-    },
-
-    // 5.5 STANY MAGAZYNOWE
-    {
-      id: 'stock',
-      label: 'Stany magazynowe',
-      fields: [
-        { key: 'stock_total', label: 'Stan całkowity', type: 'number', description: 'Łączna ilość na wszystkich magazynach' },
-        { key: 'stock_available', label: 'Dostępny', type: 'number', description: 'Ilość dostępna do sprzedaży' },
-        { key: 'stock_reserved', label: 'Zarezerwowany', type: 'number', description: 'Ilość w zamówieniach' },
-        { key: 'stock_warehouse_1', label: 'Stan - magazyn 1', type: 'number', description: 'Stan na pierwszym magazynie', enrichment: 'stock' },
-        { key: 'stock_warehouse_2', label: 'Stan - magazyn 2', type: 'number', description: 'Stan na drugim magazynie', enrichment: 'stock' },
-        { key: 'stock_warehouse_3', label: 'Stan - magazyn 3', type: 'number', description: 'Stan na trzecim magazynie', enrichment: 'stock' }
-      ]
-    },
-
-    // 5.6 WYMIARY I WAGA
+    // ========================================
+    // WYMIARY
+    // ========================================
     {
       id: 'dimensions',
-      label: 'Wymiary i waga',
+      label: 'Wymiary',
       fields: [
-        { key: 'weight', label: 'Waga (kg)', type: 'number', description: 'Waga produktu w kilogramach' },
-        { key: 'height', label: 'Wysokość (cm)', type: 'number', description: 'Wysokość w centymetrach' },
-        { key: 'width', label: 'Szerokość (cm)', type: 'number', description: 'Szerokość w centymetrach' },
-        { key: 'length', label: 'Długość (cm)', type: 'number', description: 'Długość w centymetrach' }
+        { key: 'weight', label: 'Waga (kg)', type: 'number', description: 'Waga w kilogramach', enrichment: 'product-details' },
+        { key: 'height', label: 'Wysokość (cm)', type: 'number', description: 'Wysokość w centymetrach', enrichment: 'product-details' },
+        { key: 'width', label: 'Szerokość (cm)', type: 'number', description: 'Szerokość w centymetrach', enrichment: 'product-details' },
+        { key: 'length', label: 'Długość (cm)', type: 'number', description: 'Długość w centymetrach', enrichment: 'product-details' }
       ]
     },
 
-    // 5.7 MEDIA
+    // ========================================
+    // PODATKI
+    // ========================================
     {
-      id: 'media',
-      label: 'Media',
+      id: 'tax',
+      label: 'Podatki',
       fields: [
-        { key: 'image_url', label: 'URL obrazka', type: 'text', description: 'Link do głównego zdjęcia' },
-        { key: 'images_count', label: 'Liczba zdjęć', type: 'number', description: 'Ile zdjęć ma produkt', computed: true }
+        { key: 'tax_rate', label: 'Stawka VAT', type: 'number', description: 'Stawka VAT w %', enrichment: 'product-details' }
       ]
     },
 
-    // 5.8 LOKALIZACJA
+    // ========================================
+    // KOSZTY
+    // ========================================
     {
-      id: 'location',
-      label: 'Lokalizacja',
+      id: 'costs',
+      label: 'Koszty',
       fields: [
-        { key: 'location', label: 'Lokalizacja', type: 'text', description: 'Miejsce składowania (np. "Regał A, Półka 3")' }
+        { key: 'average_cost', label: 'Średni koszt', type: 'number', description: 'Średni koszt zakupu', enrichment: 'product-details' },
+        { key: 'average_landed_cost', label: 'Średni koszt całkowity', type: 'number', description: 'Średni koszt z kosztami dodatkowymi', enrichment: 'product-details' }
       ]
     },
 
-    // 5.9 WARIANTY
+    // ========================================
+    // CENY (z getInventoryProductsList)
+    // ========================================
+    {
+      id: 'prices_basic',
+      label: 'Ceny podstawowe',
+      fields: [
+        { key: 'price_default', label: 'Cena domyślna', type: 'number', description: 'Cena z domyślnej grupy cenowej' },
+        { key: 'prices_json', label: 'Ceny (JSON)', type: 'text', description: 'Wszystkie ceny jako JSON' }
+      ]
+    },
+
+    // ========================================
+    // CENY WG GRUP (enrichment: prices)
+    // ========================================
+    {
+      id: 'prices_groups',
+      label: 'Ceny wg grup',
+      description: 'Ceny dla poszczególnych grup cenowych - wymaga enrichmentu',
+      fields: [
+        { key: 'price_group_1', label: 'Cena - grupa 1', type: 'number', enrichment: 'prices' },
+        { key: 'price_group_2', label: 'Cena - grupa 2', type: 'number', enrichment: 'prices' },
+        { key: 'price_group_3', label: 'Cena - grupa 3', type: 'number', enrichment: 'prices' }
+      ],
+      dynamic: true,
+      source: 'priceGroups'
+    },
+
+    // ========================================
+    // STANY MAGAZYNOWE (z getInventoryProductsList)
+    // ========================================
+    {
+      id: 'stock_basic',
+      label: 'Stany magazynowe',
+      fields: [
+        { key: 'stock_total', label: 'Stan łączny', type: 'number', description: 'Suma stanów ze wszystkich magazynów' },
+        { key: 'stock_json', label: 'Stany (JSON)', type: 'text', description: 'Wszystkie stany jako JSON' }
+      ]
+    },
+
+    // ========================================
+    // STANY WG MAGAZYNÓW (enrichment: stock)
+    // ========================================
+    {
+      id: 'stock_warehouses',
+      label: 'Stany wg magazynów',
+      description: 'Stany dla poszczególnych magazynów - wymaga enrichmentu',
+      fields: [
+        { key: 'stock_warehouse_1', label: 'Stan - magazyn 1', type: 'number', enrichment: 'stock' },
+        { key: 'stock_warehouse_2', label: 'Stan - magazyn 2', type: 'number', enrichment: 'stock' },
+        { key: 'stock_warehouse_3', label: 'Stan - magazyn 3', type: 'number', enrichment: 'stock' }
+      ],
+      dynamic: true,
+      source: 'warehouses'
+    },
+
+    // ========================================
+    // LOKALIZACJE
+    // ========================================
+    {
+      id: 'locations',
+      label: 'Lokalizacje',
+      fields: [
+        { key: 'locations_json', label: 'Lokalizacje (JSON)', type: 'text', description: 'Lokalizacje w magazynach', enrichment: 'product-details' }
+      ]
+    },
+
+    // ========================================
+    // OBRAZY
+    // ========================================
+    {
+      id: 'images',
+      label: 'Obrazy',
+      fields: [
+        { key: 'image_url_1', label: 'Obraz 1', type: 'text', description: 'URL pierwszego obrazu', enrichment: 'product-details' },
+        { key: 'image_url_2', label: 'Obraz 2', type: 'text', enrichment: 'product-details' },
+        { key: 'image_url_3', label: 'Obraz 3', type: 'text', enrichment: 'product-details' },
+        { key: 'images_count', label: 'Liczba obrazów', type: 'number', enrichment: 'product-details' }
+      ]
+    },
+
+    // ========================================
+    // WARIANTY
+    // ========================================
     {
       id: 'variants',
       label: 'Warianty',
       fields: [
-        { key: 'has_variants', label: 'Ma warianty', type: 'boolean', description: 'Czy produkt ma warianty' },
-        { key: 'variants_count', label: 'Liczba wariantów', type: 'number', description: 'Ile wariantów ma produkt', computed: true }
+        { key: 'has_variants', label: 'Ma warianty', type: 'boolean', enrichment: 'product-details' },
+        { key: 'variants_count', label: 'Liczba wariantów', type: 'number', enrichment: 'product-details' },
+        { key: 'variants_json', label: 'Warianty (JSON)', type: 'text', description: 'Lista wariantów jako JSON', enrichment: 'product-details' }
       ]
     },
 
-    // 5.10 CENY GRUPOWE (DYNAMICZNE)
+    // ========================================
+    // CECHY
+    // ========================================
     {
-      id: 'price_groups',
-      label: 'Ceny grupowe',
+      id: 'features',
+      label: 'Cechy',
+      fields: [
+        { key: 'features_json', label: 'Cechy (JSON)', type: 'text', description: 'Cechy produktu jako JSON', enrichment: 'product-details' }
+      ],
       dynamic: true,
-      source: 'getInventoryPriceGroups',
-      enrichment: 'prices',
-      fields: []
-    },
-
-    // 5.11 POLA TEKSTOWE (DYNAMICZNE)
-    {
-      id: 'text_fields',
-      label: 'Pola tekstowe',
-      dynamic: true,
-      source: 'getInventoryAvailableTextFieldKeys',
-      fields: []
+      source: 'productFeatures'
     }
+  ],
+
+  // Primary key
+  primaryKey: 'id',
+
+  // Sort options
+  sortOptions: [
+    { key: 'id', label: 'ID produktu', direction: 'asc' },
+    { key: 'name', label: 'Nazwa', direction: 'asc' },
+    { key: 'sku', label: 'SKU', direction: 'asc' }
   ]
 };

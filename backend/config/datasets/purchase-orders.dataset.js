@@ -1,102 +1,155 @@
 /**
- * Dataset: ZAKUPY TOWARU (purchase_orders)
+ * Dataset: ZAKUPY TOWARU (Purchase Orders)
  *
- * Zamówienia zakupowe do dostawców.
- * Jeden wiersz = jedno zamówienie zakupu.
+ * Główne API: getInventoryPurchaseOrders
+ * Enrichmenty: purchase-items
  *
- * API: getInventoryPurchaseOrders
+ * Zamówienia zakupu towaru od dostawców.
  */
 
 module.exports = {
   id: 'purchase_orders',
   label: 'Zakupy towaru',
-  description: 'Zamówienia zakupowe do dostawców',
+  description: 'Eksport zamówień zakupu towaru od dostawców',
   icon: 'truck',
 
+  // Źródło danych
   primaryQuery: 'getInventoryPurchaseOrders',
-  enrichments: [],
+  enrichments: ['purchase-items'],
+  requiresInventory: true,
 
+  // Filtry dostępne dla tego datasetu
+  availableFilters: [
+    { key: 'inventoryId', label: 'Katalog', type: 'inventory', required: true },
+    { key: 'dateFrom', label: 'Data od', type: 'date' },
+    { key: 'dateTo', label: 'Data do', type: 'date' },
+    { key: 'status', label: 'Status', type: 'select', options: [
+      { value: '', label: 'Wszystkie' },
+      { value: '0', label: 'Szkic' },
+      { value: '1', label: 'Wysłane' },
+      { value: '2', label: 'Otrzymane' },
+      { value: '3', label: 'Zakończone' },
+      { value: '4', label: 'Częściowo zakończone' },
+      { value: '5', label: 'Anulowane' }
+    ]},
+    { key: 'supplierId', label: 'Dostawca', type: 'supplier' },
+    { key: 'warehouseId', label: 'Magazyn', type: 'warehouse' }
+  ],
+
+  // Grupy pól
   fieldGroups: [
-    // 7.1 PODSTAWOWE
+    // ========================================
+    // PODSTAWOWE
+    // ========================================
     {
       id: 'basic',
       label: 'Podstawowe',
       fields: [
-        { key: 'purchase_order_id', label: 'ID zamówienia', type: 'number', description: 'Unikalny identyfikator PO' },
-        { key: 'series_id', label: 'ID serii', type: 'number', description: 'Seria numeracji' },
-        { key: 'number', label: 'Numer', type: 'text', description: 'Numer zamówienia zakupu' },
-        { key: 'status', label: 'Status', type: 'text', description: 'Aktualny status (np. "Wysłane", "Zrealizowane")' }
+        { key: 'id', label: 'ID zamówienia', type: 'number' },
+        { key: 'name', label: 'Nazwa', type: 'text' },
+        { key: 'document_number', label: 'Numer dokumentu', type: 'text' },
+        { key: 'series_id', label: 'ID serii', type: 'number' }
       ]
     },
 
-    // 7.2 DATY
+    // ========================================
+    // DATY
+    // ========================================
     {
       id: 'dates',
       label: 'Daty',
       fields: [
-        { key: 'date_add', label: 'Data utworzenia', type: 'datetime', description: 'Kiedy utworzono PO' },
-        { key: 'date_expected', label: 'Planowana dostawa', type: 'date', description: 'Oczekiwana data dostawy' },
-        { key: 'date_confirmed', label: 'Data potwierdzenia', type: 'datetime', description: 'Kiedy dostawca potwierdził' },
-        { key: 'date_received', label: 'Data realizacji', type: 'datetime', description: 'Kiedy otrzymano towar' }
+        { key: 'date_created', label: 'Data utworzenia', type: 'datetime' },
+        { key: 'date_sent', label: 'Data wysłania', type: 'datetime' },
+        { key: 'date_received', label: 'Data otrzymania', type: 'datetime' },
+        { key: 'date_completed', label: 'Data zakończenia', type: 'datetime' }
       ]
     },
 
-    // 7.3 DOSTAWCA
+    // ========================================
+    // DOSTAWCA
+    // ========================================
     {
       id: 'supplier',
       label: 'Dostawca',
       fields: [
-        { key: 'supplier_id', label: 'ID dostawcy', type: 'number', description: 'Identyfikator dostawcy' },
-        { key: 'supplier_name', label: 'Nazwa dostawcy', type: 'text', description: 'Nazwa firmy dostawcy' },
-        { key: 'supplier_nip', label: 'NIP dostawcy', type: 'text', description: 'NIP dostawcy' },
-        { key: 'supplier_address', label: 'Adres dostawcy', type: 'text', description: 'Pełny adres' },
-        { key: 'supplier_email', label: 'Email dostawcy', type: 'text', description: 'Email kontaktowy' },
-        { key: 'supplier_phone', label: 'Telefon dostawcy', type: 'text', description: 'Telefon kontaktowy' }
+        { key: 'supplier_id', label: 'ID dostawcy', type: 'number' },
+        { key: 'supplier_name', label: 'Nazwa dostawcy', type: 'text', computed: true },
+        { key: 'payer_id', label: 'ID płatnika', type: 'number' }
       ]
     },
 
-    // 7.4 MAGAZYN DOCELOWY
+    // ========================================
+    // MAGAZYN
+    // ========================================
     {
       id: 'warehouse',
-      label: 'Magazyn docelowy',
+      label: 'Magazyn',
       fields: [
-        { key: 'warehouse_id', label: 'ID magazynu', type: 'number', description: 'Magazyn docelowy' },
-        { key: 'warehouse_name', label: 'Nazwa magazynu', type: 'text', description: 'Nazwa magazynu', computed: true },
-        { key: 'inventory_id', label: 'ID katalogu', type: 'number', description: 'Katalog produktów' }
+        { key: 'warehouse_id', label: 'ID magazynu', type: 'text' }
       ]
     },
 
-    // 7.5 WARTOŚCI
+    // ========================================
+    // WARTOŚCI
+    // ========================================
     {
       id: 'values',
       label: 'Wartości',
       fields: [
-        { key: 'total_value_brutto', label: 'Wartość brutto', type: 'number', description: 'Łączna wartość zamówienia z VAT' },
-        { key: 'total_value_netto', label: 'Wartość netto', type: 'number', description: 'Łączna wartość bez VAT' },
-        { key: 'items_count', label: 'Liczba pozycji', type: 'number', description: 'Ile różnych produktów zamówiono' },
-        { key: 'items_quantity', label: 'Łączna ilość', type: 'number', description: 'Suma sztuk' },
-        { key: 'currency', label: 'Waluta', type: 'text', description: 'Waluta zamówienia' }
+        { key: 'currency', label: 'Waluta', type: 'text' },
+        { key: 'total_quantity', label: 'Ilość zamówiona', type: 'number' },
+        { key: 'completed_total_quantity', label: 'Ilość zrealizowana', type: 'number' },
+        { key: 'total_cost', label: 'Koszt zamówienia', type: 'number' },
+        { key: 'completed_total_cost', label: 'Koszt zrealizowany', type: 'number' }
       ]
     },
 
-    // 7.6 REALIZACJA
+    // ========================================
+    // STATUS
+    // ========================================
     {
-      id: 'fulfillment',
-      label: 'Realizacja',
+      id: 'status',
+      label: 'Status',
       fields: [
-        { key: 'received_value', label: 'Wartość otrzymana', type: 'number', description: 'Wartość już dostarczonego towaru' },
-        { key: 'received_quantity', label: 'Ilość otrzymana', type: 'number', description: 'Ile sztuk już dostarczono' },
-        { key: 'completion_percent', label: 'Realizacja %', type: 'number', description: 'Procent zrealizowania zamówienia', computed: true }
+        { key: 'status', label: 'Status', type: 'number', description: '0=szkic, 1=wysłane, 2=otrzymane, 3=zakończone, 4=częściowo, 5=anulowane' },
+        { key: 'status_name', label: 'Nazwa statusu', type: 'text', computed: true }
       ]
     },
 
-    // 7.7 KOMENTARZE
+    // ========================================
+    // NOTATKI
+    // ========================================
     {
-      id: 'comments',
-      label: 'Komentarze',
+      id: 'notes',
+      label: 'Notatki',
       fields: [
-        { key: 'comments', label: 'Komentarze', type: 'text', description: 'Uwagi do zamówienia' }
+        { key: 'notes', label: 'Notatki', type: 'text' },
+        { key: 'cost_invoice_no', label: 'Nr faktury kosztowej', type: 'text' }
+      ]
+    },
+
+    // ========================================
+    // POZYCJE (enrichment)
+    // ========================================
+    {
+      id: 'items',
+      label: 'Pozycje',
+      description: 'Pozycje zamówienia - wymaga enrichmentu',
+      fields: [
+        { key: 'items_count', label: 'Liczba pozycji', type: 'number' },
+        { key: 'items_summary', label: 'Podsumowanie', type: 'text' },
+        { key: 'items_json', label: 'Pozycje (JSON)', type: 'text', enrichment: 'purchase-items' }
       ]
     }
+  ],
+
+  // Primary key
+  primaryKey: 'id',
+
+  // Sort options
+  sortOptions: [
+    { key: 'date_created', label: 'Data utworzenia', direction: 'desc' },
+    { key: 'id', label: 'ID zamówienia', direction: 'desc' }
   ]
 };

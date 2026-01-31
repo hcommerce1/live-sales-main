@@ -1,12 +1,11 @@
 /**
  * Purchase Orders Fetcher
  *
- * Pobiera zamówienia zakupowe z BaseLinker API (getInventoryPurchaseOrders).
- * Dataset: purchase_orders
+ * Pobiera zamówienia zakupu towaru (getInventoryPurchaseOrders).
+ * Zamówienia od dostawców.
  */
 
 const BaseFetcher = require('./BaseFetcher');
-const logger = require('../../../utils/logger');
 
 class PurchaseOrdersFetcher extends BaseFetcher {
   constructor() {
@@ -14,169 +13,159 @@ class PurchaseOrdersFetcher extends BaseFetcher {
   }
 
   /**
-   * Pobiera zamówienia zakupowe z BaseLinker
-   * @param {string} token - Token BaseLinker
-   * @param {Object} filters - Filtry
-   * @param {Object} options - Opcje (inventoryId opcjonalny)
-   * @returns {Promise<Object[]>}
+   * Pobiera zamówienia zakupu z BaseLinker API
+   *
+   * @param {string} token - Token API BaseLinker
+   * @param {object} filters - Filtry
+   * @param {number} filters.inventoryId - ID katalogu (wymagany)
+   * @param {object} options - Opcje
+   * @returns {Promise<Array>} - Tablica znormalizowanych zamówień
    */
   async fetch(token, filters = {}, options = {}) {
-    this.logFetchStart({ filters, inventoryId: options.inventoryId });
+    this.resetStats();
+    this.logFetchStart({ filters, options });
 
-    const client = this.getBaseLinkerClient(token);
-    const apiFilters = this.convertFilters(filters);
-
-    // Dodaj inventory_id jeśli podano
-    if (options.inventoryId) {
-      apiFilters.inventory_id = options.inventoryId;
+    const inventoryId = filters.inventoryId || options.inventoryId;
+    if (!inventoryId) {
+      throw new Error('inventoryId is required for purchase_orders dataset');
     }
 
-    // Pobierz zamówienia z paginacją
-    const purchaseOrders = await this.fetchAllPages(async (lastPurchaseOrderId) => {
-      const params = { ...apiFilters };
+    try {
+      const apiFilters = this.convertFilters(filters, inventoryId);
+      const maxRecords = options.maxRecords || 10000;
 
-      if (lastPurchaseOrderId) {
-        params.purchase_order_id = lastPurchaseOrderId;
-      }
+      const allOrders = await this.fetchAllPages(
+        async (page) => {
+          const params = {
+            ...apiFilters,
+            page: page || 1
+          };
 
-      // BaseLinker API: getInventoryPurchaseOrders
-      const response = await client.makeRequest('getInventoryPurchaseOrders', params);
+          const response = await this.baselinkerService.makeRequest(
+            token,
+            'getInventoryPurchaseOrders',
+            params
+          );
 
-      if (!response || !response.purchase_orders) {
-        return { data: [], nextPageToken: null };
-      }
+          const orders = response.purchase_orders || [];
 
-      const ordersArray = Object.values(response.purchase_orders);
+          let nextPageToken = null;
+          if (orders.length === 100) {
+            nextPageToken = (page || 1) + 1;
+          }
 
-      const nextPageToken = ordersArray.length === 100
-        ? ordersArray[ordersArray.length - 1].purchase_order_id
-        : null;
+          return {
+            data: orders,
+            nextPageToken
+          };
+        },
+        maxRecords
+      );
 
-      return {
-        data: ordersArray,
-        nextPageToken
-      };
-    });
+      const normalizedOrders = allOrders.map(order => this.normalize(order));
 
-    // Normalizuj dane zamówień
-    const normalizedOrders = purchaseOrders.map(order => this.normalizePurchaseOrder(order));
+      this.logFetchComplete(normalizedOrders.length);
 
-    this.logFetchComplete(normalizedOrders.length);
+      return normalizedOrders;
 
-    return normalizedOrders;
+    } catch (error) {
+      this.logError('Fetch failed', error);
+      throw error;
+    }
   }
 
   /**
-   * Normalizuje strukturę zamówienia zakupowego
-   * @param {Object} order - Surowe zamówienie z API
-   * @returns {Object}
+   * Konwertuje filtry UI na format API
    */
-  normalizePurchaseOrder(order) {
-    // Agreguj pozycje
-    const items = order.items || [];
-    const itemsCount = items.length;
-    const itemsQuantity = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    const receivedQuantity = items.reduce((sum, item) => sum + (Number(item.received_quantity) || 0), 0);
+  convertFilters(filters, inventoryId) {
+    const converted = {
+      inventory_id: inventoryId
+    };
 
-    // Oblicz procent realizacji
-    const completionPercent = itemsQuantity > 0
-      ? Math.round((receivedQuantity / itemsQuantity) * 100)
-      : 0;
+    if (filters.dateFrom) {
+      converted.date_from = this.toUnixTimestamp(filters.dateFrom);
+    }
 
+    if (filters.dateTo) {
+      converted.date_to = this.toUnixTimestamp(filters.dateTo);
+    }
+
+    if (filters.status !== undefined && filters.status !== '') {
+      converted.status = parseInt(filters.status, 10);
+    }
+
+    if (filters.supplierId) {
+      converted.supplier_id = filters.supplierId;
+    }
+
+    if (filters.warehouseId) {
+      converted.warehouse_id = filters.warehouseId;
+    }
+
+    return converted;
+  }
+
+  /**
+   * Normalizuje zamówienie zakupu
+   */
+  normalize(order) {
     return {
       // Podstawowe
-      purchase_order_id: order.purchase_order_id,
-      series_id: order.series_id,
-      number: order.number || '',
-      status: this.mapStatus(order.status),
+      id: order.id,
+      name: order.name || null,
+      document_number: order.document_number || null,
+      series_id: order.series_id || null,
 
       // Daty
-      date_add: order.date_add,
-      date_expected: order.date_expected,
-      date_confirmed: order.date_confirmed,
-      date_received: order.date_received,
+      date_created: this.fromUnixTimestamp(order.date_created),
+      date_sent: this.fromUnixTimestamp(order.date_sent),
+      date_received: this.fromUnixTimestamp(order.date_received),
+      date_completed: this.fromUnixTimestamp(order.date_completed),
 
       // Dostawca
-      supplier_id: order.supplier_id,
-      supplier_name: order.supplier_name || '',
-      supplier_nip: order.supplier_nip || '',
-      supplier_address: order.supplier_address || '',
-      supplier_email: order.supplier_email || '',
-      supplier_phone: order.supplier_phone || '',
+      supplier_id: order.supplier_id || null,
+      supplier_name: null, // Computed - wymaga enrichmentu
+      payer_id: order.payer_id || null,
 
-      // Magazyn docelowy
-      warehouse_id: order.warehouse_id,
-      warehouse_name: '', // Wypełni transformer
-      inventory_id: order.inventory_id,
+      // Magazyn
+      warehouse_id: order.warehouse_id || null,
 
       // Wartości
-      total_value_brutto: Number(order.total_value_brutto) || 0,
-      total_value_netto: Number(order.total_value_netto) || 0,
-      items_count: itemsCount,
-      items_quantity: itemsQuantity,
       currency: order.currency || 'PLN',
+      total_quantity: this.parseNumber(order.total_quantity),
+      completed_total_quantity: this.parseNumber(order.completed_total_quantity),
+      total_cost: this.parseNumber(order.total_cost),
+      completed_total_cost: this.parseNumber(order.completed_total_cost),
 
-      // Realizacja
-      received_value: Number(order.received_value) || 0,
-      received_quantity: receivedQuantity,
-      completion_percent: completionPercent,
+      // Status
+      status: order.status,
+      status_name: this.mapStatus(order.status),
 
-      // Komentarze
-      comments: order.comments || '',
+      // Notatki
+      notes: order.notes || null,
+      cost_invoice_no: order.cost_invoice_no || null,
 
-      // Oryginalne pozycje (do ewentualnego enrichment)
-      _items: items
+      // Pozycje (placeholder)
+      items_count: 0,
+      items_summary: null,
+      items_json: null
     };
   }
 
   /**
-   * Mapuje status na czytelną nazwę
-   * @param {string|number} status
-   * @returns {string}
+   * Mapuje status na nazwę
    */
   mapStatus(status) {
     const statusMap = {
-      '0': 'Szkic',
-      '1': 'Wysłane',
-      '2': 'Potwierdzone',
-      '3': 'W realizacji',
-      '4': 'Zrealizowane',
-      '5': 'Anulowane',
-      'draft': 'Szkic',
-      'sent': 'Wysłane',
-      'confirmed': 'Potwierdzone',
-      'in_progress': 'W realizacji',
-      'completed': 'Zrealizowane',
-      'cancelled': 'Anulowane'
+      0: 'Szkic',
+      1: 'Wysłane',
+      2: 'Otrzymane',
+      3: 'Zakończone',
+      4: 'Częściowo zakończone',
+      5: 'Anulowane'
     };
 
-    return statusMap[String(status)] || String(status);
-  }
-
-  /**
-   * Konwertuje filtry specyficzne dla zamówień zakupowych
-   * @param {Object} filters
-   * @returns {Object}
-   */
-  convertFilters(filters) {
-    const apiFilters = super.convertFilters(filters);
-
-    // Filtr po statusie
-    if (filters.status) {
-      apiFilters.status = filters.status;
-    }
-
-    // Filtr po dostawcy
-    if (filters.supplierId) {
-      apiFilters.supplier_id = filters.supplierId;
-    }
-
-    // Filtr po magazynie
-    if (filters.warehouseId) {
-      apiFilters.warehouse_id = filters.warehouseId;
-    }
-
-    return apiFilters;
+    return statusMap[status] || `Status ${status}`;
   }
 }
 

@@ -1,14 +1,11 @@
 /**
  * Packages Enricher
  *
- * Wzbogaca zamówienia o dane przesyłek (max 5 paczek na zamówienie).
- * Używa API: getOrderPackages
- *
- * Dodaje pola pkg1_* do pkg5_* oraz packages_count.
+ * Wzbogaca zamówienia o dane przesyłek z API getOrderPackages.
+ * Dodaje pola pkg1_*, pkg2_*, pkg3_* dla max 3 przesyłek na zamówienie.
  */
 
 const BaseEnricher = require('./BaseEnricher');
-const logger = require('../../../utils/logger');
 
 class PackagesEnricher extends BaseEnricher {
   constructor() {
@@ -17,142 +14,165 @@ class PackagesEnricher extends BaseEnricher {
 
   /**
    * Wzbogaca zamówienia o dane przesyłek
-   * @param {Object[]} orders - Zamówienia do wzbogacenia
-   * @param {string} token - Token BaseLinker
-   * @param {Object} options - Opcje (courierMap)
-   * @returns {Promise<Object[]>}
+   *
+   * @param {Array} records - Tablica zamówień
+   * @param {string} token - Token API BaseLinker
+   * @param {object} options - Opcje
+   * @returns {Promise<Array>} - Wzbogacone zamówienia
    */
-  async enrich(orders, token, options = {}) {
-    this.logEnrichStart(orders.length);
+  async enrich(records, token, options = {}) {
+    this.resetStats();
+    this.logEnrichStart(records.length);
 
-    const client = this.getBaseLinkerClient(token);
-    const courierMap = options.courierMap || {};
+    try {
+      // Pobierz unikalne order_id
+      const orderIds = this.getUniqueValues(records, 'order_id');
 
-    // Pobierz przesyłki dla każdego zamówienia
-    const enrichedOrders = await Promise.all(
-      orders.map(async (order) => {
-        try {
-          const packages = await this.fetchPackagesForOrder(client, order.order_id);
-          return this.enrichOrderWithPackages(order, packages, courierMap);
-        } catch (error) {
-          logger.warn(`Failed to fetch packages for order ${order.order_id}`, {
-            error: error.message
-          });
-          return this.enrichOrderWithEmptyPackages(order);
-        }
-      })
-    );
+      if (orderIds.length === 0) {
+        this.logEnrichComplete(0);
+        return records;
+      }
 
-    this.logEnrichComplete(enrichedOrders.length);
+      // Pobierz przesyłki dla wszystkich zamówień
+      const packagesMap = await this.fetchPackagesForOrders(orderIds, token);
 
-    return enrichedOrders;
-  }
+      // Wzbogać rekordy
+      const enrichedRecords = records.map(record => {
+        const orderId = record.order_id;
+        const packages = packagesMap.get(orderId) || [];
 
-  /**
-   * Pobiera przesyłki dla zamówienia
-   * @param {Object} client - Klient BaseLinker
-   * @param {number} orderId - ID zamówienia
-   * @returns {Promise<Object[]>}
-   */
-  async fetchPackagesForOrder(client, orderId) {
-    const response = await client.getOrderPackages(orderId);
+        // Spłaszcz przesyłki do pól pkg1_*, pkg2_*, pkg3_*
+        const packageFields = this.flattenPackagesToFields(packages);
 
-    if (!response || !response.packages) {
-      return [];
+        return {
+          ...record,
+          ...packageFields
+        };
+      });
+
+      this.logEnrichComplete(enrichedRecords.length);
+
+      return enrichedRecords;
+
+    } catch (error) {
+      this.logError('Enrichment failed', error);
+      throw error;
     }
-
-    return Array.isArray(response.packages)
-      ? response.packages
-      : Object.values(response.packages);
   }
 
   /**
-   * Wzbogaca zamówienie o dane przesyłek
-   * @param {Object} order - Zamówienie
-   * @param {Object[]} packages - Lista przesyłek
-   * @param {Object} courierMap - Mapa kurierów
-   * @returns {Object}
+   * Pobiera przesyłki dla listy zamówień
+   *
+   * @param {Array<number>} orderIds - Lista ID zamówień
+   * @param {string} token - Token API BaseLinker
+   * @returns {Promise<Map>} - Mapa: order_id -> Array<package>
    */
-  enrichOrderWithPackages(order, packages, courierMap) {
-    const enriched = { ...order };
+  async fetchPackagesForOrders(orderIds, token) {
+    const packagesMap = new Map();
 
-    // Liczba przesyłek
-    enriched.packages_count = Math.min(packages.length, 5);
+    // Przetwarzaj w batchach po 10 zamówień
+    // (każde wywołanie getOrderPackages to osobny request)
+    const batchSize = 10;
 
-    // Mapuj max 5 przesyłek do pól pkg1_* - pkg5_*
-    for (let i = 0; i < 5; i++) {
-      const prefix = `pkg${i + 1}_`;
-      const pkg = packages[i] || null;
+    for (let i = 0; i < orderIds.length; i += batchSize) {
+      const batch = orderIds.slice(i, i + batchSize);
 
-      if (pkg) {
-        const courierCode = pkg.courier_code || '';
-        const trackingNumber = pkg.tracking_number || pkg.courier_package_nr || '';
+      // Pobierz przesyłki równolegle dla batcha
+      const promises = batch.map(async (orderId) => {
+        try {
+          this.stats.apiCalls++;
+          const packages = await this.baselinkerService.getOrderPackages(token, orderId);
+          return { orderId, packages };
+        } catch (error) {
+          this.logError(`Failed to get packages for order ${orderId}`, error);
+          return { orderId, packages: [] };
+        }
+      });
 
-        enriched[`${prefix}id`] = pkg.package_id;
-        enriched[`${prefix}courier_code`] = courierCode;
-        enriched[`${prefix}courier_name`] = courierMap[courierCode] || courierCode;
-        enriched[`${prefix}tracking_number`] = trackingNumber;
-        enriched[`${prefix}tracking_url`] = this.buildTrackingUrl(courierCode, trackingNumber);
-        enriched[`${prefix}status`] = pkg.status || '';
-        enriched[`${prefix}date_add`] = pkg.date_add || null;
-        enriched[`${prefix}date_sent`] = pkg.date_sent || null;
-        enriched[`${prefix}date_delivered`] = pkg.date_delivered || null;
-        enriched[`${prefix}weight`] = Number(pkg.weight) || 0;
-        enriched[`${prefix}cod_value`] = Number(pkg.cod_value) || 0;
-        enriched[`${prefix}is_delivered`] = pkg.is_delivered === true || pkg.is_delivered === 1;
-      } else {
-        // Puste pola dla brakującej przesyłki
-        enriched[`${prefix}id`] = null;
-        enriched[`${prefix}courier_code`] = '';
-        enriched[`${prefix}courier_name`] = '';
-        enriched[`${prefix}tracking_number`] = '';
-        enriched[`${prefix}tracking_url`] = '';
-        enriched[`${prefix}status`] = '';
-        enriched[`${prefix}date_add`] = null;
-        enriched[`${prefix}date_sent`] = null;
-        enriched[`${prefix}date_delivered`] = null;
-        enriched[`${prefix}weight`] = null;
-        enriched[`${prefix}cod_value`] = null;
-        enriched[`${prefix}is_delivered`] = null;
+      const results = await Promise.all(promises);
+
+      for (const { orderId, packages } of results) {
+        packagesMap.set(orderId, packages);
+      }
+
+      // Rate limiting między batchami
+      if (i + batchSize < orderIds.length) {
+        await this.rateLimit(200); // 200ms między batchami
       }
     }
 
-    return enriched;
+    return packagesMap;
   }
 
   /**
-   * Wzbogaca zamówienie o puste pola przesyłek (w przypadku błędu)
-   * @param {Object} order
-   * @returns {Object}
+   * Spłaszcza tablicę przesyłek do pól pkg1_*, pkg2_*, pkg3_*
+   *
+   * @param {Array} packages - Tablica przesyłek
+   * @returns {object} - Obiekt z polami pkg1_*, pkg2_*, pkg3_*
    */
-  enrichOrderWithEmptyPackages(order) {
-    return this.enrichOrderWithPackages(order, [], {});
+  flattenPackagesToFields(packages) {
+    const maxPackages = 3;
+    const fields = [
+      'package_id',
+      'courier_code',
+      'courier_package_nr',
+      'tracking_status',
+      'tracking_url'
+    ];
+
+    const result = {};
+
+    // Inicjalizuj wszystkie pola jako null
+    for (let i = 1; i <= maxPackages; i++) {
+      for (const field of fields) {
+        result[`pkg${i}_${field}`] = null;
+      }
+    }
+
+    // Wypełnij danymi z przesyłek
+    const packagesToProcess = (packages || []).slice(0, maxPackages);
+
+    for (let i = 0; i < packagesToProcess.length; i++) {
+      const pkg = packagesToProcess[i];
+      const num = i + 1;
+
+      result[`pkg${num}_package_id`] = pkg.package_id || null;
+      result[`pkg${num}_courier_code`] = pkg.courier_code || null;
+      result[`pkg${num}_courier_package_nr`] = pkg.courier_package_nr || null;
+      result[`pkg${num}_tracking_status`] = this.mapTrackingStatus(pkg.tracking_status);
+      result[`pkg${num}_tracking_url`] = pkg.tracking_url || null;
+    }
+
+    return result;
   }
 
   /**
-   * Buduje URL do śledzenia przesyłki
-   * @param {string} courierCode
-   * @param {string} trackingNumber
-   * @returns {string}
+   * Mapuje kod statusu śledzenia na czytelną nazwę
+   *
+   * @param {number} statusCode - Kod statusu
+   * @returns {string|null} - Nazwa statusu
    */
-  buildTrackingUrl(courierCode, trackingNumber) {
-    if (!trackingNumber) return '';
+  mapTrackingStatus(statusCode) {
+    if (statusCode === null || statusCode === undefined) {
+      return null;
+    }
 
-    const trackingUrls = {
-      'inpost': `https://inpost.pl/sledzenie-przesylek?number=${trackingNumber}`,
-      'dpd': `https://www.dpd.com.pl/tracking?number=${trackingNumber}`,
-      'dhl': `https://www.dhl.com/pl-pl/home/tracking.html?tracking-id=${trackingNumber}`,
-      'ups': `https://www.ups.com/track?tracknum=${trackingNumber}`,
-      'fedex': `https://www.fedex.com/fedextrack/?trknbr=${trackingNumber}`,
-      'gls': `https://gls-group.eu/PL/pl/sledzenie-paczek?match=${trackingNumber}`,
-      'pocztex': `https://www.pocztex.pl/sledzenie-przesylki/?numer=${trackingNumber}`,
-      'orlen_paczka': `https://nadaj.orlenpaczka.pl/sledzenie?number=${trackingNumber}`,
-      'poczta_polska': `https://emonitoring.poczta-polska.pl/?numer=${trackingNumber}`,
-      'raben': `https://www.rfraben.com/pl/sledzenie-przesylki/?track=${trackingNumber}`
+    const statusMap = {
+      0: 'Nieznany',
+      1: 'Etykieta utworzona',
+      2: 'Wysłana',
+      3: 'Niedoręczona',
+      4: 'W doręczeniu',
+      5: 'Doręczona',
+      6: 'Zwrot',
+      7: 'Awizo',
+      8: 'Czeka w punkcie',
+      9: 'Zagubiona',
+      10: 'Anulowana',
+      11: 'W drodze'
     };
 
-    const code = String(courierCode).toLowerCase();
-    return trackingUrls[code] || '';
+    return statusMap[statusCode] || `Status ${statusCode}`;
   }
 }
 

@@ -2,324 +2,298 @@
  * Field Definitions Service
  *
  * Serwis do pobierania definicji pól dla UI (ExportWizard).
- * Łączy statyczne definicje z datasetów z dynamicznymi polami z BaseLinker API.
+ * Zwraca strukturę datasetów, grup pól i pojedynczych pól
+ * do wyświetlenia w interfejsie wyboru eksportu.
  */
 
 const logger = require('../../utils/logger');
-const { getAllDatasets, getDataset } = require('../../config/datasets');
-const { getClient } = require('../baselinker');
+const { getAllDatasets, getDataset, getDatasetFields } = require('../../config/datasets');
+const baselinkerService = require('../baselinkerService');
 
 /**
- * Pobiera pełną konfigurację pól dla wszystkich datasetów
- * @param {string} token - Token BaseLinker (opcjonalny, do dynamicznych pól)
- * @param {Object} options - Opcje
- * @param {number} [options.inventoryId] - ID katalogu (dla pól tekstowych produktów)
- * @returns {Promise<Object>}
+ * Pobiera pełne definicje pól dla wszystkich datasetów
+ *
+ * @param {string} token - Token API BaseLinker (opcjonalnie, do pobrania dynamicznych pól)
+ * @param {object} options - Opcje
+ * @returns {Promise<object>} - Definicje pól
  */
 async function getFieldDefinitions(token = null, options = {}) {
-  const datasets = getAllDatasets();
+  try {
+    // Pobierz wszystkie datasety
+    const allDatasets = getAllDatasets();
+
+    // Mapuj datasety do formatu dla UI
+    const datasets = allDatasets.map(dataset => ({
+      id: dataset.id,
+      label: dataset.label,
+      description: dataset.description,
+      icon: dataset.icon,
+      requiresInventory: dataset.requiresInventory || false,
+      requiresStorage: dataset.requiresStorage || false,
+      requiresIntegration: dataset.requiresIntegration || false,
+      availableFilters: dataset.availableFilters || dataset.filters || [],
+      fieldGroups: dataset.fieldGroups.map(group => ({
+        id: group.id,
+        label: group.label,
+        description: group.description,
+        dynamic: group.dynamic || false,
+        fields: group.fields.map(field => ({
+          key: field.key,
+          label: field.label,
+          type: field.type,
+          description: field.description,
+          enrichment: field.enrichment || null,
+          computed: field.computed || false
+        }))
+      }))
+    }));
+
+    // Pobierz dynamiczne pola jeśli jest token
+    let dynamicFields = {};
+    if (token) {
+      try {
+        dynamicFields = await fetchAllDynamicFields(token);
+      } catch (err) {
+        logger.warn('Failed to fetch dynamic fields', { error: err.message });
+      }
+    }
+
+    return {
+      datasets,
+      dynamicFields,
+      supportedCurrencies: ['PLN', 'EUR', 'USD', 'GBP', 'CHF', 'CZK', 'SEK', 'NOK', 'DKK'],
+      currencyRateSources: [
+        { value: 'document_date', label: 'Data dokumentu sprzedaży' },
+        { value: 'order_date', label: 'Data zamówienia' },
+        { value: 'ship_date', label: 'Data wysyłki' },
+        { value: 'today', label: 'Dzisiejsza data' }
+      ]
+    };
+
+  } catch (error) {
+    logger.error('Failed to get field definitions', { error: error.message });
+    throw error;
+  }
+}
+
+/**
+ * Pobiera definicje pól dla konkretnego datasetu
+ *
+ * @param {string} datasetId - ID datasetu
+ * @param {string} token - Token API BaseLinker
+ * @param {object} options - Opcje
+ * @returns {Promise<object|null>} - Definicja datasetu lub null
+ */
+async function getDatasetFieldDefinitions(datasetId, token = null, options = {}) {
+  try {
+    const dataset = getDataset(datasetId);
+
+    if (!dataset) {
+      return null;
+    }
+
+    // Pobierz dynamiczne pola dla tego datasetu
+    let dynamicFields = [];
+    if (token && dataset.fieldGroups) {
+      for (const group of dataset.fieldGroups) {
+        if (group.dynamic && group.source) {
+          try {
+            const fields = await fetchDynamicFields(group.source, token, options);
+            dynamicFields = dynamicFields.concat(fields);
+          } catch (err) {
+            logger.warn(`Failed to fetch dynamic fields for ${group.source}`, {
+              error: err.message
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      id: dataset.id,
+      label: dataset.label,
+      description: dataset.description,
+      icon: dataset.icon,
+      requiresInventory: dataset.requiresInventory || false,
+      availableFilters: dataset.availableFilters || dataset.filters || [],
+      fieldGroups: dataset.fieldGroups,
+      dynamicFields,
+      defaultFields: dataset.defaultFields || [],
+      primaryKey: dataset.primaryKey
+    };
+
+  } catch (error) {
+    logger.error('Failed to get dataset field definitions', {
+      datasetId,
+      error: error.message
+    });
+    throw error;
+  }
+}
+
+/**
+ * Pobiera mapę dodatkowych pól zamówień
+ *
+ * @param {string} token - Token API BaseLinker
+ * @returns {Promise<object>} - Mapa: field_key -> label
+ */
+async function getOrderExtraFieldsMap(token) {
+  try {
+    const extraFields = await baselinkerService.getOrderExtraFields(token);
+
+    const map = {};
+
+    // extraFields jest obiektem: { field_id: { name, editor_type, ... } }
+    if (extraFields && typeof extraFields === 'object') {
+      for (const [fieldId, fieldData] of Object.entries(extraFields)) {
+        map[`ef_${fieldId}`] = fieldData.name || `Pole ${fieldId}`;
+      }
+    }
+
+    return map;
+
+  } catch (error) {
+    logger.warn('Failed to get order extra fields', { error: error.message });
+    return {};
+  }
+}
+
+/**
+ * Pobiera dynamiczne pola z określonego źródła
+ *
+ * @param {string} source - Źródło pól (np. 'getOrderExtraFields')
+ * @param {string} token - Token API BaseLinker
+ * @param {object} options - Opcje
+ * @returns {Promise<Array>} - Tablica definicji pól
+ */
+async function fetchDynamicFields(source, token, options = {}) {
+  try {
+    switch (source) {
+      case 'getOrderExtraFields':
+      case 'orderExtraFields': {
+        const extraFields = await baselinkerService.getOrderExtraFields(token);
+        return Object.entries(extraFields || {}).map(([fieldId, fieldData]) => ({
+          key: `ef_${fieldId}`,
+          label: fieldData.name || `Pole ${fieldId}`,
+          type: mapEditorTypeToFieldType(fieldData.editor_type),
+          dynamic: true,
+          source: 'orderExtraFields'
+        }));
+      }
+
+      case 'getInventoryExtraFields':
+      case 'inventoryExtraFields': {
+        // TODO: Implement when needed
+        return [];
+      }
+
+      case 'getOrderReturnExtraFields':
+      case 'returnExtraFields': {
+        // TODO: Implement when needed
+        return [];
+      }
+
+      default:
+        logger.warn(`Unknown dynamic field source: ${source}`);
+        return [];
+    }
+
+  } catch (error) {
+    logger.warn(`Failed to fetch dynamic fields from ${source}`, {
+      error: error.message
+    });
+    return [];
+  }
+}
+
+/**
+ * Pobiera wszystkie dynamiczne pola
+ *
+ * @param {string} token - Token API BaseLinker
+ * @returns {Promise<object>} - Obiekt z dynamicznymi polami dla każdego źródła
+ */
+async function fetchAllDynamicFields(token) {
   const result = {
-    datasets: [],
-    supportedCurrencies: ['PLN', 'EUR', 'USD', 'GBP', 'CHF', 'CZK'],
-    currencyRateSources: [
-      { value: 'document_date', label: 'Data dokumentu sprzedaży' },
-      { value: 'order_date', label: 'Data zamówienia' },
-      { value: 'ship_date', label: 'Data wysyłki' },
-      { value: 'today', label: 'Dzisiejsza data' }
-    ]
+    orderExtraFields: [],
+    inventoryExtraFields: [],
+    returnExtraFields: []
   };
 
-  for (const dataset of datasets) {
-    const datasetDef = await buildDatasetDefinition(dataset, token, options);
-    result.datasets.push(datasetDef);
+  try {
+    result.orderExtraFields = await fetchDynamicFields('orderExtraFields', token);
+  } catch (err) {
+    logger.warn('Failed to fetch order extra fields', { error: err.message });
   }
 
   return result;
 }
 
 /**
- * Buduje definicję pojedynczego datasetu
- * @param {Object} dataset - Konfiguracja datasetu
- * @param {string} token - Token BaseLinker
- * @param {Object} options - Opcje
- * @returns {Promise<Object>}
+ * Mapuje typ edytora BaseLinker na typ pola
+ *
+ * @param {string} editorType - Typ edytora z BaseLinker
+ * @returns {string} - Typ pola
  */
-async function buildDatasetDefinition(dataset, token, options) {
-  const definition = {
-    id: dataset.id,
-    label: dataset.label,
-    description: dataset.description,
-    icon: dataset.icon,
-    requiresInventory: dataset.requiresInventory || false,
-    requiresExternalStorage: dataset.requiresExternalStorage || false,
-    requiresIntegration: dataset.requiresIntegration || false,
-    enrichments: dataset.enrichments || [],
-    fieldGroups: []
+function mapEditorTypeToFieldType(editorType) {
+  const mapping = {
+    text: 'text',
+    textarea: 'text',
+    select: 'text',
+    checkbox: 'boolean',
+    date: 'date',
+    datetime: 'datetime',
+    number: 'number'
   };
 
-  // Przetwórz grupy pól
-  for (const group of dataset.fieldGroups) {
-    const groupDef = await buildFieldGroupDefinition(group, dataset.id, token, options);
-
-    // Dodaj grupę tylko jeśli ma pola
-    if (groupDef.fields.length > 0 || groupDef.dynamic) {
-      definition.fieldGroups.push(groupDef);
-    }
-  }
-
-  return definition;
+  return mapping[editorType] || 'text';
 }
 
 /**
- * Buduje definicję grupy pól
- * @param {Object} group - Konfiguracja grupy
- * @param {string} datasetId - ID datasetu
- * @param {string} token - Token BaseLinker
- * @param {Object} options - Opcje
- * @returns {Promise<Object>}
+ * Pobiera mapę statusów zamówień
+ *
+ * @param {string} token - Token API BaseLinker
+ * @returns {Promise<object>} - Mapa: status_id -> status_name
  */
-async function buildFieldGroupDefinition(group, datasetId, token, options) {
-  const groupDef = {
-    id: group.id,
-    label: group.label,
-    enrichment: group.enrichment || null,
-    dynamic: group.dynamic || false,
-    fields: []
-  };
-
-  // Jeśli grupa jest dynamiczna, pobierz pola z API
-  if (group.dynamic && token && group.source) {
-    const dynamicFields = await fetchDynamicFields(group.source, token, options);
-    groupDef.fields = dynamicFields;
-  } else {
-    // Standardowe pola
-    groupDef.fields = group.fields.map(field => ({
-      key: field.key,
-      label: field.label,
-      type: field.type,
-      description: field.description || '',
-      computed: field.computed || false,
-      enrichment: field.enrichment || null,
-      plan: 'free' // Wszystkie pola w FREE na razie
-    }));
-  }
-
-  return groupDef;
-}
-
-/**
- * Pobiera dynamiczne pola z BaseLinker API
- * @param {string} source - Nazwa metody API
- * @param {string} token - Token BaseLinker
- * @param {Object} options - Opcje
- * @returns {Promise<Object[]>}
- */
-async function fetchDynamicFields(source, token, options) {
+async function getOrderStatusMap(token) {
   try {
-    const client = getClient(token);
-    let fields = [];
+    const statuses = await baselinkerService.getOrderStatusList(token);
 
-    switch (source) {
-      case 'getOrderExtraFields':
-        fields = await fetchOrderExtraFields(client);
-        break;
-
-      case 'getOrderReturnExtraFields':
-        fields = await fetchReturnExtraFields(client);
-        break;
-
-      case 'getInventoryAvailableTextFieldKeys':
-        if (options.inventoryId) {
-          fields = await fetchInventoryTextFields(client, options.inventoryId);
-        }
-        break;
-
-      default:
-        logger.warn(`Unknown dynamic fields source: ${source}`);
-    }
-
-    return fields;
-
-  } catch (error) {
-    logger.warn('Failed to fetch dynamic fields', {
-      source,
-      error: error.message
-    });
-    return [];
-  }
-}
-
-/**
- * Pobiera pola dodatkowe zamówień
- * @param {Object} client - Klient BaseLinker
- * @returns {Promise<Object[]>}
- */
-async function fetchOrderExtraFields(client) {
-  try {
-    const response = await client.makeRequest('getOrderExtraFields', {});
-
-    if (!response || !response.extra_fields) {
-      return [];
-    }
-
-    // Response format: { extra_field_id: "Nazwa pola", ... }
-    const extraFields = response.extra_fields;
-    const fields = [];
-
-    for (const [id, name] of Object.entries(extraFields)) {
-      fields.push({
-        key: `extra_field_${id}`,
-        label: name || `Pole dodatkowe ${id}`,
-        type: 'text',
-        description: `Pole dodatkowe: ${name}`,
-        dynamic: true,
-        plan: 'free'
-      });
-    }
-
-    return fields;
-
-  } catch (error) {
-    logger.warn('Failed to fetch order extra fields', { error: error.message });
-    return [];
-  }
-}
-
-/**
- * Pobiera pola dodatkowe zwrotów
- * @param {Object} client - Klient BaseLinker
- * @returns {Promise<Object[]>}
- */
-async function fetchReturnExtraFields(client) {
-  try {
-    const response = await client.makeRequest('getOrderReturnExtraFields', {});
-
-    if (!response || !response.extra_fields) {
-      return [];
-    }
-
-    const extraFields = response.extra_fields;
-    const fields = [];
-
-    for (const [id, name] of Object.entries(extraFields)) {
-      fields.push({
-        key: `extra_field_${id}`,
-        label: name || `Pole dodatkowe ${id}`,
-        type: 'text',
-        description: `Pole dodatkowe zwrotu: ${name}`,
-        dynamic: true,
-        plan: 'free'
-      });
-    }
-
-    return fields;
-
-  } catch (error) {
-    logger.warn('Failed to fetch return extra fields', { error: error.message });
-    return [];
-  }
-}
-
-/**
- * Pobiera pola tekstowe z katalogu produktów
- * @param {Object} client - Klient BaseLinker
- * @param {number} inventoryId - ID katalogu
- * @returns {Promise<Object[]>}
- */
-async function fetchInventoryTextFields(client, inventoryId) {
-  try {
-    // Najpierw pobierz dostępne klucze
-    const keysResponse = await client.makeRequest('getInventoryAvailableTextFieldKeys', {
-      inventory_id: inventoryId
-    });
-
-    if (!keysResponse || !keysResponse.text_field_keys) {
-      return [];
-    }
-
-    // Potem pobierz nazwy pól (jeśli dostępne)
-    let fieldNames = {};
-
-    try {
-      const extraFieldsResponse = await client.makeRequest('getInventoryExtraFields', {
-        inventory_id: inventoryId
-      });
-
-      if (extraFieldsResponse && extraFieldsResponse.extra_fields) {
-        fieldNames = extraFieldsResponse.extra_fields;
-      }
-    } catch (e) {
-      // Ignoruj błąd, użyjemy kluczy jako nazw
-    }
-
-    const fields = [];
-
-    for (const key of keysResponse.text_field_keys) {
-      const name = fieldNames[key] || key;
-
-      fields.push({
-        key: `text_field_${key}`,
-        label: name,
-        type: 'text',
-        description: `Pole tekstowe: ${name}`,
-        dynamic: true,
-        plan: 'free'
-      });
-    }
-
-    return fields;
-
-  } catch (error) {
-    logger.warn('Failed to fetch inventory text fields', {
-      inventoryId,
-      error: error.message
-    });
-    return [];
-  }
-}
-
-/**
- * Pobiera definicje pól dla konkretnego datasetu
- * @param {string} datasetId - ID datasetu
- * @param {string} token - Token BaseLinker
- * @param {Object} options - Opcje
- * @returns {Promise<Object|null>}
- */
-async function getDatasetFieldDefinitions(datasetId, token = null, options = {}) {
-  const dataset = getDataset(datasetId);
-
-  if (!dataset) {
-    return null;
-  }
-
-  return buildDatasetDefinition(dataset, token, options);
-}
-
-/**
- * Pobiera mapę extra fields dla zamówień (do enrichmentu)
- * @param {string} token - Token BaseLinker
- * @returns {Promise<Object>}
- */
-async function getOrderExtraFieldsMap(token) {
-  try {
-    const client = getClient(token);
-    const response = await client.makeRequest('getOrderExtraFields', {});
-
-    if (!response || !response.extra_fields) {
-      return {};
-    }
-
-    // Buduj mapę: extra_field_123 -> "Nazwa pola"
     const map = {};
-
-    for (const [id, name] of Object.entries(response.extra_fields)) {
-      map[`extra_field_${id}`] = name;
+    for (const status of statuses) {
+      map[status.id] = status.name;
     }
 
     return map;
 
   } catch (error) {
-    logger.warn('Failed to fetch order extra fields map', { error: error.message });
+    logger.warn('Failed to get order status map', { error: error.message });
+    return {};
+  }
+}
+
+/**
+ * Pobiera mapę źródeł zamówień
+ *
+ * @param {string} token - Token API BaseLinker
+ * @returns {Promise<object>} - Mapa źródeł
+ */
+async function getOrderSourcesMap(token) {
+  try {
+    const sources = await baselinkerService.getOrderSources(token);
+
+    const map = {};
+
+    // sources jest obiektem: { type: { source_id: name, ... }, ... }
+    for (const [type, sourcesOfType] of Object.entries(sources || {})) {
+      for (const [sourceId, name] of Object.entries(sourcesOfType || {})) {
+        map[sourceId] = { type, name };
+      }
+    }
+
+    return map;
+
+  } catch (error) {
+    logger.warn('Failed to get order sources map', { error: error.message });
     return {};
   }
 }
@@ -328,5 +302,8 @@ module.exports = {
   getFieldDefinitions,
   getDatasetFieldDefinitions,
   getOrderExtraFieldsMap,
-  fetchDynamicFields
+  fetchDynamicFields,
+  fetchAllDynamicFields,
+  getOrderStatusMap,
+  getOrderSourcesMap
 };

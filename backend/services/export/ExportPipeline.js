@@ -1,178 +1,174 @@
 /**
  * Export Pipeline
  *
- * Orkiestruje cały proces eksportu:
- * 1. Pobiera główne dane (primary query)
- * 2. Wzbogaca dane (enrichments) - tylko te wymagane przez wybrane pola
- * 3. Transformuje do formatu wyjściowego
- * 4. Zapisuje do Google Sheets
+ * Orkiestruje cały proces eksportu w 3 fazach:
+ * 1. FETCH - Pobieranie danych głównych przez Fetcher
+ * 2. ENRICH - Wzbogacanie o dane dodatkowe przez Enrichery
+ * 3. TRANSFORM - Transformacja do formatu wyjścia
  *
- * Wykorzystuje wzorzec Strategy dla różnych datasetów i enricherów.
+ * Automatycznie wyznacza wymagane enrichmenty na podstawie wybranych pól.
  */
 
 const logger = require('../../utils/logger');
-const { getDataset, getRequiredEnrichments } = require('../../config/datasets');
-
-// Fetchers
-const FetcherRegistry = require('./fetchers');
-
-// Enrichers
-const EnricherRegistry = require('./enrichers');
-
-// Transformer
 const DataTransformer = require('./DataTransformer');
-
-/**
- * Konfiguracja eksportu
- * @typedef {Object} ExportConfig
- * @property {string} datasetId - ID datasetu (np. 'orders', 'order_items')
- * @property {string[]} selectedFields - Lista wybranych kluczy pól
- * @property {Object} filters - Filtry do zastosowania
- * @property {Object} [currencyConversion] - Opcjonalna konfiguracja przewalutowania
- * @property {string} currencyConversion.targetCurrency - Waluta docelowa (np. 'PLN')
- * @property {string} currencyConversion.rateSource - Źródło daty kursu: 'document_date', 'order_date', 'ship_date', 'today'
- * @property {Object} [customHeaders] - Mapowanie field_key -> custom_header
- * @property {Object[]} [customFields] - Pola customowe (formuły)
- * @property {number} [inventoryId] - ID katalogu (dla products_catalog)
- * @property {string} [externalStorageId] - ID zewnętrznego magazynu (dla products_external)
- * @property {number} [integrationId] - ID integracji (dla base_connect)
- */
-
-/**
- * Kontekst wykonania eksportu
- * @typedef {Object} ExportContext
- * @property {string} token - Token BaseLinker
- * @property {Object} statusMap - Mapa statusów { id -> name }
- * @property {Object} courierMap - Mapa kurierów { code -> name }
- * @property {Object} warehouseMap - Mapa magazynów { id -> name }
- * @property {Object} [extraFieldsMap] - Mapa pól dodatkowych { key -> label }
- */
+const { getDataset, getRequiredEnrichments } = require('../../config/datasets');
+const FetcherRegistry = require('./fetchers');
+const EnricherRegistry = require('./enrichers');
 
 class ExportPipeline {
   /**
-   * @param {ExportConfig} config - Konfiguracja eksportu
-   * @param {ExportContext} context - Kontekst z tokenem i mapami referencyjnymi
+   * @param {object} config - Konfiguracja eksportu
+   * @param {string} config.datasetId - ID datasetu
+   * @param {Array<string>} config.selectedFields - Wybrane pola
+   * @param {object} config.filters - Filtry (dateFrom, dateTo, statusId, etc.)
+   * @param {object} config.customHeaders - Mapa: fieldKey -> customLabel
+   * @param {Array} config.customFields - Custom fields z template'ami
+   * @param {object} config.currencyConversion - Opcje konwersji walut
+   * @param {number} config.inventoryId - ID katalogu (dla products_catalog)
+   * @param {string} config.storageId - ID magazynu zewnętrznego (dla products_external)
+   * @param {number} config.integrationId - ID integracji (dla base_connect)
+   * @param {string} config.subCategory - Sub-kategoria (dla basic_data)
+   *
+   * @param {object} context - Kontekst wykonania
+   * @param {string} context.token - Token API BaseLinker
+   * @param {object} context.statusMap - Mapa statusów: id -> name
+   * @param {object} context.courierMap - Mapa kurierów: code -> name
+   * @param {object} context.extraFieldsMap - Mapa extra fields: key -> label
    */
   constructor(config, context) {
-    this.config = config;
-    this.context = context;
-    this.dataset = getDataset(config.datasetId);
+    this.config = {
+      datasetId: config.datasetId,
+      selectedFields: config.selectedFields || [],
+      filters: config.filters || {},
+      customHeaders: config.customHeaders || {},
+      customFields: config.customFields || [],
+      currencyConversion: config.currencyConversion || null,
+      inventoryId: config.inventoryId || null,
+      storageId: config.storageId || null,
+      integrationId: config.integrationId || null,
+      subCategory: config.subCategory || null,
+      maxRecords: config.maxRecords || 10000
+    };
+
+    this.context = {
+      token: context.token,
+      statusMap: context.statusMap || {},
+      courierMap: context.courierMap || {},
+      extraFieldsMap: context.extraFieldsMap || {},
+      ...context
+    };
+
+    // Pobierz definicję datasetu
+    this.dataset = getDataset(this.config.datasetId);
 
     if (!this.dataset) {
-      throw new Error(`Unknown dataset: ${config.datasetId}`);
+      throw new Error(`Unknown dataset: ${this.config.datasetId}`);
     }
 
-    // Określ wymagane enrichmenty na podstawie wybranych pól
-    this.requiredEnrichments = getRequiredEnrichments(
-      config.datasetId,
-      config.selectedFields
-    );
+    // Wyznacz wymagane enrichmenty
+    this.requiredEnrichments = this.determineRequiredEnrichments();
 
-    // Dodaj currency enrichment jeśli włączone przewalutowanie
-    if (config.currencyConversion?.targetCurrency) {
-      if (!this.requiredEnrichments.includes('currency')) {
-        this.requiredEnrichments.push('currency');
-      }
-    }
-
-    // Statystyki wykonania
+    // Statystyki
     this.stats = {
       startTime: null,
       endTime: null,
       primaryRecords: 0,
       enrichedRecords: 0,
       transformedRecords: 0,
+      fetchStats: null,
+      enrichStats: {},
       errors: []
     };
-
-    logger.info('ExportPipeline initialized', {
-      datasetId: config.datasetId,
-      selectedFieldsCount: config.selectedFields.length,
-      requiredEnrichments: this.requiredEnrichments,
-      hasCurrencyConversion: !!config.currencyConversion?.targetCurrency
-    });
   }
 
   /**
-   * Wykonuje cały pipeline eksportu
-   * @returns {Promise<Object>} Wynik eksportu { rows, headers, stats }
+   * Wyznacza wymagane enrichmenty na podstawie wybranych pól
+   * @returns {Array<string>}
+   */
+  determineRequiredEnrichments() {
+    const enrichments = new Set();
+
+    // Pobierz enrichmenty z definicji pól
+    const fieldEnrichments = getRequiredEnrichments(
+      this.config.datasetId,
+      this.config.selectedFields
+    );
+
+    for (const enrichment of fieldEnrichments) {
+      enrichments.add(enrichment);
+    }
+
+    // Dodaj currency enricher jeśli jest konwersja walut
+    if (this.config.currencyConversion?.targetCurrency) {
+      enrichments.add('currency');
+    }
+
+    return Array.from(enrichments);
+  }
+
+  /**
+   * Wykonuje pełny pipeline eksportu
+   * @returns {Promise<object>} - { headers, rows, stats }
    */
   async execute() {
     this.stats.startTime = Date.now();
 
     try {
-      // 1. Pobierz główne dane
-      logger.info('Step 1: Fetching primary data', {
-        dataset: this.config.datasetId,
-        primaryQuery: this.dataset.primaryQuery
+      logger.info('ExportPipeline: Starting export', {
+        datasetId: this.config.datasetId,
+        selectedFieldsCount: this.config.selectedFields.length,
+        requiredEnrichments: this.requiredEnrichments
       });
 
-      const rawData = await this.fetchPrimaryData();
+      // ========================================
+      // FAZA 1: FETCH
+      // ========================================
+      const rawData = await this.executeFetch();
       this.stats.primaryRecords = rawData.length;
 
       if (rawData.length === 0) {
-        logger.info('No records found, returning empty result');
+        logger.info('ExportPipeline: No data to export');
         return this.buildEmptyResult();
       }
 
-      logger.info(`Fetched ${rawData.length} primary records`);
+      // ========================================
+      // FAZA 2: ENRICH
+      // ========================================
+      const enrichedData = await this.executeEnrich(rawData);
+      this.stats.enrichedRecords = enrichedData.length;
 
-      // 2. Wzbogać dane (jeśli potrzebne)
-      let enrichedData = rawData;
-
-      if (this.requiredEnrichments.length > 0) {
-        logger.info('Step 2: Applying enrichments', {
-          enrichments: this.requiredEnrichments
-        });
-
-        enrichedData = await this.applyEnrichments(rawData);
-        this.stats.enrichedRecords = enrichedData.length;
-      } else {
-        logger.info('Step 2: Skipped (no enrichments required)');
-        this.stats.enrichedRecords = rawData.length;
-      }
-
-      // 3. Transformuj do formatu wyjściowego
-      logger.info('Step 3: Transforming data');
-
-      const transformer = new DataTransformer(
-        this.dataset,
-        this.config.selectedFields,
-        {
-          customHeaders: this.config.customHeaders,
-          customFields: this.config.customFields,
-          statusMap: this.context.statusMap,
-          courierMap: this.context.courierMap,
-          warehouseMap: this.context.warehouseMap,
-          extraFieldsMap: this.context.extraFieldsMap
-        }
-      );
-
-      const result = transformer.transform(enrichedData);
-      this.stats.transformedRecords = result.rows.length;
+      // ========================================
+      // FAZA 3: TRANSFORM
+      // ========================================
+      const { headers, rows } = await this.executeTransform(enrichedData);
+      this.stats.transformedRecords = rows.length;
 
       this.stats.endTime = Date.now();
 
-      logger.info('Export pipeline completed', {
-        duration: this.stats.endTime - this.stats.startTime,
+      logger.info('ExportPipeline: Export complete', {
+        datasetId: this.config.datasetId,
         primaryRecords: this.stats.primaryRecords,
-        outputRows: this.stats.transformedRecords
+        transformedRecords: this.stats.transformedRecords,
+        durationMs: this.stats.endTime - this.stats.startTime
       });
 
       return {
-        headers: result.headers,
-        rows: result.rows,
+        headers,
+        rows,
         stats: this.getStats()
       };
 
     } catch (error) {
       this.stats.endTime = Date.now();
-      this.stats.errors.push(error.message);
+      this.stats.errors.push({
+        phase: 'execute',
+        message: error.message,
+        stack: error.stack
+      });
 
-      logger.error('Export pipeline failed', {
-        error: error.message,
-        dataset: this.config.datasetId,
-        duration: this.stats.endTime - this.stats.startTime
+      logger.error('ExportPipeline: Export failed', {
+        datasetId: this.config.datasetId,
+        error: error.message
       });
 
       throw error;
@@ -180,60 +176,145 @@ class ExportPipeline {
   }
 
   /**
-   * Pobiera główne dane za pomocą odpowiedniego fetchera
-   * @returns {Promise<Object[]>}
+   * FAZA 1: Pobieranie danych głównych
+   * @returns {Promise<Array>}
    */
-  async fetchPrimaryData() {
+  async executeFetch() {
     const fetcher = FetcherRegistry.get(this.config.datasetId);
 
     if (!fetcher) {
       throw new Error(`No fetcher registered for dataset: ${this.config.datasetId}`);
     }
 
-    return fetcher.fetch(this.context.token, this.config.filters, {
-      inventoryId: this.config.inventoryId,
-      externalStorageId: this.config.externalStorageId,
-      integrationId: this.config.integrationId
+    logger.info('ExportPipeline: Phase 1 - FETCH', {
+      datasetId: this.config.datasetId,
+      fetcherClass: fetcher.constructor.name
     });
+
+    try {
+      const options = {
+        inventoryId: this.config.inventoryId,
+        storageId: this.config.storageId,
+        integrationId: this.config.integrationId,
+        subCategory: this.config.subCategory,
+        maxRecords: this.config.maxRecords
+      };
+
+      const data = await fetcher.fetch(
+        this.context.token,
+        this.config.filters,
+        options
+      );
+
+      this.stats.fetchStats = fetcher.getStats();
+
+      return data;
+
+    } catch (error) {
+      this.stats.errors.push({
+        phase: 'fetch',
+        message: error.message
+      });
+      throw error;
+    }
   }
 
   /**
-   * Aplikuje enrichmenty do danych
-   * @param {Object[]} data - Surowe dane
-   * @returns {Promise<Object[]>}
+   * FAZA 2: Wzbogacanie danych
+   * @param {Array} data - Dane z fazy FETCH
+   * @returns {Promise<Array>}
    */
-  async applyEnrichments(data) {
-    let enrichedData = [...data];
+  async executeEnrich(data) {
+    if (this.requiredEnrichments.length === 0) {
+      logger.info('ExportPipeline: Phase 2 - ENRICH (skipped, no enrichments required)');
+      return data;
+    }
+
+    logger.info('ExportPipeline: Phase 2 - ENRICH', {
+      enrichments: this.requiredEnrichments
+    });
+
+    let enrichedData = data;
 
     for (const enrichmentName of this.requiredEnrichments) {
       const enricher = EnricherRegistry.get(enrichmentName);
 
       if (!enricher) {
-        logger.warn(`Enricher not found: ${enrichmentName}, skipping`);
+        logger.warn(`ExportPipeline: Enricher not found: ${enrichmentName}`);
         continue;
       }
 
-      logger.debug(`Applying enricher: ${enrichmentName}`);
+      try {
+        logger.info(`ExportPipeline: Applying enricher: ${enrichmentName}`);
 
-      enrichedData = await enricher.enrich(
-        enrichedData,
-        this.context.token,
-        {
-          currencyConfig: this.config.currencyConversion,
-          inventoryId: this.config.inventoryId,
-          statusMap: this.context.statusMap,
-          courierMap: this.context.courierMap,
-          warehouseMap: this.context.warehouseMap
-        }
-      );
+        enrichedData = await enricher.enrich(
+          enrichedData,
+          this.context.token,
+          {
+            statusMap: this.context.statusMap,
+            courierMap: this.context.courierMap,
+            extraFieldsMap: this.context.extraFieldsMap,
+            currencyConfig: this.config.currencyConversion
+          }
+        );
+
+        this.stats.enrichStats[enrichmentName] = enricher.getStats();
+
+      } catch (error) {
+        logger.error(`ExportPipeline: Enricher failed: ${enrichmentName}`, {
+          error: error.message
+        });
+
+        this.stats.errors.push({
+          phase: 'enrich',
+          enricher: enrichmentName,
+          message: error.message
+        });
+
+        // Kontynuuj z pozostałymi enricherami
+      }
     }
 
     return enrichedData;
   }
 
   /**
+   * FAZA 3: Transformacja do formatu wyjścia
+   * @param {Array} data - Wzbogacone dane
+   * @returns {Promise<object>} - { headers, rows }
+   */
+  async executeTransform(data) {
+    logger.info('ExportPipeline: Phase 3 - TRANSFORM', {
+      recordCount: data.length,
+      selectedFieldsCount: this.config.selectedFields.length
+    });
+
+    try {
+      const transformer = new DataTransformer(
+        this.dataset,
+        this.config.selectedFields,
+        {
+          customHeaders: this.config.customHeaders,
+          customFields: this.config.customFields
+        }
+      );
+
+      const result = transformer.transform(data);
+
+      return result;
+
+    } catch (error) {
+      this.stats.errors.push({
+        phase: 'transform',
+        message: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Buduje pusty wynik (gdy brak danych)
-   * @returns {Object}
+   * @returns {object}
    */
   buildEmptyResult() {
     const transformer = new DataTransformer(
@@ -241,9 +322,11 @@ class ExportPipeline {
       this.config.selectedFields,
       {
         customHeaders: this.config.customHeaders,
-        statusMap: this.context.statusMap
+        customFields: this.config.customFields
       }
     );
+
+    this.stats.endTime = Date.now();
 
     return {
       headers: transformer.getHeaders(),
@@ -253,8 +336,8 @@ class ExportPipeline {
   }
 
   /**
-   * Zwraca statystyki wykonania
-   * @returns {Object}
+   * Pobiera statystyki wykonania
+   * @returns {object}
    */
   getStats() {
     return {

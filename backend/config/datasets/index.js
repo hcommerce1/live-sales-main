@@ -1,98 +1,85 @@
 /**
- * Index wszystkich datasetów
+ * Dataset Registry
  *
- * Eksportuje wszystkie dostępne datasety w systemie.
+ * Centralny rejestr wszystkich datasetów eksportu.
+ * Każdy dataset definiuje strukturę pól i konfigurację eksportu.
  */
 
-const orders = require('./orders.dataset');
-const orderItems = require('./order-items.dataset');
-const returns = require('./returns.dataset');
-const warehouseDocs = require('./warehouse-docs.dataset');
-const productsCatalog = require('./products-catalog.dataset');
-const productsExternal = require('./products-external.dataset');
-const purchaseOrders = require('./purchase-orders.dataset');
-const shipments = require('./shipments.dataset');
-const baseConnect = require('./base-connect.dataset');
+// Import dataset definitions
+const ordersDataset = require('./orders.dataset');
+const orderItemsDataset = require('./order-items.dataset');
+const returnsDataset = require('./returns.dataset');
+const productsCatalogDataset = require('./products-catalog.dataset');
+const accountingDocsDataset = require('./accounting-docs.dataset');
+const warehouseDocsDataset = require('./warehouse-docs.dataset');
+const productsExternalDataset = require('./products-external.dataset');
+const purchaseOrdersDataset = require('./purchase-orders.dataset');
+const shipmentsDataset = require('./shipments.dataset');
+const baseConnectDataset = require('./base-connect.dataset');
+const basicDataDataset = require('./basic-data.dataset');
 
-// Wszystkie datasety jako mapa
+// Registry of all datasets
 const datasets = {
-  orders,
-  order_items: orderItems,
-  returns,
-  warehouse_docs: warehouseDocs,
-  products_catalog: productsCatalog,
-  products_external: productsExternal,
-  purchase_orders: purchaseOrders,
-  shipments,
-  base_connect: baseConnect
+  orders: ordersDataset,
+  order_items: orderItemsDataset,
+  returns: returnsDataset,
+  products_catalog: productsCatalogDataset,
+  accounting_docs: accountingDocsDataset,
+  warehouse_docs: warehouseDocsDataset,
+  products_external: productsExternalDataset,
+  purchase_orders: purchaseOrdersDataset,
+  shipments: shipmentsDataset,
+  base_connect: baseConnectDataset,
+  basic_data: basicDataDataset
 };
 
-// Lista datasetów w kolejności wyświetlania
+// Order for UI display
 const datasetOrder = [
   'orders',
   'order_items',
   'returns',
-  'warehouse_docs',
   'products_catalog',
+  'accounting_docs',
+  'warehouse_docs',
   'products_external',
   'purchase_orders',
   'shipments',
-  'base_connect'
+  'base_connect',
+  'basic_data'
 ];
 
-/**
- * Pobiera definicję datasetu po ID
- */
 function getDataset(datasetId) {
   return datasets[datasetId] || null;
 }
 
-/**
- * Pobiera wszystkie datasety
- */
 function getAllDatasets() {
-  return datasetOrder.map(id => datasets[id]);
+  return datasetOrder.map(id => datasets[id]).filter(Boolean);
 }
 
-/**
- * Pobiera wszystkie pola dla datasetu (płaska lista)
- */
 function getDatasetFields(datasetId) {
   const dataset = datasets[datasetId];
-  if (!dataset) return [];
-
-  return dataset.fieldGroups.flatMap(group => group.fields);
+  if (!dataset || !dataset.fieldGroups) return [];
+  return dataset.fieldGroups.flatMap(group => group.fields || []);
 }
 
-/**
- * Pobiera pole po kluczu
- */
 function getField(datasetId, fieldKey) {
   const fields = getDatasetFields(datasetId);
   return fields.find(f => f.key === fieldKey) || null;
 }
 
-/**
- * Sprawdza czy pole wymaga wzbogacenia
- */
 function fieldRequiresEnrichment(datasetId, fieldKey) {
   const field = getField(datasetId, fieldKey);
   return field?.enrichment || null;
 }
 
-/**
- * Pobiera wymagane wzbogacenia dla listy pól
- */
 function getRequiredEnrichments(datasetId, selectedFieldKeys) {
   const enrichments = new Set();
-
   for (const fieldKey of selectedFieldKeys) {
     const enrichment = fieldRequiresEnrichment(datasetId, fieldKey);
     if (enrichment) {
       enrichments.add(enrichment);
     }
   }
-
   return Array.from(enrichments);
 }
 

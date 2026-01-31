@@ -457,6 +457,60 @@ router.get('/inventories', async (req, res) => {
 });
 
 /**
+ * GET /api/baselinker/external-storages
+ * Get list of external storages (shops, wholesalers)
+ */
+router.get('/external-storages', async (req, res) => {
+  try {
+    const client = await getBaseLinkerClient(req, res);
+    if (!client) return;
+
+    const response = await client.makeRequest('getExternalStoragesList', {});
+
+    res.json({
+      success: true,
+      data: response.storages || [],
+    });
+  } catch (error) {
+    logger.error('Failed to fetch external storages', {
+      error: error.message,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/baselinker/connect-integrations
+ * Get Base Connect integrations (B2B)
+ */
+router.get('/connect-integrations', async (req, res) => {
+  try {
+    const client = await getBaseLinkerClient(req, res);
+    if (!client) return;
+
+    const response = await client.makeRequest('getConnectIntegrations', {});
+
+    res.json({
+      success: true,
+      data: response.integrations || {},
+    });
+  } catch (error) {
+    logger.error('Failed to fetch connect integrations', {
+      error: error.message,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/baselinker/status
  * Get integration status (is token configured?)
  */

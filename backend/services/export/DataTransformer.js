@@ -1,49 +1,62 @@
 /**
  * Data Transformer
  *
- * Transformuje surowe dane do formatu gotowego do eksportu:
- * - Mapuje pola według konfiguracji datasetu
- * - Obsługuje własne nagłówki (customHeaders)
- * - Obsługuje pola customowe (formuły z placeholderami)
- * - Obsługuje puste pola (_empty)
- * - Formatuje daty, boolean, liczby
+ * Transformuje surowe dane do formatu gotowego do eksportu (Google Sheets).
+ *
+ * Odpowiedzialności:
+ * - Mapowanie pól na kolumny
+ * - Formatowanie wartości (daty, liczby, boolean)
+ * - Obsługa custom headers
+ * - Obsługa custom fields (formuły z placeholderami)
+ * - Obsługa pustych kolumn (_empty_)
  */
 
 const logger = require('../../utils/logger');
+const { getDataset, getField } = require('../../config/datasets');
 
 class DataTransformer {
   /**
-   * @param {Object} dataset - Konfiguracja datasetu
-   * @param {string[]} selectedFields - Lista wybranych kluczy pól
-   * @param {Object} options - Opcje transformacji
-   * @param {Object} [options.customHeaders] - Mapowanie field_key -> custom_header
-   * @param {Object[]} [options.customFields] - Pola customowe
-   * @param {Object} [options.statusMap] - Mapa statusów
-   * @param {Object} [options.courierMap] - Mapa kurierów
-   * @param {Object} [options.warehouseMap] - Mapa magazynów
-   * @param {Object} [options.extraFieldsMap] - Mapa pól dodatkowych
+   * @param {object} dataset - Definicja datasetu
+   * @param {Array<string>} selectedFields - Lista kluczy wybranych pól
+   * @param {object} options - Opcje transformacji
+   * @param {object} options.customHeaders - Mapa: fieldKey -> customLabel
+   * @param {Array} options.customFields - Custom fields z template'ami
+   * @param {object} options.formatOptions - Opcje formatowania
    */
   constructor(dataset, selectedFields, options = {}) {
     this.dataset = dataset;
-    this.selectedFields = selectedFields;
-    this.options = options;
+    this.selectedFields = selectedFields || [];
+    this.options = {
+      customHeaders: options.customHeaders || {},
+      customFields: options.customFields || [],
+      formatOptions: {
+        dateFormat: options.formatOptions?.dateFormat || 'ISO',
+        decimalPlaces: options.formatOptions?.decimalPlaces || 2,
+        booleanTrue: options.formatOptions?.booleanTrue || 'TAK',
+        booleanFalse: options.formatOptions?.booleanFalse || 'NIE',
+        nullValue: options.formatOptions?.nullValue || '',
+        ...options.formatOptions
+      }
+    };
 
-    // Buduj mapę pól dla szybkiego dostępu
+    // Zbuduj mapę pól i kolumn
     this.fieldMap = this.buildFieldMap();
-
-    // Buduj listę kolumn do eksportu
     this.columns = this.buildColumns();
   }
 
   /**
-   * Buduje mapę wszystkich pól datasetu
-   * @returns {Map<string, Object>}
+   * Buduje mapę pól: fieldKey -> fieldDefinition
+   * @returns {Map}
    */
   buildFieldMap() {
     const map = new Map();
 
+    if (!this.dataset || !this.dataset.fieldGroups) {
+      return map;
+    }
+
     for (const group of this.dataset.fieldGroups) {
-      for (const field of group.fields) {
+      for (const field of group.fields || []) {
         map.set(field.key, {
           ...field,
           groupId: group.id,
@@ -52,427 +65,402 @@ class DataTransformer {
       }
     }
 
+    // Dodaj custom fields do mapy
+    for (const customField of this.options.customFields) {
+      map.set(customField.key, {
+        key: customField.key,
+        label: customField.label,
+        type: 'custom',
+        template: customField.template,
+        computed: true
+      });
+    }
+
     return map;
   }
 
   /**
    * Buduje listę kolumn do eksportu
-   * @returns {Object[]}
+   * @returns {Array}
    */
   buildColumns() {
-    const columns = [];
-
-    for (const fieldKey of this.selectedFields) {
-      // Sprawdź czy to puste pole
-      if (fieldKey === '_empty' || fieldKey.startsWith('_empty_')) {
-        columns.push({
+    return this.selectedFields.map((fieldKey, index) => {
+      // Spacer/pusta kolumna
+      if (fieldKey.startsWith('_empty_') || fieldKey === '_empty_') {
+        return {
           key: fieldKey,
           label: '',
           type: 'empty',
-          isEmpty: true
-        });
-        continue;
+          index
+        };
       }
 
-      // Sprawdź czy to pole customowe
+      // Custom field
       if (fieldKey.startsWith('_custom_')) {
-        const customField = this.options.customFields?.find(
-          cf => cf.key === fieldKey
-        );
-
-        if (customField) {
-          columns.push({
-            key: fieldKey,
-            label: customField.label || 'Custom',
-            type: 'custom',
-            template: customField.template,
-            isCustom: true
-          });
-        }
-        continue;
-      }
-
-      // Standardowe pole z datasetu
-      const field = this.fieldMap.get(fieldKey);
-
-      if (field) {
-        // Użyj customowego nagłówka jeśli podano
-        const customHeader = this.options.customHeaders?.[fieldKey];
-
-        columns.push({
+        const customField = this.options.customFields.find(f => f.key === fieldKey);
+        return {
           key: fieldKey,
-          label: customHeader || field.label,
-          type: field.type,
-          description: field.description,
-          computed: field.computed,
-          enrichment: field.enrichment
-        });
-      } else {
-        // Pole dynamiczne (extra field) - może nie być w fieldMap
-        // Extra fields mają format: extra_field_123
-        if (fieldKey.startsWith('extra_field_')) {
-          const extraLabel = this.options.extraFieldsMap?.[fieldKey] || fieldKey;
-          const customHeader = this.options.customHeaders?.[fieldKey];
-
-          columns.push({
-            key: fieldKey,
-            label: customHeader || extraLabel,
-            type: 'text',
-            isDynamic: true
-          });
-        } else {
-          logger.warn(`Field not found in dataset: ${fieldKey}`);
-        }
+          label: customField?.label || fieldKey,
+          type: 'custom',
+          template: customField?.template || '',
+          index
+        };
       }
-    }
 
-    return columns;
+      // Standardowe pole
+      const fieldDef = this.fieldMap.get(fieldKey);
+
+      if (!fieldDef) {
+        logger.warn(`DataTransformer: Unknown field '${fieldKey}'`);
+        return {
+          key: fieldKey,
+          label: fieldKey,
+          type: 'text',
+          index
+        };
+      }
+
+      return {
+        key: fieldKey,
+        label: this.options.customHeaders[fieldKey] || fieldDef.label,
+        type: fieldDef.type || 'text',
+        index,
+        fieldDef
+      };
+    });
   }
 
   /**
    * Zwraca nagłówki kolumn
-   * @returns {string[]}
+   * @returns {Array<string>}
    */
   getHeaders() {
     return this.columns.map(col => col.label);
   }
 
   /**
-   * Transformuje tablicę rekordów do formatu wyjściowego
-   * @param {Object[]} data - Surowe dane
-   * @returns {Object} { headers: string[], rows: any[][] }
+   * Transformuje dane do formatu eksportu
+   *
+   * @param {Array} data - Tablica rekordów
+   * @returns {object} - { headers: [], rows: [] }
    */
   transform(data) {
     const headers = this.getHeaders();
-    const rows = data.map(record => this.transformRecord(record));
+    const rows = [];
+
+    for (const record of data) {
+      const row = this.transformRecord(record);
+      rows.push(row);
+    }
+
+    logger.info(`DataTransformer: Transformed ${rows.length} records`, {
+      datasetId: this.dataset?.id,
+      columnsCount: this.columns.length
+    });
 
     return { headers, rows };
   }
 
   /**
-   * Transformuje pojedynczy rekord
-   * @param {Object} record - Rekord danych
-   * @returns {any[]} Tablica wartości kolumn
+   * Transformuje pojedynczy rekord do wiersza
+   *
+   * @param {object} record - Rekord danych
+   * @returns {Array} - Wartości wiersza
    */
   transformRecord(record) {
     return this.columns.map(column => {
-      // Puste pole
-      if (column.isEmpty) {
+      // Pusta kolumna
+      if (column.type === 'empty') {
         return '';
       }
 
-      // Pole customowe (formuła)
-      if (column.isCustom) {
-        return this.evaluateCustomField(column.template, record);
+      // Custom field z template
+      if (column.type === 'custom' && column.template) {
+        return this.evaluateTemplate(column.template, record);
       }
 
       // Standardowe pole
-      const rawValue = this.getNestedValue(record, column.key);
-
-      // Computed fields
-      if (column.computed) {
-        return this.computeField(column.key, rawValue, record);
-      }
-
-      // Format value based on type
+      const rawValue = this.getFieldValue(record, column.key);
       return this.formatValue(rawValue, column.type);
     });
   }
 
   /**
-   * Pobiera wartość z obiektu (obsługuje zagnieżdżone klucze)
-   * @param {Object} obj - Obiekt źródłowy
-   * @param {string} key - Klucz (może być zagnieżdżony: 'a.b.c')
-   * @returns {any}
+   * Pobiera wartość pola z rekordu
+   * Obsługuje zagnieżdżone ścieżki (np. 'address.city')
+   *
+   * @param {object} record - Rekord
+   * @param {string} fieldKey - Klucz pola
+   * @returns {*} - Wartość
    */
-  getNestedValue(obj, key) {
-    // Najpierw sprawdź bezpośredni klucz
-    if (obj.hasOwnProperty(key)) {
-      return obj[key];
+  getFieldValue(record, fieldKey) {
+    if (!record || !fieldKey) {
+      return null;
     }
 
-    // Sprawdź zagnieżdżone klucze
-    const parts = key.split('.');
-    let value = obj;
+    // Prosta wartość
+    if (fieldKey in record) {
+      return record[fieldKey];
+    }
 
-    for (const part of parts) {
-      if (value === null || value === undefined) {
-        return null;
+    // Zagnieżdżona ścieżka
+    if (fieldKey.includes('.')) {
+      const parts = fieldKey.split('.');
+      let value = record;
+
+      for (const part of parts) {
+        if (value === null || value === undefined) {
+          return null;
+        }
+        value = value[part];
       }
-      value = value[part];
+
+      return value;
     }
 
-    return value;
+    return null;
   }
 
   /**
-   * Formatuje wartość na podstawie typu
-   * @param {any} value - Wartość do sformatowania
+   * Formatuje wartość według typu
+   *
+   * @param {*} value - Wartość do formatowania
    * @param {string} type - Typ pola
-   * @returns {any}
+   * @returns {*} - Sformatowana wartość
    */
   formatValue(value, type) {
+    const { formatOptions } = this.options;
+
+    // Null/undefined
     if (value === null || value === undefined) {
-      return '';
+      return formatOptions.nullValue;
     }
 
     switch (type) {
       case 'datetime':
-        return this.formatDatetime(value);
+        return this.formatDateTime(value);
 
       case 'date':
         return this.formatDate(value);
 
-      case 'boolean':
-        return this.formatBoolean(value);
-
       case 'number':
         return this.formatNumber(value);
 
+      case 'currency':
+        return this.formatCurrency(value);
+
+      case 'boolean':
+        return this.formatBoolean(value);
+
+      case 'array':
+        return this.formatArray(value);
+
+      case 'object':
+        return this.formatObject(value);
+
       case 'text':
       default:
-        return String(value);
+        return this.formatText(value);
     }
   }
 
   /**
-   * Formatuje datetime (Unix timestamp lub string)
-   * @param {number|string} value
+   * Formatuje datę i czas
+   * @param {*} value - Wartość (timestamp, Date, string)
    * @returns {string}
    */
-  formatDatetime(value) {
-    if (!value || value === 0) return '';
+  formatDateTime(value) {
+    if (!value) return this.options.formatOptions.nullValue;
 
-    let date;
+    try {
+      let date;
 
-    // Unix timestamp (seconds)
-    if (typeof value === 'number') {
-      date = new Date(value * 1000);
-    } else {
-      date = new Date(value);
-    }
+      // Unix timestamp (sekundy)
+      if (typeof value === 'number') {
+        date = new Date(value > 9999999999 ? value : value * 1000);
+      } else if (typeof value === 'string') {
+        date = new Date(value);
+      } else if (value instanceof Date) {
+        date = value;
+      } else {
+        return String(value);
+      }
 
-    if (isNaN(date.getTime())) {
+      if (isNaN(date.getTime())) {
+        return String(value);
+      }
+
+      // Format: YYYY-MM-DD HH:mm:ss
+      const pad = n => String(n).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    } catch {
       return String(value);
     }
-
-    // Format: YYYY-MM-DD HH:mm:ss
-    return date.toISOString()
-      .replace('T', ' ')
-      .replace(/\.\d{3}Z$/, '');
   }
 
   /**
-   * Formatuje date (bez czasu)
-   * @param {number|string} value
+   * Formatuje datę (bez czasu)
+   * @param {*} value - Wartość
    * @returns {string}
    */
   formatDate(value) {
-    if (!value || value === 0) return '';
+    if (!value) return this.options.formatOptions.nullValue;
 
-    let date;
+    try {
+      let date;
 
-    if (typeof value === 'number') {
-      date = new Date(value * 1000);
-    } else {
-      date = new Date(value);
-    }
+      if (typeof value === 'number') {
+        date = new Date(value > 9999999999 ? value : value * 1000);
+      } else if (typeof value === 'string') {
+        date = new Date(value);
+      } else if (value instanceof Date) {
+        date = value;
+      } else {
+        return String(value);
+      }
 
-    if (isNaN(date.getTime())) {
+      if (isNaN(date.getTime())) {
+        return String(value);
+      }
+
+      // Format: YYYY-MM-DD
+      const pad = n => String(n).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    } catch {
       return String(value);
     }
-
-    // Format: YYYY-MM-DD
-    return date.toISOString().split('T')[0];
-  }
-
-  /**
-   * Formatuje boolean
-   * @param {any} value
-   * @returns {string}
-   */
-  formatBoolean(value) {
-    if (value === true || value === 1 || value === '1' || value === 'true') {
-      return 'Tak';
-    }
-    if (value === false || value === 0 || value === '0' || value === 'false') {
-      return 'Nie';
-    }
-    return '';
   }
 
   /**
    * Formatuje liczbę
-   * @param {any} value
+   * @param {*} value - Wartość
    * @returns {number|string}
    */
   formatNumber(value) {
     if (value === null || value === undefined || value === '') {
-      return '';
+      return this.options.formatOptions.nullValue;
     }
 
-    const num = Number(value);
-
+    const num = parseFloat(value);
     if (isNaN(num)) {
-      return value;
+      return String(value);
     }
 
-    // Zaokrąglij do 2 miejsc po przecinku dla wartości finansowych
-    return Math.round(num * 100) / 100;
+    return Number(num.toFixed(this.options.formatOptions.decimalPlaces));
   }
 
   /**
-   * Oblicza wartość pola computed
-   * @param {string} fieldKey - Klucz pola
-   * @param {any} rawValue - Surowa wartość (jeśli istnieje)
-   * @param {Object} record - Cały rekord
-   * @returns {any}
-   */
-  computeField(fieldKey, rawValue, record) {
-    // Jeśli wartość już istnieje (obliczona przez enricher), użyj jej
-    if (rawValue !== null && rawValue !== undefined) {
-      return this.formatValue(rawValue, this.fieldMap.get(fieldKey)?.type || 'text');
-    }
-
-    // Obliczenia specyficzne dla datasetu orders
-    switch (fieldKey) {
-      // Nazwa statusu
-      case 'order_status_name':
-        return this.options.statusMap?.[record.order_status_id] || '';
-
-      // Status płatności
-      case 'payment_status': {
-        const total = this.calculateOrderTotal(record);
-        const paid = Number(record.payment_done) || 0;
-
-        if (paid >= total && total > 0) return 'Opłacone';
-        if (paid > 0) return 'Częściowo opłacone';
-        return 'Nieopłacone';
-      }
-
-      // Wartości produktów
-      case 'products_value_brutto':
-        return this.calculateProductsValueBrutto(record);
-
-      case 'products_value_netto':
-        return this.calculateProductsValueNetto(record);
-
-      // Wartość zamówienia
-      case 'order_value_brutto':
-        return this.calculateOrderValueBrutto(record);
-
-      case 'order_value_netto':
-        return this.calculateOrderValueNetto(record);
-
-      // Koszt dostawy netto
-      case 'delivery_price_netto': {
-        const brutto = Number(record.delivery_price) || Number(record.delivery_price_brutto) || 0;
-        const vatRate = Number(record.delivery_vat_rate) || 23;
-        return Math.round((brutto / (1 + vatRate / 100)) * 100) / 100;
-      }
-
-      // Liczba pozycji
-      case 'products_count':
-        return record.products?.length || 0;
-
-      // Łączna ilość
-      case 'products_quantity':
-        return record.products?.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0) || 0;
-
-      // Nazwa magazynu
-      case 'warehouse_name':
-        return this.options.warehouseMap?.[record.warehouse_id] || '';
-
-      // Nazwa kuriera
-      case 'courier_name':
-        return this.options.courierMap?.[record.courier_code] || record.courier_code || '';
-
-      default:
-        return '';
-    }
-  }
-
-  /**
-   * Oblicza wartość produktów brutto
-   * @param {Object} record
-   * @returns {number}
-   */
-  calculateProductsValueBrutto(record) {
-    if (!record.products || !Array.isArray(record.products)) {
-      return 0;
-    }
-
-    return record.products.reduce((sum, product) => {
-      const price = Number(product.price_brutto) || 0;
-      const qty = Number(product.quantity) || 0;
-      return sum + price * qty;
-    }, 0);
-  }
-
-  /**
-   * Oblicza wartość produktów netto
-   * @param {Object} record
-   * @returns {number}
-   */
-  calculateProductsValueNetto(record) {
-    if (!record.products || !Array.isArray(record.products)) {
-      return 0;
-    }
-
-    return record.products.reduce((sum, product) => {
-      const priceBrutto = Number(product.price_brutto) || 0;
-      const taxRate = Number(product.tax_rate) || 23;
-      const qty = Number(product.quantity) || 0;
-      const priceNetto = priceBrutto / (1 + taxRate / 100);
-      return sum + priceNetto * qty;
-    }, 0);
-  }
-
-  /**
-   * Oblicza całkowitą wartość zamówienia brutto
-   * @param {Object} record
-   * @returns {number}
-   */
-  calculateOrderValueBrutto(record) {
-    const productsValue = this.calculateProductsValueBrutto(record);
-    const deliveryPrice = Number(record.delivery_price) || Number(record.delivery_price_brutto) || 0;
-    return Math.round((productsValue + deliveryPrice) * 100) / 100;
-  }
-
-  /**
-   * Oblicza całkowitą wartość zamówienia netto
-   * @param {Object} record
-   * @returns {number}
-   */
-  calculateOrderValueNetto(record) {
-    const productsNetto = this.calculateProductsValueNetto(record);
-    const deliveryBrutto = Number(record.delivery_price) || Number(record.delivery_price_brutto) || 0;
-    const deliveryVat = Number(record.delivery_vat_rate) || 23;
-    const deliveryNetto = deliveryBrutto / (1 + deliveryVat / 100);
-    return Math.round((productsNetto + deliveryNetto) * 100) / 100;
-  }
-
-  /**
-   * Oblicza całkowitą wartość zamówienia (dla statusu płatności)
-   * @param {Object} record
-   * @returns {number}
-   */
-  calculateOrderTotal(record) {
-    return this.calculateOrderValueBrutto(record);
-  }
-
-  /**
-   * Ewaluuje pole customowe (formuła z placeholderami)
-   * @param {string} template - Szablon np. "https://shop.com/order/{order_id}"
-   * @param {Object} record - Rekord danych
+   * Formatuje walutę
+   * @param {*} value - Wartość
    * @returns {string}
    */
-  evaluateCustomField(template, record) {
+  formatCurrency(value) {
+    const num = this.formatNumber(value);
+    if (typeof num === 'number') {
+      return num.toFixed(2);
+    }
+    return num;
+  }
+
+  /**
+   * Formatuje boolean
+   * @param {*} value - Wartość
+   * @returns {string}
+   */
+  formatBoolean(value) {
+    if (value === null || value === undefined) {
+      return this.options.formatOptions.nullValue;
+    }
+
+    // Konwertuj różne reprezentacje
+    let boolValue;
+
+    if (typeof value === 'boolean') {
+      boolValue = value;
+    } else if (typeof value === 'number') {
+      boolValue = value !== 0;
+    } else if (typeof value === 'string') {
+      boolValue = value.toLowerCase() === 'true' || value === '1';
+    } else {
+      boolValue = Boolean(value);
+    }
+
+    return boolValue
+      ? this.options.formatOptions.booleanTrue
+      : this.options.formatOptions.booleanFalse;
+  }
+
+  /**
+   * Formatuje tablicę
+   * @param {Array} value - Tablica
+   * @returns {string}
+   */
+  formatArray(value) {
+    if (!Array.isArray(value)) {
+      return this.formatText(value);
+    }
+
+    return value
+      .map(item => {
+        if (typeof item === 'object') {
+          return JSON.stringify(item);
+        }
+        return String(item);
+      })
+      .join(', ');
+  }
+
+  /**
+   * Formatuje obiekt
+   * @param {object} value - Obiekt
+   * @returns {string}
+   */
+  formatObject(value) {
+    if (typeof value !== 'object' || value === null) {
+      return this.formatText(value);
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  /**
+   * Formatuje tekst
+   * @param {*} value - Wartość
+   * @returns {string}
+   */
+  formatText(value) {
+    if (value === null || value === undefined) {
+      return this.options.formatOptions.nullValue;
+    }
+
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+
+    return String(value);
+  }
+
+  /**
+   * Ewaluuje template z placeholderami
+   * Placeholder: {field_name}
+   *
+   * @param {string} template - Template z placeholderami
+   * @param {object} record - Rekord danych
+   * @returns {string}
+   */
+  evaluateTemplate(template, record) {
     if (!template) return '';
 
-    // Zamień placeholdery {field_key} na wartości z rekordu
     return template.replace(/\{(\w+)\}/g, (match, fieldKey) => {
-      const value = this.getNestedValue(record, fieldKey);
+      const value = this.getFieldValue(record, fieldKey);
 
       if (value === null || value === undefined) {
         return '';
@@ -480,6 +468,19 @@ class DataTransformer {
 
       return String(value);
     });
+  }
+
+  /**
+   * Zwraca informacje o kolumnach
+   * @returns {Array}
+   */
+  getColumnInfo() {
+    return this.columns.map(col => ({
+      key: col.key,
+      label: col.label,
+      type: col.type,
+      index: col.index
+    }));
   }
 }
 

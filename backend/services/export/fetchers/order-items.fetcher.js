@@ -1,14 +1,11 @@
 /**
  * Order Items Fetcher
  *
- * Pobiera pozycje zamówień - rozwija products[] do osobnych wierszy.
- * Dataset: order_items
- *
- * Każdy produkt z zamówienia staje się osobnym wierszem z kontekstem zamówienia.
+ * Pobiera zamówienia z API BaseLinker i rozbija tablicę products[]
+ * na osobne wiersze - każdy produkt to osobny rekord.
  */
 
 const BaseFetcher = require('./BaseFetcher');
-const logger = require('../../../utils/logger');
 
 class OrderItemsFetcher extends BaseFetcher {
   constructor() {
@@ -16,73 +13,120 @@ class OrderItemsFetcher extends BaseFetcher {
   }
 
   /**
-   * Pobiera pozycje zamówień (rozwinięte produkty)
-   * @param {string} token - Token BaseLinker
-   * @param {Object} filters - Filtry
-   * @param {Object} options - Opcje
-   * @returns {Promise<Object[]>}
+   * Pobiera pozycje zamówień z BaseLinker API
+   *
+   * @param {string} token - Token API BaseLinker
+   * @param {object} filters - Filtry
+   * @param {object} options - Opcje
+   * @returns {Promise<Array>} - Tablica znormalizowanych pozycji
    */
   async fetch(token, filters = {}, options = {}) {
-    this.logFetchStart({ filters });
+    this.resetStats();
+    this.logFetchStart({ filters, options });
 
-    const client = this.getBaseLinkerClient(token);
-    const apiFilters = this.convertFilters(filters);
+    try {
+      const apiFilters = this.convertFilters(filters);
+      const maxRecords = options.maxRecords || 10000;
 
-    // Pobierz zamówienia z paginacją
-    const orders = await this.fetchAllPages(async (lastOrderId) => {
-      const params = {
-        ...apiFilters,
-        get_unconfirmed_orders: !filters.confirmedOnly
-      };
+      // Pobierz zamówienia z paginacją
+      const allOrders = await this.fetchAllPages(
+        async (lastDateConfirmed) => {
+          const params = {
+            ...apiFilters,
+            date_confirmed_from: lastDateConfirmed || apiFilters.date_from || 0
+          };
 
-      if (lastOrderId) {
-        params.order_id = lastOrderId;
-      }
+          delete params.date_from;
 
-      const response = await client.getOrders(params);
+          const response = await this.baselinkerService.makeRequest(
+            token,
+            'getOrders',
+            params
+          );
 
-      if (!response || !response.orders) {
-        return { data: [], nextPageToken: null };
-      }
+          const orders = response.orders || [];
 
-      const ordersArray = Object.values(response.orders);
+          let nextPageToken = null;
+          if (orders.length === 100) {
+            const lastOrder = orders[orders.length - 1];
+            nextPageToken = lastOrder.date_confirmed + 1;
+          }
 
-      const nextPageToken = ordersArray.length === 100
-        ? ordersArray[ordersArray.length - 1].order_id
-        : null;
+          return {
+            data: orders,
+            nextPageToken
+          };
+        },
+        maxRecords
+      );
 
-      return {
-        data: ordersArray,
-        nextPageToken
-      };
-    });
+      // Rozbij zamówienia na pozycje
+      const allItems = this.flattenOrdersToItems(allOrders);
 
-    // Rozwiń produkty do osobnych wierszy
-    const orderItems = this.expandProductsToItems(orders);
+      this.logFetchComplete(allItems.length);
 
-    this.logFetchComplete(orderItems.length);
+      return allItems;
 
-    return orderItems;
+    } catch (error) {
+      this.logError('Fetch failed', error);
+      throw error;
+    }
   }
 
   /**
-   * Rozwija tablice products[] do osobnych wierszy
-   * @param {Object[]} orders - Lista zamówień
-   * @returns {Object[]} - Lista pozycji (jeden wiersz per produkt)
+   * Konwertuje filtry UI na format API BaseLinker
    */
-  expandProductsToItems(orders) {
+  convertFilters(filters) {
+    const converted = {};
+
+    if (filters.dateFrom) {
+      converted.date_from = this.toUnixTimestamp(filters.dateFrom);
+    }
+
+    if (filters.dateTo) {
+      converted.date_to = this.toUnixTimestamp(filters.dateTo);
+    }
+
+    if (filters.statusId) {
+      converted.order_status_id = filters.statusId;
+    }
+
+    if (filters.orderSourceId) {
+      converted.filter_order_source_id = filters.orderSourceId;
+    }
+
+    if (filters.confirmedOnly === false) {
+      converted.get_unconfirmed_orders = true;
+    }
+
+    return converted;
+  }
+
+  /**
+   * Rozbija tablicę zamówień na tablicę pozycji
+   * Każdy produkt z zamówienia staje się osobnym rekordem
+   *
+   * @param {Array} orders - Tablica zamówień
+   * @returns {Array} - Tablica pozycji
+   */
+  flattenOrdersToItems(orders) {
     const items = [];
 
     for (const order of orders) {
       const products = order.products || [];
 
+      // Jeśli zamówienie nie ma produktów, pomijamy je
       if (products.length === 0) {
-        // Zamówienie bez produktów - pomijamy lub dodajemy pusty wiersz
         continue;
       }
 
+      // Dane zamówienia do skopiowania do każdej pozycji
+      const orderData = this.extractOrderData(order);
+
+      // Dla każdego produktu tworzymy osobny rekord
       for (const product of products) {
-        items.push(this.createOrderItem(order, product));
+        const item = this.normalizeItem(product, orderData);
+        items.push(item);
       }
     }
 
@@ -90,84 +134,81 @@ class OrderItemsFetcher extends BaseFetcher {
   }
 
   /**
-   * Tworzy rekord pozycji zamówienia
-   * @param {Object} order - Zamówienie
-   * @param {Object} product - Produkt z zamówienia
-   * @returns {Object}
+   * Wyciąga dane zamówienia do skopiowania do pozycji
+   *
+   * @param {object} order - Zamówienie
+   * @returns {object} - Dane zamówienia
    */
-  createOrderItem(order, product) {
-    // Oblicz wartości pozycji
-    const quantity = Number(product.quantity) || 0;
-    const priceBrutto = Number(product.price_brutto) || 0;
-    const taxRate = Number(product.tax_rate) || 23;
-    const priceNetto = priceBrutto / (1 + taxRate / 100);
-    const weight = Number(product.weight) || 0;
+  extractOrderData(order) {
+    return {
+      order_id: order.order_id,
+      shop_order_id: order.shop_order_id || null,
+      external_order_id: order.external_order_id || null,
+      order_source: order.order_source || null,
+      date_add: this.fromUnixTimestamp(order.date_add),
+      date_confirmed: this.fromUnixTimestamp(order.date_confirmed),
+      order_status_id: order.order_status_id || null,
+      order_status_name: null, // Computed - wymaga mapy statusów
+      currency: order.currency || 'PLN',
+      email: order.email || null,
+      phone: order.phone || null,
+      delivery_fullname: order.delivery_fullname || null,
+      delivery_company: order.delivery_company || null,
+      delivery_city: order.delivery_city || null,
+      delivery_country: order.delivery_country || null
+    };
+  }
 
-    const lineTotalBrutto = priceBrutto * quantity;
-    const lineTotalNetto = priceNetto * quantity;
-    const lineTaxValue = lineTotalBrutto - lineTotalNetto;
-    const lineWeight = weight * quantity;
+  /**
+   * Normalizuje pojedynczą pozycję produktową
+   *
+   * @param {object} product - Produkt z zamówienia
+   * @param {object} orderData - Dane zamówienia
+   * @returns {object} - Znormalizowana pozycja
+   */
+  normalizeItem(product, orderData) {
+    const priceBrutto = this.parseNumber(product.price_brutto);
+    const quantity = this.parseNumber(product.quantity);
 
     return {
-      // Kontekst zamówienia
-      order_id: order.order_id,
-      order_source: order.order_source || '',
-      order_status_id: order.order_status_id,
-      date_confirmed: order.date_confirmed,
-      email: order.email || '',
-      delivery_country_code: order.delivery_country_code || '',
-      currency: order.currency || 'PLN',
+      // Dane zamówienia
+      ...orderData,
 
-      // Dane produktu
-      product_id: product.product_id || '',
-      variant_id: product.variant_id || '',
-      name: product.name || '',
-      sku: product.sku || '',
-      ean: product.ean || '',
-      location: product.location || '',
-      auction_id: product.auction_id || '',
-      attributes: product.attributes || '',
+      // Podstawowe dane pozycji
+      order_product_id: product.order_product_id || null,
+      product_id: product.product_id || null,
+      variant_id: product.variant_id || null,
+      name: product.name || null,
+      sku: product.sku || null,
+      ean: product.ean || null,
 
-      // Ilość i ceny
+      // Szczegóły pozycji
+      attributes: product.attributes || null,
+      location: product.location || null,
+      warehouse_id: product.warehouse_id || null,
+
+      // Ceny i ilości
+      price_brutto: priceBrutto,
+      tax_rate: this.parseNumber(product.tax_rate),
       quantity: quantity,
-      price_brutto: Math.round(priceBrutto * 100) / 100,
-      price_netto: Math.round(priceNetto * 100) / 100,
-      tax_rate: taxRate,
-      weight: weight,
+      weight: this.parseNumber(product.weight),
+      line_total: priceBrutto * quantity,
 
-      // Wartości pozycji
-      line_total_brutto: Math.round(lineTotalBrutto * 100) / 100,
-      line_total_netto: Math.round(lineTotalNetto * 100) / 100,
-      line_tax_value: Math.round(lineTaxValue * 100) / 100,
-      line_weight: Math.round(lineWeight * 1000) / 1000,
+      // Flagi
+      bundle_id: product.bundle_id || null,
+      auction_id: product.auction_id || null,
 
-      // Placeholder dla danych z magazynu (wypełni enricher)
-      inv_name: null,
-      inv_sku: null,
-      inv_ean: null,
-      inv_manufacturer: null,
-      inv_category: null,
-      inv_purchase_price_brutto: null,
-      inv_purchase_price_netto: null,
-      inv_tax_rate: null,
-      inv_weight: null,
-      inv_stock: null,
-      inv_reserved: null,
-      inv_available: null,
-      inv_average_cost: null,
+      // Magazyn
+      storage: product.storage || null,
+      storage_id: product.storage_id || null,
 
-      // Placeholder dla marży (wymaga danych z magazynu)
-      margin_per_unit: null,
-      margin_total: null,
-      margin_percent: null,
-
-      // Oryginalny produkt (do enrichment)
-      _originalProduct: product,
-      _originalOrder: {
-        order_id: order.order_id,
-        currency: order.currency,
-        date_confirmed: order.date_confirmed
-      }
+      // Placeholder dla enrichmentu product-details
+      catalog_name: null,
+      catalog_sku: null,
+      catalog_ean: null,
+      category_id: null,
+      manufacturer_id: null,
+      description: null
     };
   }
 }

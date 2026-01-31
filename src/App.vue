@@ -86,6 +86,8 @@ const lastSyncTime = ref(new Date(Date.now() - 2 * 60 * 1000))
 // Server data
 const exportsListServer = ref([])
 const isLoading = ref(false)
+const isDeleting = ref(false)
+const isInitialDataLoaded = ref(false) // Prevent onboarding checklist flash
 
 // === Export Wizard State ===
 const wizardEditingExportId = ref(null)  // null = new export, string = editing existing
@@ -227,6 +229,8 @@ const onboardingProgress = computed(() => {
 })
 
 const showOnboardingChecklist = computed(() => {
+    // Don't show until initial data is loaded (prevents flash on login)
+    if (!isInitialDataLoaded.value) return false
     return onboardingChecklist.value.some(item => !item.done)
 })
 
@@ -426,8 +430,19 @@ async function saveConfigToServer() {
 }
 
 async function deleteExportFromServer(exportId) {
+    if (isDeleting.value) return // Prevent double-click
+
     try {
+        isDeleting.value = true
         isLoading.value = true
+
+        // Show immediate feedback - modal will close via v-if condition
+        showToast(
+            'Usuwanie...',
+            'Trwa usuwanie eksportu',
+            '<svg class="w-6 h-6 text-gray-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>'
+        )
+
         await API.exports.delete(exportId)
 
         await loadExportsFromServer()
@@ -436,11 +451,12 @@ async function deleteExportFromServer(exportId) {
         deleteConfirm.value = null
         showToast(
             'Usunięto',
-            'Eksport został pomyślnie usunięty z serwera',
-            '<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>'
+            'Eksport został pomyślnie usunięty',
+            '<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'
         )
     } catch (error) {
         console.error('Failed to delete export:', error)
+        deleteConfirm.value = null
         showToast(
             'Błąd',
             'Nie udało się usunąć eksportu: ' + error.message,
@@ -448,6 +464,7 @@ async function deleteExportFromServer(exportId) {
         )
     } finally {
         isLoading.value = false
+        isDeleting.value = false
     }
 }
 
@@ -1863,6 +1880,9 @@ onMounted(async () => {
 
     // Load exports from server
     await loadExportsFromServer()
+
+    // Mark initial data as loaded (prevents onboarding checklist flash)
+    isInitialDataLoaded.value = true
 
     // Load user email
     await loadUserEmail()
@@ -3329,20 +3349,24 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Delete Confirmation Modal -->
-        <div v-if="deleteConfirm" @click.self="deleteConfirm = null" class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop flex items-center justify-center z-50 p-4 md:p-6">
-            <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-                <h3 class="text-xl font-bold mb-4">Potwierdź usunięcie</h3>
-                <p class="text-gray-600 mb-6">Czy na pewno chcesz usunąć ten eksport? Tej operacji nie można cofnąć.</p>
-                <div class="flex gap-3">
-                    <button @click="deleteConfirm = null" class="flex-1 bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium">
-                        Anuluj
-                    </button>
-                    <button @click="deleteExport(deleteConfirm)" class="flex-1 bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-colors font-medium">
-                        Usuń
-                    </button>
-                </div>
+        <Transition name="modal-fade">
+            <div v-if="deleteConfirm && !isDeleting" @click.self="deleteConfirm = null" class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop flex items-center justify-center z-50 p-4 md:p-6">
+                <Transition name="modal-scale">
+                    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                        <h3 class="text-xl font-bold mb-4">Potwierdź usunięcie</h3>
+                        <p class="text-gray-600 mb-6">Czy na pewno chcesz usunąć ten eksport? Tej operacji nie można cofnąć.</p>
+                        <div class="flex gap-3">
+                            <button @click="deleteConfirm = null" class="flex-1 bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium">
+                                Anuluj
+                            </button>
+                            <button @click="deleteExport(deleteConfirm)" class="flex-1 bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-colors font-medium">
+                                Usuń
+                            </button>
+                        </div>
+                    </div>
+                </Transition>
             </div>
-        </div>
+        </Transition>
 
         <!-- Cancel Subscription Confirmation Modal -->
         <div v-if="showCancelConfirm" @click.self="showCancelConfirm = false" class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop flex items-center justify-center z-50 p-4 md:p-6">
@@ -3594,4 +3618,28 @@ onBeforeUnmount(() => {
 .accordion-content.open { max-height: 800px; }
 
 .modal-backdrop { backdrop-filter: blur(4px); }
+
+/* Modal fade animation */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+    transition: opacity 0.15s ease;
+}
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+    opacity: 0;
+}
+
+/* Modal scale animation */
+.modal-scale-enter-active {
+    transition: transform 0.15s ease;
+}
+.modal-scale-leave-active {
+    transition: transform 0.1s ease;
+}
+.modal-scale-enter-from {
+    transform: scale(0.95);
+}
+.modal-scale-leave-to {
+    transform: scale(0.95);
+}
 </style>

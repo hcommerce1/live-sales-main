@@ -2,13 +2,10 @@
  * Products External Fetcher
  *
  * Pobiera produkty z zewnętrznych magazynów (getExternalStorageProductsList).
- * Dataset: products_external
- *
- * Wymaga podania storage_id (ID zewnętrznego magazynu).
+ * Wymaga storageId. Obsługuje paginację przez page number.
  */
 
 const BaseFetcher = require('./BaseFetcher');
-const logger = require('../../../utils/logger');
 
 class ProductsExternalFetcher extends BaseFetcher {
   constructor() {
@@ -17,129 +14,151 @@ class ProductsExternalFetcher extends BaseFetcher {
 
   /**
    * Pobiera produkty z zewnętrznego magazynu
-   * @param {string} token - Token BaseLinker
-   * @param {Object} filters - Filtry
-   * @param {Object} options - Opcje (externalStorageId wymagany)
-   * @returns {Promise<Object[]>}
+   *
+   * @param {string} token - Token API BaseLinker
+   * @param {object} filters - Filtry
+   * @param {string} filters.storageId - ID magazynu zewnętrznego (wymagany)
+   * @param {object} options - Opcje
+   * @returns {Promise<Array>} - Tablica znormalizowanych produktów
    */
   async fetch(token, filters = {}, options = {}) {
-    if (!options.externalStorageId) {
-      throw new Error('externalStorageId is required for products_external dataset');
+    this.resetStats();
+    this.logFetchStart({ filters, options });
+
+    const storageId = filters.storageId || options.storageId;
+    if (!storageId) {
+      throw new Error('storageId is required for products_external dataset');
     }
 
-    this.logFetchStart({ filters, externalStorageId: options.externalStorageId });
+    try {
+      const apiFilters = this.convertFilters(filters, storageId);
+      const maxRecords = options.maxRecords || 10000;
 
-    const client = this.getBaseLinkerClient(token);
-    const apiFilters = this.convertFilters(filters);
+      const allProducts = await this.fetchAllPages(
+        async (page) => {
+          const params = {
+            ...apiFilters,
+            page: page || 1
+          };
 
-    // Pobierz produkty z paginacją
-    const products = await this.fetchAllPages(async (page) => {
-      const params = {
-        storage_id: options.externalStorageId,
-        ...apiFilters,
-        page: page || 1
-      };
+          const response = await this.baselinkerService.makeRequest(
+            token,
+            'getExternalStorageProductsList',
+            params
+          );
 
-      // BaseLinker API: getExternalStorageProductsList
-      const response = await client.makeRequest('getExternalStorageProductsList', params);
+          // API może zwracać obiekt lub tablicę
+          let products = response.products || [];
+          if (!Array.isArray(products)) {
+            products = this.objectToArray(products);
+          }
 
-      if (!response || !response.products) {
-        return { data: [], nextPageToken: null };
-      }
+          let nextPageToken = null;
+          if (products.length >= 100) {
+            nextPageToken = (page || 1) + 1;
+          }
 
-      const productsArray = Array.isArray(response.products)
-        ? response.products
-        : Object.entries(response.products).map(([id, product]) => ({
-            product_id: id,
-            ...product
-          }));
+          return {
+            data: products,
+            nextPageToken
+          };
+        },
+        maxRecords
+      );
 
-      const nextPageToken = productsArray.length === 1000
-        ? (page || 1) + 1
-        : null;
+      const normalizedProducts = allProducts.map(product => this.normalize(product));
 
-      return {
-        data: productsArray,
-        nextPageToken
-      };
-    });
+      this.logFetchComplete(normalizedProducts.length);
 
-    // Normalizuj dane produktów
-    const normalizedProducts = products.map(product =>
-      this.normalizeProduct(product, options.externalStorageId)
-    );
+      return normalizedProducts;
 
-    this.logFetchComplete(normalizedProducts.length);
-
-    return normalizedProducts;
+    } catch (error) {
+      this.logError('Fetch failed', error);
+      throw error;
+    }
   }
 
   /**
-   * Normalizuje strukturę produktu zewnętrznego
-   * @param {Object} product - Surowy produkt z API
-   * @param {string} storageId - ID zewnętrznego magazynu
-   * @returns {Object}
+   * Konwertuje filtry UI na format API
    */
-  normalizeProduct(product, storageId) {
+  convertFilters(filters, storageId) {
+    const converted = {
+      storage_id: storageId
+    };
+
+    if (filters.categoryId) {
+      converted.filter_category_id = filters.categoryId;
+    }
+
+    if (filters.sku) {
+      converted.filter_sku = filters.sku;
+    }
+
+    if (filters.ean) {
+      converted.filter_ean = filters.ean;
+    }
+
+    if (filters.name) {
+      converted.filter_name = filters.name;
+    }
+
+    if (filters.priceFrom !== undefined && filters.priceFrom !== null) {
+      converted.filter_price_from = filters.priceFrom;
+    }
+
+    if (filters.priceTo !== undefined && filters.priceTo !== null) {
+      converted.filter_price_to = filters.priceTo;
+    }
+
+    if (filters.stockFrom !== undefined && filters.stockFrom !== null) {
+      converted.filter_stock_from = filters.stockFrom;
+    }
+
+    if (filters.stockTo !== undefined && filters.stockTo !== null) {
+      converted.filter_stock_to = filters.stockTo;
+    }
+
+    return converted;
+  }
+
+  /**
+   * Normalizuje produkt z zewnętrznego magazynu
+   */
+  normalize(product) {
+    const variants = product.variants || [];
+
     return {
       // Identyfikatory
-      product_id: product.product_id || product.id || '',
-      storage_id: storageId,
-      storage_name: '', // Wypełni context
-      sku: product.sku || '',
-      ean: product.ean || '',
+      product_id: product.product_id || product._key || null,
+      sku: product.sku || null,
+      ean: product.ean || null,
+      asin: product.asin || null,
 
       // Podstawowe
-      name: product.name || '',
-      description: product.description || '',
-      category: product.category || '',
-      manufacturer: product.manufacturer || product.brand || '',
+      name: product.name || null,
+      category_id: product.category_id || null,
 
       // Ceny
-      price_brutto: Number(product.price_brutto) || Number(product.price) || 0,
-      price_netto: Number(product.price_netto) || 0,
-      price_retail: Number(product.price_retail) || Number(product.retail_price) || 0,
+      price_brutto: this.parseNumber(product.price_brutto),
+      price_netto: this.parseNumber(product.price_netto),
+      tax_rate: this.parseNumber(product.tax_rate),
 
-      // Dostępność
-      quantity: Number(product.quantity) || Number(product.stock) || 0,
-      available: (Number(product.quantity) || Number(product.stock) || 0) > 0,
-      delivery_time: product.delivery_time || product.shipping_time || '',
+      // Stany
+      quantity: this.parseNumber(product.quantity),
 
-      // Wymiary
-      weight: Number(product.weight) || 0,
-      height: Number(product.height) || 0,
-      width: Number(product.width) || 0,
-      length: Number(product.length) || 0,
+      // Warianty
+      has_variants: variants.length > 0,
+      variants_count: variants.length,
+      variants_json: variants.length > 0 ? JSON.stringify(variants) : null,
 
-      // Metadata
-      _storageId: storageId
+      // Placeholder dla enrichmentu
+      description: null,
+      weight: null,
+      image_url: null,
+
+      // Raw data
+      _variants: variants
     };
-  }
-
-  /**
-   * Konwertuje filtry specyficzne dla produktów zewnętrznych
-   * @param {Object} filters
-   * @returns {Object}
-   */
-  convertFilters(filters) {
-    const apiFilters = {};
-
-    // Filtr po kategorii
-    if (filters.category) {
-      apiFilters.filter_category = filters.category;
-    }
-
-    // Filtr po SKU
-    if (filters.sku) {
-      apiFilters.filter_sku = filters.sku;
-    }
-
-    // Filtr po dostępności
-    if (filters.availableOnly) {
-      apiFilters.filter_available = true;
-    }
-
-    return apiFilters;
   }
 }
 

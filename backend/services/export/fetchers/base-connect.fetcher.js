@@ -1,14 +1,14 @@
 /**
  * Base Connect Fetcher
  *
- * Pobiera kontrahentów z integracji Base Connect (getConnectIntegrationContractors).
- * Dataset: base_connect
+ * Pobiera dane kontrahentów B2B z integracji Base Connect:
+ * 1. getConnectIntegrations - lista integracji
+ * 2. getConnectIntegrationContractors - kontrahenci dla każdej integracji
  *
- * Wymaga podania integration_id.
+ * Zwraca spłaszczoną listę kontrahentów z danymi integracji.
  */
 
 const BaseFetcher = require('./BaseFetcher');
-const logger = require('../../../utils/logger');
 
 class BaseConnectFetcher extends BaseFetcher {
   constructor() {
@@ -16,144 +16,111 @@ class BaseConnectFetcher extends BaseFetcher {
   }
 
   /**
-   * Pobiera kontrahentów z Base Connect
-   * @param {string} token - Token BaseLinker
-   * @param {Object} filters - Filtry
-   * @param {Object} options - Opcje (integrationId wymagany)
-   * @returns {Promise<Object[]>}
+   * Pobiera kontrahentów Base Connect
+   *
+   * @param {string} token - Token API BaseLinker
+   * @param {object} filters - Filtry
+   * @param {number} filters.integrationId - ID konkretnej integracji (opcjonalne)
+   * @param {object} options - Opcje
+   * @returns {Promise<Array>} - Tablica znormalizowanych kontrahentów
    */
   async fetch(token, filters = {}, options = {}) {
-    if (!options.integrationId) {
-      throw new Error('integrationId is required for base_connect dataset');
-    }
+    this.resetStats();
+    this.logFetchStart({ filters, options });
 
-    this.logFetchStart({ filters, integrationId: options.integrationId });
+    try {
+      const maxRecords = options.maxRecords || 10000;
+      const targetIntegrationId = filters.integrationId || options.integrationId;
 
-    const client = this.getBaseLinkerClient(token);
-    const apiFilters = this.convertFilters(filters);
+      // 1. Pobierz listę integracji
+      this.stats.apiCalls++;
+      const integrationsResponse = await this.baselinkerService.makeRequest(
+        token,
+        'getConnectIntegrations',
+        {}
+      );
 
-    // Pobierz kontrahentów z paginacją
-    const contractors = await this.fetchAllPages(async (page) => {
-      const params = {
-        integration_id: options.integrationId,
-        ...apiFilters,
-        page: page || 1
-      };
+      const integrations = integrationsResponse.integrations || {};
+      const ownIntegrations = integrations.own_integrations || [];
+      const connectedIntegrations = integrations.connected_integrations || [];
 
-      // BaseLinker API: getConnectIntegrationContractors
-      const response = await client.makeRequest('getConnectIntegrationContractors', params);
+      // Połącz wszystkie integracje z oznaczeniem typu
+      const allIntegrations = [
+        ...ownIntegrations.map(i => ({ ...i, type: 'own' })),
+        ...connectedIntegrations.map(i => ({ ...i, type: 'connected' }))
+      ];
 
-      if (!response || !response.contractors) {
-        return { data: [], nextPageToken: null };
+      // Filtruj po integrationId jeśli podano
+      const filteredIntegrations = targetIntegrationId
+        ? allIntegrations.filter(i => i.connect_integration_id === targetIntegrationId)
+        : allIntegrations;
+
+      // 2. Dla każdej integracji pobierz kontrahentów
+      const allContractors = [];
+
+      for (const integration of filteredIntegrations) {
+        if (allContractors.length >= maxRecords) break;
+
+        try {
+          this.stats.apiCalls++;
+          const contractorsResponse = await this.baselinkerService.makeRequest(
+            token,
+            'getConnectIntegrationContractors',
+            { connect_integration_id: integration.connect_integration_id }
+          );
+
+          const contractors = contractorsResponse.contractors || {};
+
+          // contractors to obiekt gdzie klucz to ID
+          for (const [contractorId, contractor] of Object.entries(contractors)) {
+            if (allContractors.length >= maxRecords) break;
+
+            allContractors.push(this.normalize(contractor, integration));
+          }
+
+          // Rate limiting między integracjami
+          await this.rateLimit(100);
+
+        } catch (error) {
+          this.logError(`Failed to get contractors for integration ${integration.connect_integration_id}`, error);
+        }
       }
 
-      const contractorsArray = Array.isArray(response.contractors)
-        ? response.contractors
-        : Object.values(response.contractors);
+      this.logFetchComplete(allContractors.length);
 
-      const nextPageToken = contractorsArray.length === 100
-        ? (page || 1) + 1
-        : null;
+      return allContractors;
 
-      return {
-        data: contractorsArray,
-        nextPageToken
-      };
-    });
-
-    // Normalizuj dane kontrahentów
-    const normalizedContractors = contractors.map(contractor =>
-      this.normalizeContractor(contractor, options.integrationId)
-    );
-
-    this.logFetchComplete(normalizedContractors.length);
-
-    return normalizedContractors;
+    } catch (error) {
+      this.logError('Fetch failed', error);
+      throw error;
+    }
   }
 
   /**
-   * Normalizuje strukturę kontrahenta
-   * @param {Object} contractor - Surowy kontrahent z API
-   * @param {number} integrationId - ID integracji
-   * @returns {Object}
+   * Normalizuje kontrahenta
    */
-  normalizeContractor(contractor, integrationId) {
+  normalize(contractor, integration) {
+    const creditData = contractor.credit_data || {};
+
     return {
-      // Podstawowe
-      contractor_id: contractor.contractor_id,
-      integration_id: integrationId,
-      external_id: contractor.external_id || '',
+      // Integracja
+      connect_integration_id: integration.connect_integration_id,
+      integration_name: integration.name || null,
+      integration_type: integration.type || null,
 
-      // Dane firmy
-      name: contractor.name || '',
-      nip: contractor.nip || '',
-      regon: contractor.regon || '',
-      krs: contractor.krs || '',
-      email: contractor.email || '',
-      phone: contractor.phone || '',
-      website: contractor.website || '',
+      // Kontrahent
+      connect_contractor_id: contractor.connect_contractor_id,
+      contractor_name: contractor.name || null,
 
-      // Adres
-      address: contractor.address || '',
-      city: contractor.city || '',
-      postcode: contractor.postcode || '',
-      country: contractor.country || '',
-      country_code: contractor.country_code || '',
+      // Kredyt kupiecki
+      credit_limit: this.parseNumber(creditData.limit),
+      credit_used: this.parseNumber(creditData.used),
+      credit_available: this.parseNumber(creditData.available),
+      credit_currency: creditData.currency || 'PLN',
 
-      // Warunki handlowe
-      payment_term_days: Number(contractor.payment_term_days) || 0,
-      credit_limit: Number(contractor.credit_limit) || 0,
-      currency: contractor.currency || 'PLN',
-      price_group: contractor.price_group || '',
-      discount_percent: Number(contractor.discount_percent) || 0,
-
-      // Kontakt
-      contact_person: contractor.contact_person || '',
-      contact_email: contractor.contact_email || '',
-      contact_phone: contractor.contact_phone || '',
-
-      // Dane kredytowe (placeholder - wypełni enricher 'credit')
-      credit_current_debt: null,
-      credit_overdue: null,
-      credit_available: null,
-      orders_total_value: null,
-      orders_count: null,
-      last_order_date: null,
-
-      // Metadata
-      _integrationId: integrationId
+      // Ustawienia
+      settings_json: contractor.settings ? JSON.stringify(contractor.settings) : null
     };
-  }
-
-  /**
-   * Konwertuje filtry specyficzne dla kontrahentów
-   * @param {Object} filters
-   * @returns {Object}
-   */
-  convertFilters(filters) {
-    const apiFilters = {};
-
-    // Filtr po nazwie
-    if (filters.name) {
-      apiFilters.filter_name = filters.name;
-    }
-
-    // Filtr po NIP
-    if (filters.nip) {
-      apiFilters.filter_nip = filters.nip;
-    }
-
-    // Filtr po mieście
-    if (filters.city) {
-      apiFilters.filter_city = filters.city;
-    }
-
-    // Filtr po grupie cenowej
-    if (filters.priceGroup) {
-      apiFilters.filter_price_group = filters.priceGroup;
-    }
-
-    return apiFilters;
   }
 }
 

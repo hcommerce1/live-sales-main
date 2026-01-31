@@ -1,12 +1,11 @@
 /**
  * Orders Fetcher
  *
- * Pobiera zamówienia z BaseLinker API (getOrders).
- * Dataset: orders
+ * Pobiera zamówienia z API BaseLinker (getOrders).
+ * Obsługuje paginację przez date_confirmed (max 100 zamówień/request).
  */
 
 const BaseFetcher = require('./BaseFetcher');
-const logger = require('../../../utils/logger');
 
 class OrdersFetcher extends BaseFetcher {
   constructor() {
@@ -14,187 +13,270 @@ class OrdersFetcher extends BaseFetcher {
   }
 
   /**
-   * Pobiera zamówienia z BaseLinker
-   * @param {string} token - Token BaseLinker
-   * @param {Object} filters - Filtry
-   * @param {Object} options - Opcje
-   * @returns {Promise<Object[]>}
+   * Pobiera zamówienia z BaseLinker API
+   *
+   * @param {string} token - Token API BaseLinker
+   * @param {object} filters - Filtry
+   * @param {string} filters.dateFrom - Data od (ISO string lub timestamp)
+   * @param {string} filters.dateTo - Data do (ISO string lub timestamp)
+   * @param {number} filters.statusId - ID statusu zamówienia
+   * @param {number} filters.orderSourceId - ID źródła zamówienia
+   * @param {boolean} filters.confirmedOnly - Tylko potwierdzone (default: true)
+   * @param {boolean} filters.includeCommissionData - Dołącz dane prowizji
+   * @param {object} options - Opcje
+   * @param {number} options.maxRecords - Maksymalna liczba rekordów
+   * @returns {Promise<Array>} - Tablica znormalizowanych zamówień
    */
   async fetch(token, filters = {}, options = {}) {
-    this.logFetchStart({ filters });
+    this.resetStats();
+    this.logFetchStart({ filters, options });
 
-    const client = this.getBaseLinkerClient(token);
-    const apiFilters = this.convertFilters(filters);
+    try {
+      const apiFilters = this.convertFilters(filters);
+      const maxRecords = options.maxRecords || 10000;
 
-    // Pobierz zamówienia z paginacją
-    const orders = await this.fetchAllPages(async (lastOrderId) => {
-      const params = {
-        ...apiFilters,
-        get_unconfirmed_orders: !filters.confirmedOnly
-      };
+      // Użyj paginacji przez date_confirmed
+      const allOrders = await this.fetchAllPages(
+        async (lastDateConfirmed) => {
+          const params = {
+            ...apiFilters,
+            date_confirmed_from: lastDateConfirmed || apiFilters.date_from || 0
+          };
 
-      // Paginacja przez order_id
-      if (lastOrderId) {
-        params.order_id = lastOrderId;
-      }
+          // Usuń date_from jeśli używamy date_confirmed_from
+          delete params.date_from;
 
-      const response = await client.getOrders(params);
+          const response = await this.baselinkerService.makeRequest(
+            token,
+            'getOrders',
+            params
+          );
 
-      if (!response || !response.orders) {
-        return { data: [], nextPageToken: null };
-      }
+          const orders = response.orders || [];
 
-      const ordersArray = Object.values(response.orders);
+          // Oblicz nextPageToken (ostatnia data + 1 sekunda)
+          let nextPageToken = null;
+          if (orders.length === 100) {
+            const lastOrder = orders[orders.length - 1];
+            nextPageToken = lastOrder.date_confirmed + 1;
+          }
 
-      // Następna strona jeśli jest 100 rekordów (limit API)
-      const nextPageToken = ordersArray.length === 100
-        ? ordersArray[ordersArray.length - 1].order_id
-        : null;
+          return {
+            data: orders,
+            nextPageToken
+          };
+        },
+        maxRecords
+      );
 
-      return {
-        data: ordersArray,
-        nextPageToken
-      };
-    });
+      // Normalizuj wszystkie zamówienia
+      const normalizedOrders = allOrders.map(order => this.normalize(order));
 
-    // Normalizuj dane zamówień
-    const normalizedOrders = orders.map(order => this.normalizeOrder(order));
+      this.logFetchComplete(normalizedOrders.length);
 
-    this.logFetchComplete(normalizedOrders.length);
+      return normalizedOrders;
 
-    return normalizedOrders;
+    } catch (error) {
+      this.logError('Fetch failed', error);
+      throw error;
+    }
   }
 
   /**
-   * Normalizuje strukturę zamówienia
-   * @param {Object} order - Surowe zamówienie z API
-   * @returns {Object}
+   * Konwertuje filtry UI na format API BaseLinker
+   * @param {object} filters - Filtry z UI
+   * @returns {object} - Filtry dla API
    */
-  normalizeOrder(order) {
+  convertFilters(filters) {
+    const converted = {};
+
+    if (filters.dateFrom) {
+      converted.date_from = this.toUnixTimestamp(filters.dateFrom);
+    }
+
+    if (filters.dateTo) {
+      converted.date_to = this.toUnixTimestamp(filters.dateTo);
+    }
+
+    if (filters.statusId) {
+      converted.order_status_id = filters.statusId;
+    }
+
+    if (filters.orderSourceId) {
+      converted.filter_order_source_id = filters.orderSourceId;
+    }
+
+    // Domyślnie pobieramy tylko potwierdzone
+    if (filters.confirmedOnly === false) {
+      converted.get_unconfirmed_orders = true;
+    }
+
+    if (filters.includeCommissionData) {
+      converted.include_commission_data = true;
+    }
+
+    return converted;
+  }
+
+  /**
+   * Normalizuje zamówienie z API do standardowego formatu
+   *
+   * @param {object} order - Surowe zamówienie z API
+   * @returns {object} - Znormalizowane zamówienie
+   */
+  normalize(order) {
+    // Oblicz wartości computed
+    const products = order.products || [];
+    const totalProductsPrice = products.reduce(
+      (sum, p) => sum + (this.parseNumber(p.price_brutto) * this.parseNumber(p.quantity)),
+      0
+    );
+    const productsCount = products.length;
+    const productsQuantity = products.reduce(
+      (sum, p) => sum + this.parseNumber(p.quantity),
+      0
+    );
+
     return {
-      // Podstawowe
+      // Basic
       order_id: order.order_id,
-      shop_order_id: order.shop_order_id || '',
-      external_order_id: order.external_order_id || '',
-      order_source: order.order_source || '',
-      order_source_id: order.order_source_id,
-      order_source_info: order.order_source_info || '',
-      order_status_id: order.order_status_id,
-      date_add: order.date_add,
-      date_confirmed: order.date_confirmed,
-      date_in_status: order.date_in_status,
-      confirmed: order.order_status_id > 0, // Zamówienia ze statusem > 0 są potwierdzone
-      want_invoice: order.want_invoice === '1' || order.want_invoice === true,
-      admin_comments: order.admin_comments || '',
-      user_comments: order.user_comments || '',
-      user_login: order.user_login || '',
+      shop_order_id: order.shop_order_id || null,
+      external_order_id: order.external_order_id || null,
+      order_source: order.order_source || null,
+      order_source_id: order.order_source_id || null,
+      order_source_name: null, // Computed - wymaga mapy źródeł
+      order_page: order.order_page || null,
+      date_add: this.fromUnixTimestamp(order.date_add),
+      date_confirmed: this.fromUnixTimestamp(order.date_confirmed),
+      date_in_status: this.fromUnixTimestamp(order.date_in_status),
 
-      // Dane klienta
-      email: order.email || '',
-      phone: order.phone || '',
+      // Customer
+      email: order.email || null,
+      phone: order.phone || null,
+      user_login: order.user_login || null,
 
-      // Adres dostawy
-      delivery_fullname: order.delivery_fullname || '',
-      delivery_company: order.delivery_company || '',
-      delivery_address: order.delivery_address || '',
-      delivery_city: order.delivery_city || '',
-      delivery_postcode: order.delivery_postcode || '',
-      delivery_state_code: order.delivery_state_code || '',
-      delivery_country: order.delivery_country || '',
-      delivery_country_code: order.delivery_country_code || '',
+      // Delivery address
+      delivery_fullname: order.delivery_fullname || null,
+      delivery_company: order.delivery_company || null,
+      delivery_address: order.delivery_address || null,
+      delivery_postcode: order.delivery_postcode || null,
+      delivery_city: order.delivery_city || null,
+      delivery_state: order.delivery_state || null,
+      delivery_country: order.delivery_country || null,
+      delivery_country_code: order.delivery_country_code || null,
 
-      // Punkt odbioru
-      delivery_point_id: order.delivery_point_id || '',
-      delivery_point_name: order.delivery_point_name || '',
-      delivery_point_address: order.delivery_point_address || '',
-      delivery_point_postcode: order.delivery_point_postcode || '',
-      delivery_point_city: order.delivery_point_city || '',
+      // Pickup point
+      delivery_point_id: order.delivery_point_id || null,
+      delivery_point_name: order.delivery_point_name || null,
+      delivery_point_address: order.delivery_point_address || null,
+      delivery_point_postcode: order.delivery_point_postcode || null,
+      delivery_point_city: order.delivery_point_city || null,
 
-      // Dane do faktury
-      invoice_fullname: order.invoice_fullname || '',
-      invoice_company: order.invoice_company || '',
-      invoice_nip: order.invoice_nip || '',
-      invoice_address: order.invoice_address || '',
-      invoice_city: order.invoice_city || '',
-      invoice_postcode: order.invoice_postcode || '',
-      invoice_state_code: order.invoice_state_code || '',
-      invoice_country: order.invoice_country || '',
-      invoice_country_code: order.invoice_country_code || '',
+      // Invoice data
+      invoice_fullname: order.invoice_fullname || null,
+      invoice_company: order.invoice_company || null,
+      invoice_nip: order.invoice_nip || null,
+      invoice_address: order.invoice_address || null,
+      invoice_postcode: order.invoice_postcode || null,
+      invoice_city: order.invoice_city || null,
+      invoice_state: order.invoice_state || null,
+      invoice_country: order.invoice_country || null,
+      invoice_country_code: order.invoice_country_code || null,
+      want_invoice: this.parseBoolean(order.want_invoice),
 
-      // Płatność
+      // Payment
       currency: order.currency || 'PLN',
-      payment_method: order.payment_method || '',
-      payment_method_cod: order.payment_method_cod === '1' || order.payment_method_cod === true,
-      payment_done: Number(order.payment_done) || 0,
-      payment_date: order.payment_date || null,
+      payment_method: order.payment_method || null,
+      payment_method_cod: this.parseBoolean(order.payment_method_cod),
+      payment_done: this.parseNumber(order.payment_done),
 
-      // Dostawa
-      delivery_method: order.delivery_method || '',
-      delivery_price: Number(order.delivery_price) || 0,
-      delivery_price_brutto: Number(order.delivery_price) || 0,
-      delivery_vat_rate: this.extractDeliveryVatRate(order),
-      delivery_package_module: order.delivery_package_module || '',
+      // Delivery
+      delivery_method: order.delivery_method || null,
+      delivery_method_id: order.delivery_method_id || null,
+      delivery_price: this.parseNumber(order.delivery_price),
+      delivery_package_module: order.delivery_package_module || null,
+      delivery_package_nr: order.delivery_package_nr || null,
 
-      // Produkty (do obliczeń i rozwinięcia w order_items)
-      products: order.products || [],
+      // Totals (computed)
+      total_products_price: totalProductsPrice,
+      total_price: totalProductsPrice + this.parseNumber(order.delivery_price),
+      products_count: productsCount,
+      products_quantity: productsQuantity,
+
+      // Status
+      order_status_id: order.order_status_id || null,
+      order_status_name: null, // Computed - wymaga mapy statusów
+      confirmed: this.parseBoolean(order.confirmed),
+      pick_status: order.pick_status || null,
+      pack_status: order.pack_status || null,
+
+      // Comments
+      user_comments: order.user_comments || null,
+      admin_comments: order.admin_comments || null,
 
       // Extra fields
-      extra_field_1: order.extra_field_1 || '',
-      extra_field_2: order.extra_field_2 || '',
-      ...this.extractExtraFields(order)
+      extra_field_1: order.extra_field_1 || null,
+      extra_field_2: order.extra_field_2 || null,
+
+      // Dynamic extra fields
+      ...this.normalizeExtraFields(order.custom_extra_fields),
+
+      // Base Connect
+      connect_integration_id: order.connect_integration_id || null,
+      connect_contractor_id: order.connect_contractor_id || null,
+
+      // Commission data (if requested)
+      commission_net: order.commission_data?.commission_net || null,
+      commission_gross: order.commission_data?.commission_gross || null,
+      commission_currency: order.commission_data?.currency || null,
+
+      // Raw products for enrichment use
+      _products: products,
+
+      // Package enrichment placeholder fields (will be filled by enricher)
+      pkg1_package_id: null,
+      pkg1_courier_code: null,
+      pkg1_courier_package_nr: null,
+      pkg1_tracking_status: null,
+      pkg1_tracking_url: null,
+      pkg2_package_id: null,
+      pkg2_courier_code: null,
+      pkg2_courier_package_nr: null,
+      pkg2_tracking_status: null,
+      pkg2_tracking_url: null,
+      pkg3_package_id: null,
+      pkg3_courier_code: null,
+      pkg3_courier_package_nr: null,
+
+      // Document enrichment placeholder fields
+      ds_type: null,
+      ds_number: null,
+      ds_date_add: null,
+      ds_total_brutto: null,
+      ds_total_netto: null,
+      ds2_type: null,
+      ds2_number: null,
+      ds2_date_add: null
     };
   }
 
   /**
-   * Wyciąga stawkę VAT dostawy
-   * @param {Object} order
-   * @returns {number}
+   * Normalizuje dynamiczne pola dodatkowe
+   * @param {object} customExtraFields - Obiekt z custom extra fields
+   * @returns {object} - Spłaszczone pola z prefiksem ef_
    */
-  extractDeliveryVatRate(order) {
-    // BaseLinker nie zawsze zwraca VAT dostawy
-    // Spróbuj wyciągnąć z delivery_price lub domyślnie 23%
-    if (order.delivery_vat_rate !== undefined) {
-      return Number(order.delivery_vat_rate);
-    }
-    return 23; // Domyślna stawka VAT w Polsce
-  }
-
-  /**
-   * Wyciąga pola dodatkowe (extra_field_*)
-   * @param {Object} order
-   * @returns {Object}
-   */
-  extractExtraFields(order) {
-    const extraFields = {};
-
-    for (const key of Object.keys(order)) {
-      if (key.startsWith('extra_field_')) {
-        extraFields[key] = order[key] || '';
-      }
+  normalizeExtraFields(customExtraFields) {
+    if (!customExtraFields || typeof customExtraFields !== 'object') {
+      return {};
     }
 
-    return extraFields;
-  }
+    const result = {};
 
-  /**
-   * Konwertuje filtry specyficzne dla zamówień
-   * @param {Object} filters
-   * @returns {Object}
-   */
-  convertFilters(filters) {
-    const apiFilters = super.convertFilters(filters);
-
-    // Filtr po ID zamówienia
-    if (filters.orderId) {
-      apiFilters.order_id = filters.orderId;
+    for (const [key, value] of Object.entries(customExtraFields)) {
+      result[`ef_${key}`] = value || null;
     }
 
-    // Filtr po ID statusu (może być tablica)
-    if (filters.statusIds && Array.isArray(filters.statusIds)) {
-      apiFilters.filter_order_source_id = filters.statusIds;
-    }
-
-    return apiFilters;
+    return result;
   }
 }
 

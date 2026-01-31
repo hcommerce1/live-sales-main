@@ -1,123 +1,146 @@
 /**
- * Dataset: PRZESYŁKI (shipments)
+ * Dataset: PRZESYŁKI (Shipments)
  *
- * Lista przesyłek z tracking i dokumentami.
- * Jeden wiersz = jedna przesyłka.
+ * Główne API: getOrders → getOrderPackages dla każdego zamówienia
+ * Enrichmenty: tracking-history
  *
- * API: getOrderPackages + getCourierPackagesStatusHistory
+ * Przesyłki kurierskie powiązane z zamówieniami.
  */
 
 module.exports = {
   id: 'shipments',
   label: 'Przesyłki',
-  description: 'Lista przesyłek z tracking i dokumentami',
-  icon: 'send',
+  description: 'Eksport przesyłek kurierskich z zamówień',
+  icon: 'package',
 
+  // Źródło danych
   primaryQuery: 'getOrderPackages',
-  enrichments: ['tracking', 'labels'],
+  enrichments: ['tracking-history'],
+  requiresInventory: false,
 
+  // Filtry dostępne dla tego datasetu
+  availableFilters: [
+    { key: 'dateFrom', label: 'Data od', type: 'date' },
+    { key: 'dateTo', label: 'Data do', type: 'date' },
+    { key: 'courierCode', label: 'Kurier', type: 'courier' },
+    { key: 'trackingStatus', label: 'Status śledzenia', type: 'select', options: [
+      { value: '', label: 'Wszystkie' },
+      { value: '1', label: 'Etykieta utworzona' },
+      { value: '2', label: 'Wysłana' },
+      { value: '4', label: 'W doręczeniu' },
+      { value: '5', label: 'Doręczona' },
+      { value: '6', label: 'Zwrot' },
+      { value: '8', label: 'Czeka w punkcie' }
+    ]}
+  ],
+
+  // Grupy pól
   fieldGroups: [
-    // 8.1 PODSTAWOWE
+    // ========================================
+    // PODSTAWOWE
+    // ========================================
     {
       id: 'basic',
       label: 'Podstawowe',
       fields: [
-        { key: 'package_id', label: 'ID przesyłki', type: 'number', description: 'Unikalny identyfikator paczki' },
-        { key: 'order_id', label: 'ID zamówienia', type: 'number', description: 'Zamówienie, do którego należy' },
-        { key: 'courier_code', label: 'Kod kuriera', type: 'text', description: 'Kod integracji (inpost, dpd, dhl, etc.)' },
-        { key: 'courier_name', label: 'Nazwa kuriera', type: 'text', description: 'Pełna nazwa firmy kurierskiej', computed: true },
-        { key: 'tracking_number', label: 'Numer śledzenia', type: 'text', description: 'Numer do śledzenia przesyłki' },
-        { key: 'tracking_url', label: 'Link śledzenia', type: 'text', description: 'URL do strony śledzenia', computed: true }
+        { key: 'package_id', label: 'ID przesyłki', type: 'number' },
+        { key: 'order_id', label: 'ID zamówienia', type: 'number' },
+        { key: 'courier_code', label: 'Kod kuriera', type: 'text' },
+        { key: 'courier_package_nr', label: 'Nr listu przewozowego', type: 'text' }
       ]
     },
 
-    // 8.2 DATY
+    // ========================================
+    // KURIER
+    // ========================================
     {
-      id: 'dates',
-      label: 'Daty',
+      id: 'courier',
+      label: 'Kurier',
       fields: [
-        { key: 'date_add', label: 'Data utworzenia', type: 'datetime', description: 'Kiedy utworzono przesyłkę' },
-        { key: 'date_sent', label: 'Data nadania', type: 'datetime', description: 'Kiedy przesyłka została nadana' },
-        { key: 'date_delivered', label: 'Data doręczenia', type: 'datetime', description: 'Kiedy doręczono (jeśli doręczona)' }
+        { key: 'courier_other_name', label: 'Inna nazwa kuriera', type: 'text' },
+        { key: 'courier_inner_number', label: 'Wewnętrzny numer', type: 'text' },
+        { key: 'account_id', label: 'ID konta kuriera', type: 'number' }
       ]
     },
 
-    // 8.3 STATUS
-    {
-      id: 'status',
-      label: 'Status',
-      fields: [
-        { key: 'status', label: 'Status', type: 'text', description: 'Aktualny status przesyłki' },
-        { key: 'status_code', label: 'Kod statusu', type: 'text', description: 'Kod statusu kuriera' },
-        { key: 'is_delivered', label: 'Doręczona', type: 'boolean', description: 'Czy przesyłka została doręczona' },
-        { key: 'is_return', label: 'Zwrot', type: 'boolean', description: 'Czy to przesyłka zwrotna' }
-      ]
-    },
-
-    // 8.4 PARAMETRY PRZESYŁKI
-    {
-      id: 'package_params',
-      label: 'Parametry przesyłki',
-      fields: [
-        { key: 'weight', label: 'Waga (kg)', type: 'number', description: 'Waga przesyłki' },
-        { key: 'size_x', label: 'Wymiar X (cm)', type: 'number', description: 'Długość' },
-        { key: 'size_y', label: 'Wymiar Y (cm)', type: 'number', description: 'Szerokość' },
-        { key: 'size_z', label: 'Wymiar Z (cm)', type: 'number', description: 'Wysokość' },
-        { key: 'cod_value', label: 'Pobranie', type: 'number', description: 'Kwota pobrania (jeśli COD)' },
-        { key: 'insurance_value', label: 'Ubezpieczenie', type: 'number', description: 'Wartość ubezpieczenia' }
-      ]
-    },
-
-    // 8.5 ADRES DORĘCZENIA
-    {
-      id: 'receiver_address',
-      label: 'Adres doręczenia',
-      fields: [
-        { key: 'receiver_name', label: 'Odbiorca', type: 'text', description: 'Imię i nazwisko odbiorcy' },
-        { key: 'receiver_address', label: 'Adres', type: 'text', description: 'Adres doręczenia' },
-        { key: 'receiver_city', label: 'Miasto', type: 'text', description: 'Miasto' },
-        { key: 'receiver_postcode', label: 'Kod pocztowy', type: 'text', description: 'Kod pocztowy' },
-        { key: 'receiver_country', label: 'Kraj', type: 'text', description: 'Kraj' },
-        { key: 'receiver_phone', label: 'Telefon', type: 'text', description: 'Telefon odbiorcy' },
-        { key: 'receiver_email', label: 'Email', type: 'text', description: 'Email odbiorcy' }
-      ]
-    },
-
-    // 8.6 PUNKT ODBIORU
-    {
-      id: 'pickup_point',
-      label: 'Punkt odbioru',
-      fields: [
-        { key: 'pickup_point_id', label: 'ID punktu', type: 'text', description: 'Identyfikator punktu (np. paczkomat)' },
-        { key: 'pickup_point_name', label: 'Nazwa punktu', type: 'text', description: 'Nazwa punktu odbioru' },
-        { key: 'pickup_point_address', label: 'Adres punktu', type: 'text', description: 'Pełny adres punktu' }
-      ]
-    },
-
-    // 8.7 TRACKING
+    // ========================================
+    // ŚLEDZENIE
+    // ========================================
     {
       id: 'tracking',
-      label: 'Tracking',
-      enrichment: 'tracking',
+      label: 'Śledzenie',
       fields: [
-        { key: 'tracking_last_status', label: 'Ostatni status', type: 'text', description: 'Najnowszy status z trackingu', enrichment: 'tracking' },
-        { key: 'tracking_last_date', label: 'Data ostatniego statusu', type: 'datetime', description: 'Kiedy wystąpił ostatni status', enrichment: 'tracking' },
-        { key: 'tracking_last_location', label: 'Ostatnia lokalizacja', type: 'text', description: 'Gdzie ostatnio była paczka', enrichment: 'tracking' },
-        { key: 'tracking_events_count', label: 'Liczba zdarzeń', type: 'number', description: 'Ile zdarzeń w historii', enrichment: 'tracking' }
+        { key: 'tracking_status', label: 'Status', type: 'number' },
+        { key: 'tracking_status_name', label: 'Nazwa statusu', type: 'text', computed: true },
+        { key: 'tracking_status_date', label: 'Data statusu', type: 'datetime' },
+        { key: 'tracking_delivery_days', label: 'Dni dostawy', type: 'number' },
+        { key: 'tracking_url', label: 'URL śledzenia', type: 'text' }
       ]
     },
 
-    // 8.8 DOKUMENTY
+    // ========================================
+    // TYP
+    // ========================================
     {
-      id: 'documents',
-      label: 'Dokumenty',
-      enrichment: 'labels',
+      id: 'type',
+      label: 'Typ przesyłki',
       fields: [
-        { key: 'has_label', label: 'Ma etykietę', type: 'boolean', description: 'Czy wygenerowano etykietę', enrichment: 'labels' },
-        { key: 'label_url', label: 'URL etykiety', type: 'text', description: 'Link do pobrania etykiety PDF', enrichment: 'labels' },
-        { key: 'has_protocol', label: 'Ma protokół', type: 'boolean', description: 'Czy jest protokół nadania', enrichment: 'labels' },
-        { key: 'protocol_url', label: 'URL protokołu', type: 'text', description: 'Link do protokołu', enrichment: 'labels' }
+        { key: 'package_type', label: 'Typ', type: 'text' },
+        { key: 'is_return', label: 'Jest zwrotem', type: 'boolean' }
+      ]
+    },
+
+    // ========================================
+    // SZCZEGÓŁY (enrichment)
+    // ========================================
+    {
+      id: 'details',
+      label: 'Szczegóły',
+      description: 'Szczegóły przesyłki - wymaga enrichmentu',
+      fields: [
+        { key: 'weight', label: 'Waga', type: 'number', enrichment: 'package-details' },
+        { key: 'width', label: 'Szerokość', type: 'number', enrichment: 'package-details' },
+        { key: 'height', label: 'Wysokość', type: 'number', enrichment: 'package-details' },
+        { key: 'length', label: 'Długość', type: 'number', enrichment: 'package-details' },
+        { key: 'cod_value', label: 'Wartość COD', type: 'number', enrichment: 'package-details' },
+        { key: 'insurance_value', label: 'Ubezpieczenie', type: 'number', enrichment: 'package-details' }
+      ]
+    },
+
+    // ========================================
+    // HISTORIA (enrichment)
+    // ========================================
+    {
+      id: 'history',
+      label: 'Historia statusów',
+      description: 'Historia śledzenia - wymaga enrichmentu',
+      fields: [
+        { key: 'tracking_history_json', label: 'Historia (JSON)', type: 'text', enrichment: 'tracking-history' }
+      ]
+    },
+
+    // ========================================
+    // DANE ZAMÓWIENIA
+    // ========================================
+    {
+      id: 'order_data',
+      label: 'Dane zamówienia',
+      fields: [
+        { key: 'order_date', label: 'Data zamówienia', type: 'datetime' },
+        { key: 'order_status_id', label: 'Status zamówienia', type: 'number' },
+        { key: 'delivery_fullname', label: 'Odbiorca', type: 'text' },
+        { key: 'delivery_city', label: 'Miasto', type: 'text' },
+        { key: 'delivery_country', label: 'Kraj', type: 'text' }
       ]
     }
+  ],
+
+  // Primary key
+  primaryKey: 'package_id',
+
+  // Sort options
+  sortOptions: [
+    { key: 'tracking_status_date', label: 'Data statusu', direction: 'desc' },
+    { key: 'package_id', label: 'ID przesyłki', direction: 'desc' }
   ]
 };
