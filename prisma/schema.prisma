@@ -354,8 +354,8 @@ model ExportSheet {
   @@index([exportId])
   @@index([companyId])
   @@index([spreadsheetId])
-  // Prevent same sheet (spreadsheetId + gid) being used by multiple exports in same company
-  @@unique([companyId, spreadsheetId, gid], name: "unique_sheet_per_company")
+  // TODO: Add unique constraint after migration is created
+  // @@unique([companyId, spreadsheetId, gid], name: "unique_sheet_per_company")
 }
 
 // Export Run Status - type-safe enum for export execution status
