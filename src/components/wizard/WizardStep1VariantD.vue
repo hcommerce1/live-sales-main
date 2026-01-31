@@ -101,15 +101,15 @@
 
       <!-- Right: Selected fields -->
       <div class="flex-1 flex flex-col min-w-0 border-2 border-blue-200 rounded-xl bg-blue-50/30 overflow-hidden">
-        <div class="p-3 bg-blue-100/50 border-b border-blue-200 flex-shrink-0">
+        <div class="p-4 bg-blue-100/50 border-b border-blue-200 flex-shrink-0">
           <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-blue-900">Wybrane pola</h3>
-            <span class="text-sm font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">{{ selectedFields.length }}</span>
+            <h3 class="font-semibold text-blue-900 text-base">Wybrane pola</h3>
+            <span class="text-sm font-bold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-full">{{ selectedFields.length }}</span>
           </div>
-          <p class="text-xs text-blue-700 mt-1">Przeciagnij aby zmienic kolejnosc</p>
+          <p class="text-sm text-blue-700 mt-1.5">Przeciagnij aby zmienic kolejnosc</p>
         </div>
         <div
-          class="flex-1 overflow-y-auto p-2"
+          class="flex-1 overflow-y-auto p-3"
           @dragover.prevent
           @drop="handleDropOnContainer"
         >
@@ -117,10 +117,10 @@
             <!-- Drop indicator line -->
             <div
               v-if="dropTargetIndex === index"
-              class="h-0.5 bg-blue-500 rounded-full mx-2 my-1 animate-pulse"
+              class="h-1 bg-blue-500 rounded-full mx-2 my-1.5 animate-pulse"
             ></div>
             <div
-              class="flex items-center gap-2 p-2.5 mb-1.5 rounded-lg bg-white border border-blue-200 cursor-move hover:border-blue-400 hover:shadow-sm transition-all group"
+              class="flex items-center gap-3 p-3 mb-2 rounded-lg bg-white border border-blue-200 cursor-move hover:border-blue-400 hover:shadow-sm transition-all group"
               :class="{ 'ring-2 ring-blue-500 border-blue-500': draggedIndex === index }"
               draggable="true"
               @dragstart="dragStart(index, $event)"
@@ -128,17 +128,17 @@
               @dragover.prevent="handleDragOver(index)"
               @drop.stop="drop(index)"
             >
-              <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM14 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM14 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM14 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>
               </svg>
-              <span class="text-xs text-gray-400 font-mono w-5">{{ index + 1 }}.</span>
-              <span class="text-sm text-gray-700 flex-1">{{ getFieldLabel(fieldKey) }}</span>
+              <span class="text-sm text-gray-400 font-mono w-6">{{ index + 1 }}.</span>
+              <span class="text-base text-gray-700 flex-1">{{ getFieldLabel(fieldKey) }}</span>
               <button
                 type="button"
-                class="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                class="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
                 @click="removeField(fieldKey)"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
               </button>
@@ -147,13 +147,13 @@
           <!-- Drop indicator at end -->
           <div
             v-if="dropTargetIndex === selectedFields.length"
-            class="h-0.5 bg-blue-500 rounded-full mx-2 my-1 animate-pulse"
+            class="h-1 bg-blue-500 rounded-full mx-2 my-1.5 animate-pulse"
           ></div>
           <div v-if="selectedFields.length === 0" class="text-center py-12 text-blue-400">
             <svg class="w-16 h-16 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
             </svg>
-            <p class="font-medium">Brak wybranych pol</p>
+            <p class="font-medium text-base">Brak wybranych pol</p>
             <p class="text-sm mt-1">Kliknij na pole po lewej aby je dodac</p>
           </div>
         </div>

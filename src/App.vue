@@ -1968,6 +1968,18 @@ onBeforeUnmount(() => {
                     </svg>
                     Automatyczne eksporty
                 </a>
+                <a href="#" @click.prevent="currentPage = 'templates'" :class="{'active': currentPage === 'templates'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                    </svg>
+                    Gotowe eksporty
+                </a>
+                <a href="#" @click.prevent="currentPage = 'dashboards'" :class="{'active': currentPage === 'dashboards'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    Dashboardy analityczne
+                </a>
 
                 <div class="mt-4 mb-2 px-3">
                     <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Firma</span>
@@ -1994,17 +2006,21 @@ onBeforeUnmount(() => {
             </nav>
 
             <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-                <div class="flex items-center gap-3 px-3 py-2">
-                    <div class="w-8 h-8 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-600 dark:to-gray-700 rounded-full flex items-center justify-center">
-                        <svg class="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                        </svg>
+                <button
+                    @click="currentPage = 'config'"
+                    class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer group"
+                >
+                    <div class="w-9 h-9 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-sm">
+                        {{ userDisplayName.charAt(0).toUpperCase() }}
                     </div>
-                    <div class="flex-1 min-w-0">
+                    <div class="flex-1 min-w-0 text-left">
                         <div class="text-sm font-medium truncate dark:text-white">{{ userDisplayName }}</div>
                         <div class="text-xs text-gray-500 dark:text-gray-400">{{ userDisplayEmail }}</div>
                     </div>
-                </div>
+                    <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
             </div>
         </div>
 
@@ -2696,6 +2712,42 @@ onBeforeUnmount(() => {
 
                     <!-- Security Settings (dawniej osobna zakładka) -->
                     <SecurityTab />
+                </div>
+            </div>
+
+            <!-- GOTOWE EKSPORTY (Placeholder) -->
+            <div v-if="currentPage === 'templates'" class="p-4 md:p-8">
+                <h1 class="text-2xl md:text-3xl font-bold mb-2 dark:text-white">Gotowe eksporty</h1>
+                <p class="text-gray-600 dark:text-gray-400 mb-8">Predefiniowane konfiguracje eksportów do szybkiego wykorzystania</p>
+
+                <div class="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-8 text-center">
+                    <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Wkrotce dostepne</h2>
+                    <p class="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+                        Tutaj znajdziesz gotowe szablony eksportow, ktore mozesz od razu wykorzystac lub dostosowac do swoich potrzeb.
+                    </p>
+                </div>
+            </div>
+
+            <!-- DASHBOARDY ANALITYCZNE (Placeholder) -->
+            <div v-if="currentPage === 'dashboards'" class="p-4 md:p-8">
+                <h1 class="text-2xl md:text-3xl font-bold mb-2 dark:text-white">Dashboardy analityczne</h1>
+                <p class="text-gray-600 dark:text-gray-400 mb-8">Gotowe wizualizacje i raporty na podstawie Twoich danych</p>
+
+                <div class="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl border border-purple-200 dark:border-purple-800 p-8 text-center">
+                    <div class="w-16 h-16 bg-purple-100 dark:bg-purple-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Wkrotce dostepne</h2>
+                    <p class="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+                        Automatycznie generowane dashboardy z wykresami sprzedazy, trendami i kluczowymi wskaznikami Twojego biznesu.
+                    </p>
                 </div>
             </div>
 

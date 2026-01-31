@@ -143,16 +143,16 @@
 
       <!-- Selected fields reorder - improved styling -->
       <div v-if="selectedFields.length > 0" class="mt-4 flex-shrink-0 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">Kolejnosc kolumn w arkuszu</label>
-        <div class="flex flex-wrap gap-2 p-3 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 max-h-32 overflow-y-auto">
+        <label class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3 block">Kolejnosc kolumn w arkuszu</label>
+        <div class="flex flex-wrap gap-2.5 p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 max-h-64 min-h-[150px] overflow-y-auto">
           <template v-for="(fieldKey, index) in selectedFields" :key="fieldKey">
             <!-- Drop indicator line before element -->
             <div
               v-if="dropTargetIndex === index"
-              class="w-0.5 h-8 bg-blue-500 rounded-full self-center animate-pulse"
+              class="w-1 h-10 bg-blue-500 rounded-full self-center animate-pulse"
             ></div>
             <div
-              class="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm shadow-sm cursor-move hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all"
+              class="flex items-center gap-2.5 pl-3.5 pr-2.5 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm cursor-move hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all"
               :class="{ 'ring-2 ring-blue-500 border-blue-500': draggedIndex === index }"
               draggable="true"
               @dragstart="dragStart(index, $event)"
@@ -161,10 +161,10 @@
               @dragleave="handleDragLeave"
               @drop.stop="drop(index)"
             >
-              <span class="text-xs text-gray-400 font-mono">{{ index + 1 }}</span>
+              <span class="text-sm text-gray-400 font-mono min-w-[1.5rem]">{{ index + 1 }}</span>
               <span class="text-gray-700 dark:text-gray-200 font-medium">{{ getFieldLabel(fieldKey) }}</span>
-              <button type="button" class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/30" @click="removeField(fieldKey)">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <button type="button" class="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/30" @click="removeField(fieldKey)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
               </button>
@@ -173,7 +173,7 @@
           <!-- Drop indicator at end -->
           <div
             v-if="dropTargetIndex === selectedFields.length"
-            class="w-0.5 h-8 bg-blue-500 rounded-full self-center animate-pulse"
+            class="w-1 h-10 bg-blue-500 rounded-full self-center animate-pulse"
           ></div>
         </div>
       </div>
