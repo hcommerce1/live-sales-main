@@ -3,11 +3,9 @@
  * Provides aggregated data for dashboards and reports
  */
 
-const BaselinkerService = require('./baselinkerService');
+const baselinkerService = require('./baselinkerService');
 const companySecretService = require('./companySecret.service');
 const logger = require('../utils/logger');
-
-const baselinkerService = new BaselinkerService();
 
 /**
  * Get decrypted BaseLinker token for company
