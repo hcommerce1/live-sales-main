@@ -92,22 +92,33 @@
           </div>
         </div>
 
-        <!-- Inventory selection for products dataset -->
+        <!-- Inventory selection for products dataset (multi-select) -->
         <div v-if="requiresInventory" class="flex-shrink-0 mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
           <label class="block text-sm font-medium text-amber-800 mb-2">
-            Wybierz katalog produktów
+            Wybierz katalogi produktów
+            <span class="font-normal text-amber-600">(można wybrać wiele)</span>
           </label>
-          <select
-            v-model="config.settings.inventoryId"
-            class="w-full md:w-80 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none bg-white"
-          >
-            <option :value="null" disabled>-- Wybierz katalog --</option>
-            <option v-for="inv in inventories" :key="inv.inventory_id" :value="inv.inventory_id">
-              {{ inv.name }} (ID: {{ inv.inventory_id }})
-            </option>
-          </select>
+          <div v-if="inventories.length > 0" class="space-y-1 max-h-48 overflow-y-auto border border-amber-200 rounded-lg bg-white p-2">
+            <label
+              v-for="inv in inventories"
+              :key="inv.inventory_id"
+              class="flex items-center gap-2 p-2 hover:bg-amber-100 rounded cursor-pointer transition-colors"
+            >
+              <input
+                type="checkbox"
+                :value="inv.inventory_id"
+                v-model="config.filters.inventory_ids"
+                class="w-4 h-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+              >
+              <span class="text-sm text-gray-700">{{ inv.name }}</span>
+              <span class="text-xs text-gray-400">(ID: {{ inv.inventory_id }})</span>
+            </label>
+          </div>
           <p v-if="inventories.length === 0" class="text-sm text-amber-600 mt-2">
             Brak katalogów. Upewnij się, że masz skonfigurowaną integrację z BaseLinker.
+          </p>
+          <p v-if="config.filters.inventory_ids?.length > 0" class="text-xs text-amber-700 mt-2">
+            Wybrano: {{ config.filters.inventory_ids.length }} katalog(ów)
           </p>
         </div>
 
@@ -394,8 +405,8 @@
                 <span class="font-medium text-gray-900">{{ getDatasetLabel(config.dataset) }}</span>
               </div>
               <div v-if="requiresInventory" class="flex justify-between py-2 border-b border-gray-100">
-                <span class="text-gray-600">Katalog</span>
-                <span class="font-medium text-gray-900">{{ getInventoryName(config.filters?.inventory_id) }}</span>
+                <span class="text-gray-600">Katalogi</span>
+                <span class="font-medium text-gray-900">{{ getInventoryNames(config.filters?.inventory_ids) }}</span>
               </div>
               <div class="flex justify-between py-2 border-b border-gray-100">
                 <span class="text-gray-600">Liczba pól</span>
@@ -543,7 +554,8 @@ const config = ref({
   selected_fields: [],
   filters: {
     logic: 'AND',
-    groups: [{ logic: 'AND', conditions: [{ field: '', operator: '', value: '' }] }]
+    groups: [{ logic: 'AND', conditions: [{ field: '', operator: '', value: '' }] }],
+    inventory_ids: []
   },
   sheets_config: [{
     sheet_url: '',
@@ -561,7 +573,6 @@ const config = ref({
       exchangeRateSource: 'today'
     },
     // Dataset-specific settings
-    inventoryId: null,
     storageId: null,
     integrationId: null,
     dataType: null
@@ -661,7 +672,7 @@ const canProceed = computed(() => {
     case 0: // Dane
       const hasFields = config.value.dataset && config.value.selected_fields.length > 0
       // Check required parameters for dataset
-      if (requiresInventory.value && !config.value.settings?.inventoryId && !config.value.filters?.inventory_id) {
+      if (requiresInventory.value && (!config.value.filters?.inventory_ids || config.value.filters.inventory_ids.length === 0)) {
         return false
       }
       if (requiresStorage.value && !config.value.settings?.storageId) {
@@ -802,7 +813,7 @@ const canSave = computed(() => {
 
   // Additional check for inventory if dataset requires it
   if (requiresInventory.value) {
-    return basicChecks && config.value.filters?.inventory_id
+    return basicChecks && config.value.filters?.inventory_ids?.length > 0
   }
   return basicChecks
 })
@@ -865,10 +876,11 @@ function getFilterSummary() {
   return conditionCount > 0 ? `${conditionCount} warunków` : 'Brak'
 }
 
-function getInventoryName(inventoryId) {
-  if (!inventoryId) return 'Nie wybrano'
-  const inv = inventories.value.find(i => i.inventory_id === inventoryId)
-  return inv?.name || `ID: ${inventoryId}`
+function getInventoryNames(inventoryIds) {
+  if (!inventoryIds || inventoryIds.length === 0) return 'Nie wybrano'
+  return inventoryIds
+    .map(id => inventories.value.find(i => i.inventory_id === id)?.name || `ID: ${id}`)
+    .join(', ')
 }
 
 // Drag & Drop
@@ -1134,10 +1146,20 @@ async function loadExistingExport() {
         description: exportData.description || '',
         dataset: exportData.dataset || 'orders',
         selected_fields: selectedFields,
-        filters: exportData.filters || {
-          logic: 'AND',
-          groups: [{ logic: 'AND', conditions: [{ field: '', operator: '', value: '' }] }]
-        },
+        filters: (() => {
+          const f = exportData.filters || {
+            logic: 'AND',
+            groups: [{ logic: 'AND', conditions: [{ field: '', operator: '', value: '' }] }]
+          }
+          // Backward compatibility: convert inventory_id to inventory_ids
+          if (!f.inventory_ids && f.inventory_id) {
+            f.inventory_ids = [f.inventory_id]
+          }
+          if (!f.inventory_ids) {
+            f.inventory_ids = []
+          }
+          return f
+        })(),
         sheets_config: sheetsConfig.length > 0 ? sheetsConfig : [{ sheet_url: '', write_mode: 'replace' }],
         schedule_minutes: scheduleMinutes,
         status: exportData.status || 'active',

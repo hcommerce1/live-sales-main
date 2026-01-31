@@ -298,16 +298,26 @@ function splitFilters(filterConfig, dataset) {
   const appFilters = { logic: filterConfig?.logic || 'AND', groups: [] };
 
   if (!filterConfig || !filterConfig.groups) {
-    // Still check for inventory_id even without groups
-    if (dataset === 'products' && filterConfig?.inventory_id) {
-      apiFilters.inventory_id = filterConfig.inventory_id;
+    // Still check for inventory_ids even without groups (with backward compatibility for inventory_id)
+    if (dataset === 'products') {
+      if (filterConfig?.inventory_ids?.length > 0) {
+        apiFilters.inventory_ids = filterConfig.inventory_ids;
+      } else if (filterConfig?.inventory_id) {
+        // Backward compatibility: convert single id to array
+        apiFilters.inventory_ids = [filterConfig.inventory_id];
+      }
     }
     return { apiFilters, appFilters };
   }
 
-  // Extract inventory_id for products dataset (stored at root level of filters)
-  if (dataset === 'products' && filterConfig.inventory_id) {
-    apiFilters.inventory_id = filterConfig.inventory_id;
+  // Extract inventory_ids for products dataset (stored at root level of filters)
+  if (dataset === 'products') {
+    if (filterConfig.inventory_ids?.length > 0) {
+      apiFilters.inventory_ids = filterConfig.inventory_ids;
+    } else if (filterConfig.inventory_id) {
+      // Backward compatibility: convert single id to array
+      apiFilters.inventory_ids = [filterConfig.inventory_id];
+    }
   }
 
   for (const group of filterConfig.groups) {
@@ -1533,53 +1543,67 @@ class ExportService {
   }
 
   /**
-   * Fetch products from BaseLinker inventory
+   * Fetch products from BaseLinker inventory (supports multiple catalogs)
    * @param {object} client - BaseLinker client
    * @param {object} apiFilters - API-side filters
-   * @returns {Promise<Array>} - List of products
+   * @returns {Promise<Array>} - List of products from all selected catalogs
    */
   async fetchProducts(client, apiFilters = {}) {
     try {
-      const inventoryId = apiFilters.inventory_id;
-      if (!inventoryId) {
-        throw new Error('inventory_id is required for products dataset. Please select a catalog.');
-      }
-      const products = await client.getInventoryProductsList(inventoryId, apiFilters);
+      // Support both inventory_ids (array) and inventory_id (single) for backward compatibility
+      const inventoryIds = apiFilters.inventory_ids ||
+        (apiFilters.inventory_id ? [apiFilters.inventory_id] : []);
 
-      if (products.length === 0) {
-        return [];
+      if (inventoryIds.length === 0) {
+        throw new Error('inventory_ids is required for products dataset. Please select at least one catalog.');
       }
 
-      // Get detailed product data
-      const productIds = products.map(p => p.product_id);
-      const detailedData = await client.getInventoryProductsData(productIds, inventoryId);
+      const allProducts = [];
 
-      // Merge list and detailed data
-      return products.map(product => {
-        const details = detailedData[product.product_id] || {};
-        return {
-          product_id: product.product_id,
-          name: details.name || product.name,
-          ean: details.ean || product.ean,
-          sku: details.sku || product.sku,
-          quantity: product.quantity || 0,
-          price_brutto: details.prices?.[0]?.price_brutto || null,
-          stock: product.stock || 0,
-          location: details.location || '',
-          weight: details.weight || 0,
-          manufacturer: details.manufacturer || '',
-          category: details.category || '',
-          description: details.description || '',
-          tax_rate: details.tax_rate || 23,
-          purchase_price: details.purchase_price || 0,
-          profit_margin: details.profit_margin || 0,
-          average_cost: details.average_cost || 0,
-          height: details.height || 0,
-          width: details.width || 0,
-          length: details.length || 0,
-          image_url: details.images ? Object.values(details.images)[0] || '' : '',
-        };
-      });
+      // Fetch products from each catalog
+      for (const inventoryId of inventoryIds) {
+        const products = await client.getInventoryProductsList(inventoryId, apiFilters);
+
+        if (products.length === 0) {
+          continue;
+        }
+
+        // Get detailed product data
+        const productIds = products.map(p => p.product_id);
+        const detailedData = await client.getInventoryProductsData(productIds, inventoryId);
+
+        // Merge list and detailed data
+        const mergedProducts = products.map(product => {
+          const details = detailedData[product.product_id] || {};
+          return {
+            product_id: product.product_id,
+            inventory_id: inventoryId, // Add catalog source info
+            name: details.name || product.name,
+            ean: details.ean || product.ean,
+            sku: details.sku || product.sku,
+            quantity: product.quantity || 0,
+            price_brutto: details.prices?.[0]?.price_brutto || null,
+            stock: product.stock || 0,
+            location: details.location || '',
+            weight: details.weight || 0,
+            manufacturer: details.manufacturer || '',
+            category: details.category || '',
+            description: details.description || '',
+            tax_rate: details.tax_rate || 23,
+            purchase_price: details.purchase_price || 0,
+            profit_margin: details.profit_margin || 0,
+            average_cost: details.average_cost || 0,
+            height: details.height || 0,
+            width: details.width || 0,
+            length: details.length || 0,
+            image_url: details.images ? Object.values(details.images)[0] || '' : '',
+          };
+        });
+
+        allProducts.push(...mergedProducts);
+      }
+
+      return allProducts;
     } catch (error) {
       logger.error('Failed to fetch products', { error: error.message });
       throw error;
