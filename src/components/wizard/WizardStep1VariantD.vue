@@ -48,7 +48,7 @@
         <div class="p-3 bg-gray-50 border-b border-gray-200 flex-shrink-0">
           <div class="flex items-center justify-between mb-2">
             <h3 class="font-semibold text-gray-900">Dostepne pola</h3>
-            <span class="text-sm text-gray-500">{{ availableFieldsFiltered.length }} pol</span>
+            <span class="text-sm text-gray-500">{{ groupedAvailableFields.reduce((sum, g) => sum + g.fields.length, 0) }} pol</span>
           </div>
           <div class="relative">
             <input
@@ -63,27 +63,34 @@
           </div>
         </div>
         <div class="flex-1 overflow-y-auto p-2">
-          <div
-            v-for="field in availableFieldsFiltered"
-            :key="field.key"
-            class="flex items-center justify-between p-2.5 rounded-lg hover:bg-blue-50 cursor-pointer group transition-colors"
-            :class="{ 'opacity-50 cursor-not-allowed': field.locked }"
-            @click="!field.locked && addField(field)"
-          >
-            <span class="text-sm text-gray-700">{{ field.label }}</span>
-            <div class="flex items-center gap-2">
-              <span v-if="field.locked" class="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">PRO</span>
-              <span
-                v-if="!field.locked"
-                class="p-1.5 rounded-lg text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-              </span>
+          <template v-for="group in groupedAvailableFields" :key="group.name">
+            <!-- Group header -->
+            <div class="sticky top-0 bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 -mx-2 mb-1 first:mt-0 mt-2">
+              {{ group.name }}
             </div>
-          </div>
-          <div v-if="availableFieldsFiltered.length === 0" class="text-center py-8 text-gray-400">
+            <!-- Fields in group -->
+            <div
+              v-for="field in group.fields"
+              :key="field.key"
+              class="flex items-center justify-between p-2.5 rounded-lg hover:bg-blue-50 cursor-pointer group transition-colors"
+              :class="{ 'opacity-50 cursor-not-allowed': field.locked }"
+              @click="!field.locked && addField(field)"
+            >
+              <span class="text-sm text-gray-700">{{ field.label }}</span>
+              <div class="flex items-center gap-2">
+                <span v-if="field.locked" class="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">PRO</span>
+                <span
+                  v-if="!field.locked"
+                  class="p-1.5 rounded-lg text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </template>
+          <div v-if="groupedAvailableFields.length === 0" class="text-center py-8 text-gray-400">
             <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 12h.01"/>
             </svg>
@@ -244,6 +251,29 @@ const availableFieldsFiltered = computed(() => {
   if (!searchQuery.value.trim()) return available
   const query = searchQuery.value.toLowerCase()
   return available.filter(f => f.label.toLowerCase().includes(query))
+})
+
+// Group available fields by field.group property from backend
+const groupedAvailableFields = computed(() => {
+  const available = props.fields.filter(f => !props.selectedFields.includes(f.key))
+
+  // Filter by search if active
+  const filtered = searchQuery.value.trim()
+    ? available.filter(f => f.label.toLowerCase().includes(searchQuery.value.toLowerCase()))
+    : available
+
+  // Group by field.group (Map preserves insertion order)
+  const groupMap = new Map()
+  filtered.forEach(field => {
+    const groupName = field.group || 'Inne'
+    if (!groupMap.has(groupName)) {
+      groupMap.set(groupName, [])
+    }
+    groupMap.get(groupName).push(field)
+  })
+
+  return Array.from(groupMap.entries())
+    .map(([name, fields]) => ({ name, fields }))
 })
 
 function getDatasetLabel(key) {

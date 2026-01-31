@@ -252,7 +252,7 @@ const props = defineProps({
 const emit = defineEmits(['update:selectedDataset', 'update:selectedFields'])
 
 const searchQuery = ref('')
-const openGroups = ref(['Podstawowe', 'Dane klienta'])
+const openGroups = ref([])
 const draggedIndex = ref(null)
 const dropTargetIndex = ref(null)
 const showDatasetSelector = ref(!props.selectedDataset)
@@ -275,39 +275,32 @@ watch(() => props.selectedDataset, (newVal) => {
   }
 })
 
-// Group fields
-const fieldGroups = computed(() => {
-  const groups = {
-    'Podstawowe': [],
-    'Dane klienta': [],
-    'Adres dostawy': [],
-    'Punkt odbioru': [],
-    'Platnosci': [],
-    'Faktura': [],
-    'Inne': []
+// Initialize open groups from actual field data (first 2 groups)
+watch(() => props.fields, (fields) => {
+  if (fields.length > 0 && openGroups.value.length === 0) {
+    // Get unique groups preserving order from backend
+    const groups = [...new Set(fields.map(f => f.group).filter(Boolean))]
+    // Open first 2 groups by default
+    openGroups.value = groups.slice(0, 2)
   }
+}, { immediate: true })
+
+// Group fields by field.group property from backend
+// Map preserves insertion order (matches backend field order)
+const fieldGroups = computed(() => {
+  const groupMap = new Map()
 
   props.fields.forEach(field => {
-    const label = field.label.toLowerCase()
-    if (label.includes('email') || label.includes('telefon') || label.includes('imie') || label.includes('nazwisko') || label.includes('login')) {
-      groups['Dane klienta'].push(field)
-    } else if (label.includes('dostaw') && (label.includes('adres') || label.includes('miasto') || label.includes('kod') || label.includes('kraj') || label.includes('wojew'))) {
-      groups['Adres dostawy'].push(field)
-    } else if (label.includes('punkt') || label.includes('odbioru')) {
-      groups['Punkt odbioru'].push(field)
-    } else if (label.includes('faktur') || label.includes('nip')) {
-      groups['Faktura'].push(field)
-    } else if (label.includes('platno') || label.includes('zaplac') || label.includes('walut') || label.includes('pobrani') || label.includes('cena')) {
-      groups['Platnosci'].push(field)
-    } else if (label.includes('id') || label.includes('status') || label.includes('data') || label.includes('zrodl')) {
-      groups['Podstawowe'].push(field)
-    } else {
-      groups['Inne'].push(field)
+    const groupName = field.group || 'Inne'
+
+    if (!groupMap.has(groupName)) {
+      groupMap.set(groupName, [])
     }
+    groupMap.get(groupName).push(field)
   })
 
-  return Object.entries(groups)
-    .filter(([_, fields]) => fields.length > 0)
+  // Convert Map to array, preserving insertion order from backend
+  return Array.from(groupMap.entries())
     .map(([name, fields]) => ({ name, fields }))
 })
 
