@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useDark, useToggle } from '@vueuse/core'
 import { MOCK_DATA, SAMPLE_EXPORTS } from './data.js'
 import { API } from './api.js'
 import Sortable from 'sortablejs'
@@ -24,6 +25,10 @@ const authStore = useAuthStore()
 const exportsStore = useExportsStore()
 const integrationsStore = useIntegrationsStore()
 const companyStore = useCompanyStore()
+
+// Dark mode
+const isDark = useDark()
+const toggleDark = useToggle(isDark)
 
 // Initialize EmailJS
 emailjs.init("AJZSalcoaqOoF-Qxe")
@@ -1931,7 +1936,7 @@ onBeforeUnmount(() => {
         <!-- Main App Content - only shown when authenticated (login handled by /login.html) -->
         <template v-else-if="isAuthenticated && !isAuthChecking">
             <!-- Sidebar -->
-            <div class="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm z-50">
+            <div class="fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col shadow-sm z-50">
             <div class="p-6">
                 <div class="flex items-center gap-3">
                     <!-- Logo SVG -->
@@ -1948,21 +1953,21 @@ onBeforeUnmount(() => {
                         </svg>
                     </div>
                     <div>
-                        <div class="font-bold text-base">Live Sales</div>
-                        <div class="text-xs text-gray-500">No-Code dla e-commerce</div>
+                        <div class="font-bold text-base dark:text-white">Live Sales</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">No-Code dla e-commerce</div>
                     </div>
                 </div>
 
             </div>
 
             <nav class="flex-1 px-3 space-y-1 sidebar-nav overflow-y-auto">
-                <a href="#" @click.prevent="currentPage = 'dashboard'" :class="{'active': currentPage === 'dashboard'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
+                <a href="#" @click.prevent="currentPage = 'dashboard'" :class="{'active': currentPage === 'dashboard'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
                     </svg>
                     Dashboard
                 </a>
-                <a href="#" @click.prevent="currentPage = 'exports'" :class="{'active': currentPage === 'exports'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
+                <a href="#" @click.prevent="currentPage = 'exports'" :class="{'active': currentPage === 'exports'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
@@ -1973,7 +1978,7 @@ onBeforeUnmount(() => {
                     <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Firma</span>
                 </div>
 
-                <a href="#" @click.prevent="currentPage = 'subscription'" :class="{'active': currentPage === 'subscription'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
+                <a href="#" @click.prevent="currentPage = 'subscription'" :class="{'active': currentPage === 'subscription'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                     </svg>
@@ -1984,38 +1989,41 @@ onBeforeUnmount(() => {
                     <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Ustawienia</span>
                 </div>
 
-                <a href="#" @click.prevent="currentPage = 'config'" :class="{'active': currentPage === 'config'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
+                <a href="#" @click.prevent="currentPage = 'config'" :class="{'active': currentPage === 'config'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                     </svg>
-                    Konfiguracja
-                </a>
-                <a href="#" @click.prevent="currentPage = 'security'" :class="{'active': currentPage === 'security'}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                    </svg>
-                    Bezpieczeństwo
+                    Ustawienia
                 </a>
             </nav>
 
-            <div class="p-4 border-t border-gray-200">
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700">
                 <div class="flex items-center gap-3 px-3 py-2">
-                    <div class="w-8 h-8 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center">
-                        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-8 h-8 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-600 dark:to-gray-700 rounded-full flex items-center justify-center">
+                        <svg class="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                         </svg>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <div class="text-sm font-medium truncate">{{ userDisplayName }}</div>
-                        <div class="text-xs text-gray-500">{{ userDisplayEmail }}</div>
+                        <div class="text-sm font-medium truncate dark:text-white">{{ userDisplayName }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">{{ userDisplayEmail }}</div>
                     </div>
+                    <!-- Dark Mode Toggle -->
+                    <button @click="toggleDark()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Przełącz tryb ciemny/jasny">
+                        <svg v-if="isDark" class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/>
+                        </svg>
+                        <svg v-else class="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
 
         <!-- Main content -->
-        <div class="ml-0 md:ml-64 min-h-screen">
+        <div class="ml-0 md:ml-64 min-h-screen bg-gray-50 dark:bg-gray-900">
             <!-- Dashboard -->
             <div v-if="currentPage === 'dashboard'" class="p-4 md:p-8">
                 <h1 class="text-2xl md:text-3xl font-bold mb-2">Dashboard</h1>
@@ -2585,29 +2593,29 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <!-- KONFIGURACJA -->
+            <!-- USTAWIENIA (połączone: Konfiguracja + Bezpieczeństwo) -->
             <div v-if="currentPage === 'config'" class="p-4 md:p-8">
                 <div class="max-w-3xl mx-auto">
-                    <h1 class="text-2xl md:text-3xl font-bold mb-2">Konfiguracja</h1>
-                    <p class="text-sm md:text-base text-gray-600 mb-8">Zarządzaj tokenem BaseLinker i ustawieniami konta</p>
+                    <h1 class="text-2xl md:text-3xl font-bold mb-2 dark:text-white">Ustawienia</h1>
+                    <p class="text-sm md:text-base text-gray-600 dark:text-gray-400 mb-8">Zarządzaj tokenem, kontem i bezpieczeństwem</p>
 
                     <!-- BaseLinker Token Card -->
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
                         <div class="flex items-start gap-4 mb-6">
-                            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
                                 </svg>
                             </div>
                             <div class="flex-1">
-                                <h2 class="text-xl font-semibold mb-1">Token BaseLinker</h2>
-                                <p class="text-sm text-gray-600">Token potrzebny do synchronizacji danych z BaseLinker</p>
+                                <h2 class="text-xl font-semibold mb-1 dark:text-white">Token BaseLinker</h2>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Token potrzebny do synchronizacji danych z BaseLinker</p>
                             </div>
                         </div>
 
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Token API
                                 </label>
                                 <div class="relative">
@@ -2616,7 +2624,7 @@ onBeforeUnmount(() => {
                                         :type="showToken ? 'text' : 'password'"
                                         @input="onTokenChange"
                                         placeholder="Wklej tutaj swój token BaseLinker"
-                                        class="w-full border-2 border-gray-300 rounded-lg px-4 py-3 pr-24 focus:border-blue-500 focus:outline-none transition-colors font-mono text-sm"
+                                        class="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-4 py-3 pr-24 focus:border-blue-500 focus:outline-none transition-colors font-mono text-sm"
                                     >
                                     <button
                                         @click="showToken = !showToken"
@@ -2632,26 +2640,26 @@ onBeforeUnmount(() => {
                                         </svg>
                                     </button>
                                 </div>
-                                <p class="text-xs text-gray-500 mt-2">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
                                     Token jest szyfrowany za pomocą AES-256-GCM i bezpiecznie przechowywany dla Twojego konta
                                 </p>
                             </div>
 
-                            <div v-if="tokenSaved" class="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-4 py-3 rounded-lg border border-green-200">
+                            <div v-if="tokenSaved" class="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-4 py-3 rounded-lg border border-green-200 dark:border-green-800">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
                                 Token został zapisany automatycznie
                             </div>
 
-                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                                 <div class="flex gap-3">
-                                    <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
-                                    <div class="text-sm text-blue-800">
+                                    <div class="text-sm text-blue-800 dark:text-blue-200">
                                         <p class="font-medium mb-1">Jak znaleźć token BaseLinker?</p>
-                                        <ol class="list-decimal list-inside space-y-1 text-blue-700">
+                                        <ol class="list-decimal list-inside space-y-1 text-blue-700 dark:text-blue-300">
                                             <li>Zaloguj się do BaseLinker</li>
                                             <li>Przejdź do: Integracje → API</li>
                                             <li>Skopiuj token API</li>
@@ -2664,50 +2672,43 @@ onBeforeUnmount(() => {
                     </div>
 
                     <!-- Account Settings Card -->
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
                         <div class="flex items-start gap-4 mb-6">
-                            <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                                <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                 </svg>
                             </div>
                             <div class="flex-1">
-                                <h2 class="text-xl font-semibold mb-1">Ustawienia konta</h2>
-                                <p class="text-sm text-gray-600">Zarządzaj swoim kontem i ustawieniami bezpieczeństwa</p>
+                                <h2 class="text-xl font-semibold mb-1 dark:text-white">Konto</h2>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Informacje o Twoim koncie</p>
                             </div>
                         </div>
 
                         <div class="space-y-4">
-                            <div class="flex items-center justify-between py-3 border-b border-gray-200">
+                            <div class="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-700">
                                 <div>
-                                    <p class="font-medium text-gray-900">Email</p>
-                                    <p class="text-sm text-gray-600">{{ userEmail }}</p>
+                                    <p class="font-medium text-gray-900 dark:text-white">Email</p>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ userEmail }}</p>
                                 </div>
                             </div>
 
                             <div class="flex items-center justify-between py-3">
                                 <div>
-                                    <p class="font-medium text-gray-900">Wyloguj się</p>
-                                    <p class="text-sm text-gray-600">Zakończ bieżącą sesję</p>
+                                    <p class="font-medium text-gray-900 dark:text-white">Wyloguj się</p>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">Zakończ bieżącą sesję</p>
                                 </div>
                                 <button
                                     @click="logout"
-                                    class="px-4 py-2 border-2 border-red-500 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-medium text-sm"
+                                    class="px-4 py-2 border-2 border-red-500 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium text-sm"
                                 >
                                     Wyloguj
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- BEZPIECZEŃSTWO -->
-            <div v-if="currentPage === 'security'" class="p-4 md:p-8">
-                <div class="max-w-3xl mx-auto">
-                    <h1 class="text-2xl md:text-3xl font-bold mb-2">Bezpieczeństwo</h1>
-                    <p class="text-sm md:text-base text-gray-600 mb-8">Zarządzaj hasłem i weryfikacją dwuetapową</p>
-
+                    <!-- Security Settings (dawniej osobna zakładka) -->
                     <SecurityTab />
                 </div>
             </div>

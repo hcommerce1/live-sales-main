@@ -1,9 +1,9 @@
 <template>
   <div class="space-y-8">
     <!-- Change Password Section -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
         </svg>
         Zmiana hasła
@@ -12,28 +12,28 @@
       <!-- Success Message -->
       <div
         v-if="passwordSuccess"
-        class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3"
+        class="mb-4 p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-3"
       >
-        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <p class="text-sm text-green-700">Hasło zostało zmienione pomyślnie</p>
+        <p class="text-sm text-green-700 dark:text-green-300">Hasło zostało zmienione pomyślnie</p>
       </div>
 
       <!-- Error Message -->
       <div
         v-if="passwordError"
-        class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3"
+        class="mb-4 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3"
       >
-        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <p class="text-sm text-red-700">{{ passwordError }}</p>
+        <p class="text-sm text-red-700 dark:text-red-300">{{ passwordError }}</p>
       </div>
 
       <form @submit.prevent="handlePasswordChange" class="space-y-4">
         <div>
-          <label for="currentPassword" class="block text-sm font-medium text-gray-700 mb-1">
+          <label for="currentPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Obecne hasło
           </label>
           <input
@@ -42,13 +42,13 @@
             type="password"
             required
             :disabled="passwordLoading"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Wpisz obecne hasło"
           />
         </div>
 
         <div>
-          <label for="newPassword" class="block text-sm font-medium text-gray-700 mb-1">
+          <label for="newPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Nowe hasło
           </label>
           <input
@@ -58,16 +58,16 @@
             required
             minlength="12"
             :disabled="passwordLoading"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Min. 12 znaków"
           />
-          <p class="mt-1 text-xs text-gray-500">
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Hasło musi mieć co najmniej 12 znaków
           </p>
         </div>
 
         <div>
-          <label for="confirmPassword" class="block text-sm font-medium text-gray-700 mb-1">
+          <label for="confirmPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Potwierdź nowe hasło
           </label>
           <input
@@ -76,12 +76,12 @@
             type="password"
             required
             :disabled="passwordLoading"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Powtórz nowe hasło"
           />
           <p
             v-if="passwordForm.new && passwordForm.confirm && passwordForm.new !== passwordForm.confirm"
-            class="mt-1 text-xs text-red-500"
+            class="mt-1 text-xs text-red-500 dark:text-red-400"
           >
             Hasła nie są identyczne
           </p>
@@ -102,10 +102,10 @@
     </div>
 
     <!-- Two-Factor Authentication Section -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6">
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
-          <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+          <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
           Weryfikacja dwuetapowa (2FA)
@@ -114,38 +114,38 @@
           :class="[
             'px-3 py-1 text-sm font-medium rounded-full',
             twoFactorEnabled
-              ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-gray-600'
+              ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
           ]"
         >
           {{ twoFactorEnabled ? 'Włączone' : 'Wyłączone' }}
         </span>
       </div>
 
-      <p class="text-gray-600 mb-6">
+      <p class="text-gray-600 dark:text-gray-400 mb-6">
         Dodatkowa warstwa bezpieczeństwa. Po włączeniu, przy każdym logowaniu otrzymasz kod weryfikacyjny na swój adres email.
       </p>
 
       <!-- 2FA Success Message -->
       <div
         v-if="twoFactorSuccess"
-        class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3"
+        class="mb-4 p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-3"
       >
-        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <p class="text-sm text-green-700">{{ twoFactorSuccess }}</p>
+        <p class="text-sm text-green-700 dark:text-green-300">{{ twoFactorSuccess }}</p>
       </div>
 
       <!-- 2FA Error Message -->
       <div
         v-if="twoFactorError"
-        class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3"
+        class="mb-4 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3"
       >
-        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <p class="text-sm text-red-700">{{ twoFactorError }}</p>
+        <p class="text-sm text-red-700 dark:text-red-300">{{ twoFactorError }}</p>
       </div>
 
       <!-- Enable 2FA Flow -->
@@ -167,15 +167,15 @@
 
         <!-- Step 2: Confirm with code -->
         <div v-else-if="twoFactorStep === 'confirm-enable'">
-          <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-            <p class="text-sm text-blue-700">
+          <div class="p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg mb-4">
+            <p class="text-sm text-blue-700 dark:text-blue-300">
               Kod weryfikacyjny został wysłany na Twój adres email. Wpisz go poniżej, aby włączyć 2FA.
             </p>
           </div>
 
           <form @submit.prevent="confirmEnable2FA" class="space-y-4">
             <div>
-              <label for="enable2faCode" class="block text-sm font-medium text-gray-700 mb-1">
+              <label for="enable2faCode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Kod weryfikacyjny
               </label>
               <input
@@ -187,7 +187,7 @@
                 maxlength="6"
                 required
                 :disabled="twoFactorLoading"
-                class="w-full max-w-xs px-4 py-2 text-center text-xl font-mono tracking-[0.3em] border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                class="w-full max-w-xs px-4 py-2 text-center text-xl font-mono tracking-[0.3em] border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="000000"
               />
             </div>
@@ -207,7 +207,7 @@
               <button
                 type="button"
                 @click="cancelTwoFactorFlow"
-                class="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium"
+                class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium"
               >
                 Anuluj
               </button>
@@ -235,15 +235,15 @@
 
         <!-- Step 2: Confirm disable with code -->
         <div v-else-if="twoFactorStep === 'confirm-disable'">
-          <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
-            <p class="text-sm text-amber-700">
+          <div class="p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+            <p class="text-sm text-amber-700 dark:text-amber-300">
               Kod weryfikacyjny został wysłany na Twój adres email. Wpisz go poniżej, aby wyłączyć 2FA.
             </p>
           </div>
 
           <form @submit.prevent="confirmDisable2FA" class="space-y-4">
             <div>
-              <label for="disable2faCode" class="block text-sm font-medium text-gray-700 mb-1">
+              <label for="disable2faCode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Kod weryfikacyjny
               </label>
               <input
@@ -255,7 +255,7 @@
                 maxlength="6"
                 required
                 :disabled="twoFactorLoading"
-                class="w-full max-w-xs px-4 py-2 text-center text-xl font-mono tracking-[0.3em] border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                class="w-full max-w-xs px-4 py-2 text-center text-xl font-mono tracking-[0.3em] border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="000000"
               />
             </div>
@@ -275,7 +275,7 @@
               <button
                 type="button"
                 @click="cancelTwoFactorFlow"
-                class="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium"
+                class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium"
               >
                 Anuluj
               </button>
@@ -286,14 +286,14 @@
     </div>
 
     <!-- Account Sessions Section (Future) -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6 opacity-60">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 opacity-60">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
         Aktywne sesje
       </h3>
-      <p class="text-gray-500 text-sm">
+      <p class="text-gray-500 dark:text-gray-400 text-sm">
         Funkcja zarządzania sesjami będzie dostępna wkrótce.
       </p>
     </div>

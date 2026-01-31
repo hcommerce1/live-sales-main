@@ -10,6 +10,9 @@
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
 
     <!-- Initial loading screen styles - shown before Vue loads -->
     <style>
@@ -49,7 +52,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50 dark:bg-gray-900">
     <!-- Initial loader - visible before Vue mounts -->
     <div id="initial-loader">
         <div style="text-align: center;">
