@@ -315,3 +315,29 @@ async function gracefulShutdown(signal) {
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle unhandled promise rejections (prevent crashes)
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Promise Rejection - CRITICAL', {
+    reason: reason?.message || reason,
+    stack: reason?.stack,
+    code: reason?.code,
+    timestamp: new Date().toISOString()
+  });
+  // Don't crash - log and continue
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception - CRITICAL', {
+    error: error.message,
+    stack: error.stack,
+    code: error.code,
+    timestamp: new Date().toISOString()
+  });
+  // For uncaught exceptions, we should exit after logging
+  // but give time for logs to flush
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
+});

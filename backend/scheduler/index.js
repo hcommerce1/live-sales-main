@@ -202,6 +202,17 @@ class Scheduler {
         );
         logger.info(`Scheduled export ${exportId} completed successfully`);
       } catch (error) {
+        // Handle specific error codes gracefully
+        if (error.code === 'TOKEN_NOT_CONFIGURED') {
+          logger.warn(`Scheduled export ${exportId} skipped - BaseLinker token not configured`, {
+            exportId,
+            code: error.code,
+            timestamp: new Date().toISOString()
+          });
+          // Don't crash - just skip this export until token is configured
+          return;
+        }
+
         logger.error(`Scheduled export ${exportId} failed`, {
           error: error.message,
           stack: error.stack,
