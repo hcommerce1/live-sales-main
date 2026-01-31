@@ -92,36 +92,6 @@
           </div>
         </div>
 
-        <!-- Inventory selection for products dataset (multi-select) -->
-        <div v-if="requiresInventory" class="flex-shrink-0 mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-          <label class="block text-sm font-medium text-amber-800 mb-2">
-            Wybierz katalogi produktów
-            <span class="font-normal text-amber-600">(można wybrać wiele)</span>
-          </label>
-          <div v-if="inventories.length > 0" class="space-y-1 max-h-48 overflow-y-auto border border-amber-200 rounded-lg bg-white p-2">
-            <label
-              v-for="inv in inventories"
-              :key="inv.inventory_id"
-              class="flex items-center gap-2 p-2 hover:bg-amber-100 rounded cursor-pointer transition-colors"
-            >
-              <input
-                type="checkbox"
-                :value="inv.inventory_id"
-                v-model="config.filters.inventory_ids"
-                class="w-4 h-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-              >
-              <span class="text-sm text-gray-700">{{ inv.name }}</span>
-              <span class="text-xs text-gray-400">(ID: {{ inv.inventory_id }})</span>
-            </label>
-          </div>
-          <p v-if="inventories.length === 0" class="text-sm text-amber-600 mt-2">
-            Brak katalogów. Upewnij się, że masz skonfigurowaną integrację z BaseLinker.
-          </p>
-          <p v-if="config.filters.inventory_ids?.length > 0" class="text-xs text-amber-700 mt-2">
-            Wybrano: {{ config.filters.inventory_ids.length }} katalog(ów)
-          </p>
-        </div>
-
         <!-- External storage selection for products_external dataset -->
         <div v-if="requiresStorage" class="flex-shrink-0 mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
           <label class="block text-sm font-medium text-purple-800 mb-2">
@@ -248,6 +218,36 @@
                   {{ option.label }}
                 </button>
               </div>
+            </div>
+
+            <!-- Inventory selection for products dataset (multi-select) - moved from Step 1 -->
+            <div v-if="requiresInventory" class="border border-blue-200 bg-blue-50/50 rounded-lg p-4">
+              <label class="block text-sm font-medium text-blue-900 mb-2">
+                Wybierz katalogi produktów
+                <span class="font-normal text-blue-600">(można wybrać wiele)</span>
+              </label>
+              <div v-if="inventories.length > 0" class="space-y-1 max-h-48 overflow-y-auto border border-blue-200 rounded-lg bg-white p-2">
+                <label
+                  v-for="inv in inventories"
+                  :key="inv.inventory_id"
+                  class="flex items-center gap-2 p-2 hover:bg-blue-50 rounded cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    :value="inv.inventory_id"
+                    v-model="config.filters.inventory_ids"
+                    class="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                  >
+                  <span class="text-sm text-gray-700">{{ inv.name }}</span>
+                  <span class="text-xs text-gray-400">(ID: {{ inv.inventory_id }})</span>
+                </label>
+              </div>
+              <p v-if="inventories.length === 0" class="text-sm text-blue-600 mt-2">
+                Brak katalogów. Upewnij się, że masz skonfigurowaną integrację z BaseLinker.
+              </p>
+              <p v-if="config.filters.inventory_ids?.length > 0" class="text-xs text-blue-700 mt-2">
+                Wybrano: {{ config.filters.inventory_ids.length }} katalog(ów)
+              </p>
             </div>
 
             <!-- Settings: Netto/Brutto (order_products only) -->
@@ -671,10 +671,7 @@ const canProceed = computed(() => {
   switch (currentStep.value) {
     case 0: // Dane
       const hasFields = config.value.dataset && config.value.selected_fields.length > 0
-      // Check required parameters for dataset
-      if (requiresInventory.value && (!config.value.filters?.inventory_ids || config.value.filters.inventory_ids.length === 0)) {
-        return false
-      }
+      // Check required parameters for dataset (inventory moved to Step 3)
       if (requiresStorage.value && !config.value.settings?.storageId) {
         return false
       }
