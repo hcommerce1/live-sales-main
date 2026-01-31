@@ -30,8 +30,10 @@ const companyStore = useCompanyStore()
 const isDark = useDark()
 const toggleDark = useToggle(isDark)
 
-// Initialize EmailJS
-emailjs.init("AJZSalcoaqOoF-Qxe")
+// Initialize EmailJS (only if public key is configured)
+if (import.meta.env.VITE_EMAILJS_PUBLIC_KEY) {
+    emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY)
+}
 
 // Auth state derived from store
 const isAuthChecking = computed(() => authStore.authState === 'CHECKING')
@@ -395,7 +397,7 @@ async function loadExportsFromServer() {
             sheets_config: exp.sheets_config || []
         }))
     } catch (error) {
-        console.error('Failed to load exports:', error)
+        // Error handled by toast
         showToast(
             'Błąd',
             'Nie udało się załadować eksportów z serwera',
@@ -422,7 +424,7 @@ async function saveConfigToServer() {
 
         return savedConfig
     } catch (error) {
-        console.error('Failed to save config:', error)
+        // Error handled by toast
         showToast(
             'Błąd',
             'Nie udało się zapisać konfiguracji: ' + error.message,
@@ -460,7 +462,7 @@ async function deleteExportFromServer(exportId) {
             '<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'
         )
     } catch (error) {
-        console.error('Failed to delete export:', error)
+        // Error handled by toast
         deleteConfirm.value = null
         showToast(
             'Błąd',
@@ -495,7 +497,7 @@ async function runExportOnServer() {
             '<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'
         )
     } catch (error) {
-        console.error('Failed to run export:', error)
+        // Error handled by toast
         showToast(
             'Błąd',
             'Nie udało się uruchomić eksportu: ' + error.message,
@@ -514,7 +516,7 @@ async function toggleExportStatusOnServer(exp) {
         await loadExportsFromServer()
         await loadCapabilities()
     } catch (error) {
-        console.error('Failed to toggle export status:', error)
+        // Error handled by toast
         showToast(
             'Błąd',
             'Nie udało się zmienić statusu eksportu: ' + error.message,
@@ -558,7 +560,7 @@ async function loadExportFromServer(exportId) {
             initSortable()
         })
     } catch (error) {
-        console.error('Failed to load export:', error)
+        // Error handled by toast
         showToast(
             'Błąd',
             'Nie udało się załadować eksportu: ' + error.message,
@@ -592,7 +594,7 @@ async function validateSheetUrlOnServer() {
     } catch (error) {
         sheetUrlValid.value = false
         extractedSheetId.value = null
-        console.error('Sheet validation error:', error)
+        // Error handled by toast
     }
 }
 
@@ -764,11 +766,9 @@ function loadExport(exportId) {
 async function handleWizardSave(exportConfig) {
     try {
         isLoading.value = true
-        console.log('=== WIZARD SAVE START ===')
 
         // Check if this is a NEW export (not editing existing one)
         const isNewExport = !wizardEditingExportId.value
-        console.log('isNewExport:', isNewExport, 'wizardEditingExportId:', wizardEditingExportId.value)
 
         // Transform wizard config to API format
         const apiConfig = {
@@ -785,23 +785,15 @@ async function handleWizardSave(exportConfig) {
                 write_mode: sheet.write_mode || 'replace'
             }))
         }
-        console.log('apiConfig prepared:', JSON.stringify(apiConfig, null, 2))
 
         // Save via API
-        console.log('Calling API.exports.save...')
-        const saveResult = await API.exports.save(apiConfig)
-        console.log('Save result:', saveResult)
+        await API.exports.save(apiConfig)
 
-        console.log('Calling loadExportsFromServer...')
         await loadExportsFromServer()
         await loadCapabilities()
-        console.log('loadExportsFromServer completed')
 
         // If this is a NEW export, run it immediately to populate data
         if (isNewExport) {
-            console.log('=== AUTO-RUN: Starting first export run ===')
-            console.log('Export ID for run:', apiConfig.id)
-
             showToast(
                 'Zapisano',
                 'Eksport zapisany. Trwa pierwsze uruchomienie...',
@@ -809,16 +801,13 @@ async function handleWizardSave(exportConfig) {
             )
 
             try {
-                console.log('Calling API.exports.run with ID:', apiConfig.id)
                 const result = await API.exports.run(apiConfig.id)
-                console.log('=== AUTO-RUN SUCCESS ===', result)
                 showToast(
                     'Sukces',
                     `Eksport uruchomiony! Zapisano ${result?.recordsWritten || 0} rekordów do arkusza.`,
                     '<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'
                 )
             } catch (runError) {
-                console.error('=== AUTO-RUN FAILED ===', runError)
                 showToast(
                     'Uwaga',
                     'Eksport zapisany, ale pierwsze uruchomienie nie powiodło się: ' + runError.message,
@@ -826,7 +815,6 @@ async function handleWizardSave(exportConfig) {
                 )
             }
         } else {
-            console.log('=== EDITING EXISTING EXPORT - no auto-run ===')
             showToast(
                 'Zapisano',
                 'Eksport został zapisany pomyślnie',
@@ -835,11 +823,9 @@ async function handleWizardSave(exportConfig) {
         }
 
         // Return to exports list
-        console.log('=== WIZARD SAVE COMPLETE - returning to exports list ===')
         currentPage.value = 'exports'
         wizardEditingExportId.value = null
     } catch (error) {
-        console.error('=== WIZARD SAVE FAILED ===', error)
         showToast(
             'Błąd',
             'Nie udało się zapisać eksportu: ' + error.message,
@@ -884,7 +870,7 @@ async function handleWizardSaveDraft(draftConfig) {
             '<svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'
         )
     } catch (error) {
-        console.error('Failed to save draft:', error)
+        // Error handled by toast
     }
 
     currentPage.value = 'exports'
@@ -997,7 +983,7 @@ async function submitBuyForm() {
             }
         )
     } catch (error) {
-        console.error('Email error:', error)
+        // Error handled by toast
         showToast(
             'Błąd',
             'Nie udało się wysłać formularza. Spróbuj ponownie.',
@@ -1073,7 +1059,7 @@ async function saveBaselinkerToken() {
             tokenSaved.value = false
         }, 3000)
     } catch (error) {
-        console.error('Error saving BaseLinker token:', error)
+        // Error handled by toast
         showToast('Błąd', 'Nie udało się zapisać tokenu', 'error')
     }
 }
@@ -1087,7 +1073,7 @@ async function loadBaselinkerToken() {
             baselinkerToken.value = data.token
         }
     } catch (error) {
-        console.error('Error loading BaseLinker token:', error)
+        // Error handled silently
     }
 }
 
@@ -1106,11 +1092,11 @@ async function loadUserEmail() {
             userEmail.value = user.email
         } else {
             // No email found - user might not be properly authenticated
-            console.warn('No user email found in store or localStorage')
+            // No user email found - not an error
             userEmail.value = ''
         }
     } catch (error) {
-        console.error('Error loading user email:', error)
+        // Error handled silently
         userEmail.value = ''
     }
 }
@@ -1119,7 +1105,7 @@ async function logout() {
     try {
         await authStore.logout()
     } catch (error) {
-        console.error('Logout error:', error)
+        // Error handled silently
     }
 
     // Reset all stores
@@ -1154,10 +1140,10 @@ async function loadCompany() {
             }
         } else {
             company.value = null
-            console.log('No company found. User should register a company first.')
+            // No company found - user should register
         }
     } catch (error) {
-        console.error('Failed to load company:', error)
+        // Error handled silently
         company.value = null
     }
 }
@@ -1168,7 +1154,7 @@ async function loadTeamMembers() {
         const result = await API.team.getMembers()
         teamMembers.value = result.members || []
     } catch (error) {
-        console.error('Failed to load team members:', error)
+        // Error handled by toast
         teamMembers.value = []
     }
 }
@@ -1189,7 +1175,7 @@ async function inviteTeamMember() {
         teamInviteRole.value = 'member'
         await loadTeamMembers()
     } catch (error) {
-        console.error('Failed to invite team member:', error)
+        // Error handled by toast
         showToast('Błąd', error.message || 'Nie udało się wysłać zaproszenia', '<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>')
     } finally {
         teamInviteLoading.value = false
@@ -1202,7 +1188,7 @@ async function changeTeamMemberRole(memberId, newRole) {
         showToast('Sukces', 'Rola została zmieniona', '<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>')
         await loadTeamMembers()
     } catch (error) {
-        console.error('Failed to change role:', error)
+        // Error handled by toast
         showToast('Błąd', error.message || 'Nie udało się zmienić roli', '<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>')
     }
 }
@@ -1215,7 +1201,7 @@ async function removeTeamMember(memberId) {
         showToast('Sukces', 'Członek zespołu został usunięty', '<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>')
         await loadTeamMembers()
     } catch (error) {
-        console.error('Failed to remove team member:', error)
+        // Error handled by toast
         showToast('Błąd', error.message || 'Nie udało się usunąć członka zespołu', '<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>')
     }
 }
@@ -1226,7 +1212,7 @@ async function loadPlans() {
         const result = await API.billing.getPlans()
         plans.value = result.plans || []
     } catch (error) {
-        console.error('Failed to load plans:', error)
+        // Error handled silently
         plans.value = []
     }
 }
@@ -1237,7 +1223,7 @@ async function loadSubscription() {
         subscription.value = result.subscription
         hasStripeCustomer.value = result.hasStripeCustomer || false
     } catch (error) {
-        console.error('Failed to load subscription:', error)
+        // Error handled silently
         subscription.value = null
         hasStripeCustomer.value = false
     }
@@ -1248,7 +1234,7 @@ async function loadCapabilities() {
         const result = await API.features.getCapabilities()
         capabilities.value = result
     } catch (error) {
-        console.error('Failed to load capabilities:', error)
+        // Error handled silently
         capabilities.value = null
     }
 }
@@ -1258,7 +1244,7 @@ async function loadTrialStatus() {
         const result = await API.billing.getTrialStatus()
         trialStatus.value = result
     } catch (error) {
-        console.error('Failed to load trial status:', error)
+        // Error handled silently
         trialStatus.value = null
     }
 }
@@ -1309,7 +1295,7 @@ async function refreshBillingDataSafe() {
     try {
         await loadSubscription()
     } catch (error) {
-        console.error('Failed to load subscription:', error)
+        // Error handled silently
         setBillingError(
             'Nie udało się pobrać danych subskrypcji',
             { type: 'retry_refresh' }
@@ -1325,7 +1311,7 @@ async function refreshBillingDataSafe() {
 
     const failed = results.filter(r => r.status === 'rejected')
     if (failed.length > 0) {
-        console.warn('Partial billing data refresh failed:', failed)
+        // Partial refresh failed - non-critical
     }
 
     return true
@@ -1348,7 +1334,7 @@ async function loadMemberRole() {
             memberRole.value = currentMember?.role || null
         }
     } catch (error) {
-        console.error('Failed to load member role:', error)
+        // Error handled silently
         memberRole.value = null
     } finally {
         memberRoleLoading.value = false
@@ -1403,7 +1389,7 @@ function handleBillingErrorAction() {
             break
 
         default:
-            console.warn('Unknown billing error action:', action.type)
+            // Unknown action type - ignore
     }
 }
 
@@ -1481,7 +1467,7 @@ async function handleStripeReturn() {
 
             // Inny status (np. w trakcie 3DS) - kontynuuj retry
         } catch (error) {
-            console.error(`Subscription check attempt ${attempt} failed:`, error)
+            // Subscription check retry - handled by loop
             // Kontynuuj retry
         }
     }
@@ -1532,7 +1518,7 @@ function requestPlanChange(planId) {
 
     // Guard: nie otwieraj modala jeśli plan niedostępny dla interwału
     if (!isPlanAvailableForInterval(plan)) {
-        console.warn('Plan not available for selected interval:', planId, selectedInterval.value)
+        // Plan not available for interval - handled by UI
         return
     }
 
@@ -1563,7 +1549,7 @@ async function confirmPlanChange() {
             window.location.href = result.url
         }
     } catch (error) {
-        console.error('Failed to create checkout:', error)
+        // Error handled by toast
         pendingPlanChange.value = null
         setBillingError(
             error.message || 'Nie udało się utworzyć sesji płatności',
@@ -1594,7 +1580,7 @@ async function startTrial() {
         // Refresh all billing data safely (subscription krytyczny, reszta best-effort)
         await refreshBillingDataSafe()
     } catch (error) {
-        console.error('Failed to start trial:', error)
+        // Error handled by toast
         showTrialStartConfirm.value = false
 
         // Handle "trial already used" gracefully
@@ -1628,7 +1614,7 @@ async function confirmCancelSubscription() {
 
         await refreshBillingDataSafe()
     } catch (error) {
-        console.error('Failed to cancel subscription:', error)
+        // Error handled by toast
         showCancelConfirm.value = false
 
         // Handle 403 gracefully - no retry action for permission errors
@@ -1660,7 +1646,7 @@ async function confirmReactivateSubscription() {
 
         await refreshBillingDataSafe()
     } catch (error) {
-        console.error('Failed to reactivate subscription:', error)
+        // Error handled by toast
         showReactivateConfirm.value = false
 
         // Handle 403 gracefully - no retry action for permission errors
@@ -1691,7 +1677,7 @@ async function openBillingPortal() {
             window.location.href = result.url
         }
     } catch (error) {
-        console.error('Failed to open billing portal:', error)
+        // Error handled by toast
         setBillingError(
             error.message || 'Nie udało się otworzyć portalu płatności',
             { type: 'open_portal' }
@@ -1868,7 +1854,7 @@ onMounted(async () => {
         try {
             hiddenTemplates.value = new Set(JSON.parse(storedHiddenTemplates))
         } catch (e) {
-            console.error('Failed to parse hiddenTemplates from localStorage:', e)
+            // Invalid JSON in localStorage - ignore
         }
     }
 

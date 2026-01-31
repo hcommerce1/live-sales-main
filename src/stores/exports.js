@@ -51,7 +51,6 @@ export const useExportsStore = defineStore('exports', () => {
       list.value = data || []
     } catch (err) {
       error.value = err.message
-      console.error('Failed to fetch exports:', err)
     } finally {
       isLoading.value = false
     }

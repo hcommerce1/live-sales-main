@@ -103,7 +103,6 @@ export const useIntegrationsStore = defineStore('integrations', () => {
       }
     } catch (err) {
       error.value = err.message
-      console.error('Failed to fetch integrations status:', err)
     }
   }
 

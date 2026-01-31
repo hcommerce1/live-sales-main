@@ -115,7 +115,7 @@ export const useCompanyStore = defineStore('company', () => {
       }
     } catch (err) {
       error.value = err.message
-      console.error('Failed to load company:', err)
+      // Error stored in error.value
     } finally {
       isLoading.value = false
     }
@@ -134,7 +134,7 @@ export const useCompanyStore = defineStore('company', () => {
         plan.value = response.plan
       }
     } catch (err) {
-      console.error('Failed to fetch subscription:', err)
+      // Subscription fetch failed silently
     }
   }
 
@@ -155,7 +155,7 @@ export const useCompanyStore = defineStore('company', () => {
         }
       }
     } catch (err) {
-      console.error('Failed to fetch trial status:', err)
+      // Trial status fetch failed silently
     }
   }
 
@@ -185,7 +185,7 @@ export const useCompanyStore = defineStore('company', () => {
         teamMembers.value = response.data.members || []
       }
     } catch (err) {
-      console.error('Failed to fetch team:', err)
+      // Team fetch failed silently
     }
   }
 
@@ -201,7 +201,7 @@ export const useCompanyStore = defineStore('company', () => {
         pendingInvitations.value = response.data.invitations || []
       }
     } catch (err) {
-      console.error('Failed to fetch pending invitations:', err)
+      // Invitations fetch failed silently
     }
   }
 

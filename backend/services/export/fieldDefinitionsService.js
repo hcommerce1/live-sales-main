@@ -25,7 +25,7 @@ async function getFieldDefinitions(token = null, options = {}) {
     // Mapuj datasety do formatu dla UI
     const datasets = allDatasets.map(dataset => ({
       id: dataset.id,
-      label: dataset.label,
+      label: dataset.name,
       description: dataset.description,
       icon: dataset.icon,
       requiresInventory: dataset.requiresInventory || false,
@@ -111,7 +111,7 @@ async function getDatasetFieldDefinitions(datasetId, token = null, options = {})
 
     return {
       id: dataset.id,
-      label: dataset.label,
+      label: dataset.name,
       description: dataset.description,
       icon: dataset.icon,
       requiresInventory: dataset.requiresInventory || false,

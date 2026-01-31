@@ -196,14 +196,31 @@ app.use('/api/team', noCacheHeaders, authMiddleware.authenticate(), teamRoutes);
 app.use('/api/company', noCacheHeaders, companyRoutes);                                       // Mixed: lookup/register public, rest protected
 app.use('/api/integrations', noCacheHeaders, authMiddleware.authenticate(), integrationsRoutes); // Protected - integration management
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
+// Health check endpoint with database status
+app.get('/health', async (req, res) => {
+  const health = {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+    environment: process.env.NODE_ENV || 'development',
+    database: 'unknown'
+  };
+
+  try {
+    // Test database connection
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$disconnect();
+    health.database = 'connected';
+  } catch (error) {
+    health.database = 'disconnected';
+    health.status = 'degraded';
+    logger.error('Health check: Database connection failed', { error: error.message });
+  }
+
+  const statusCode = health.status === 'ok' ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // Serve index.html for all other routes (SPA support)
@@ -224,10 +241,31 @@ app.get('*', (req, res, next) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   logger.error('Unhandled error:', err);
-  res.status(err.status || 500).json({
+
+  // In production, don't expose error details to clients
+  const isProduction = process.env.NODE_ENV === 'production';
+  const status = err.status || 500;
+
+  // Only show generic messages in production to prevent information disclosure
+  let message;
+  if (isProduction) {
+    if (status === 404) {
+      message = 'Not found';
+    } else if (status >= 400 && status < 500) {
+      // Client errors - can show message
+      message = err.message || 'Bad request';
+    } else {
+      // Server errors - hide details
+      message = 'Internal server error';
+    }
+  } else {
+    message = err.message || 'Internal server error';
+  }
+
+  res.status(status).json({
     error: {
-      message: err.message || 'Internal server error',
-      status: err.status || 500
+      message,
+      status
     }
   });
 });
@@ -295,22 +333,34 @@ app.listen(PORT, async () => {
 
 module.exports = app;
 
-// Graceful shutdown
+// Graceful shutdown with timeout
+const SHUTDOWN_TIMEOUT_MS = 30000; // 30 seconds
+
 async function gracefulShutdown(signal) {
   logger.info(`${signal} received, shutting down gracefully`);
 
-  // Stop scheduler
-  scheduler.stop();
+  // Force exit if cleanup takes too long
+  const forceExitTimer = setTimeout(() => {
+    logger.error('Graceful shutdown timeout - forcing exit');
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
 
-  // Close webhook queue and worker
   try {
+    // Stop scheduler
+    scheduler.stop();
+
+    // Close webhook queue and worker
     await webhookWorker.closeWorker();
     await webhookQueue.closeQueue();
-  } catch (error) {
-    logger.error('Error closing webhook services', { error: error.message });
-  }
 
-  process.exit(0);
+    logger.info('Graceful shutdown completed');
+    clearTimeout(forceExitTimer);
+    process.exit(0);
+  } catch (error) {
+    logger.error('Error during graceful shutdown', { error: error.message });
+    clearTimeout(forceExitTimer);
+    process.exit(1);
+  }
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

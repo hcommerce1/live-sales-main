@@ -616,10 +616,6 @@ const availableDatasets = computed(() => {
     requiredPlan: ds.requiredPlan || 'basic',
     description: datasetDescriptions[key] || ''
   }))
-  console.log('[ExportWizard] availableDatasets computed:', {
-    count: result.length,
-    datasets: result.map(d => d.key)
-  })
   return result
 })
 
@@ -1039,16 +1035,11 @@ async function saveExport() {
 async function loadFieldDefinitions() {
   try {
     const data = await API.exports.getFieldDefinitions()
-    console.log('[ExportWizard] Field definitions loaded:', {
-      datasetsCount: data?.datasets ? Object.keys(data.datasets).length : 0,
-      datasetKeys: data?.datasets ? Object.keys(data.datasets) : [],
-      fullData: data
-    })
     if (data) {
       fieldDefinitions.value = data
     }
-  } catch (error) {
-    console.error('Failed to load field definitions:', error)
+  } catch {
+    // Error handled silently - will show empty state
   }
 }
 
@@ -1056,8 +1047,8 @@ async function loadOrderStatuses() {
   try {
     const data = await API.baselinker.getOrderStatuses()
     orderStatuses.value = data || []
-  } catch (error) {
-    console.error('Failed to load order statuses:', error)
+  } catch {
+    // Error handled silently
   }
 }
 
@@ -1065,8 +1056,8 @@ async function loadOrderSources() {
   try {
     const data = await API.baselinker.getOrderSources()
     orderSources.value = data || {}
-  } catch (error) {
-    console.error('Failed to load order sources:', error)
+  } catch {
+    // Error handled silently
   }
 }
 
@@ -1074,8 +1065,8 @@ async function loadInventories() {
   try {
     const data = await API.baselinker.getInventories()
     inventories.value = data || []
-  } catch (error) {
-    console.error('Failed to load inventories:', error)
+  } catch {
+    // Error handled silently
   }
 }
 
@@ -1083,8 +1074,8 @@ async function loadExternalStorages() {
   try {
     const data = await API.baselinker.getExternalStorages()
     externalStorages.value = data || []
-  } catch (error) {
-    console.error('Failed to load external storages:', error)
+  } catch {
+    // Error handled silently
   }
 }
 
@@ -1092,8 +1083,8 @@ async function loadConnectIntegrations() {
   try {
     const data = await API.baselinker.getConnectIntegrations()
     connectIntegrations.value = data || {}
-  } catch (error) {
-    console.error('Failed to load connect integrations:', error)
+  } catch {
+    // Error handled silently
   }
 }
 
@@ -1159,8 +1150,8 @@ async function loadExistingExport() {
         }
       }
     }
-  } catch (error) {
-    console.error('Failed to load export:', error)
+  } catch {
+    // Error handled silently
   }
 }
 

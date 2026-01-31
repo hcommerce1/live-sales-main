@@ -54,7 +54,6 @@ export const API = {
   async refreshAccessToken() {
     // If refresh is already in progress, wait for it
     if (refreshPromise) {
-      console.log('[API] Waiting for existing refresh...');
       return refreshPromise;
     }
 
@@ -75,7 +74,6 @@ export const API = {
    */
   async _doRefresh() {
     try {
-      console.log('[API] Refreshing token...');
       const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,10 +86,8 @@ export const API = {
 
       const data = await response.json();
       this.setAccessToken(data.accessToken);
-      console.log('[API] Token refreshed successfully');
       return data.accessToken;
     } catch (error) {
-      console.error('[API] Token refresh failed:', error.message);
       this.clearAuth();
       throw error;
     }
@@ -104,7 +100,6 @@ export const API = {
    * @returns {Promise<object>} - Response data
    */
   async request(endpoint, options = {}) {
-    console.log('[API.request]', options.method || 'GET', endpoint);
     const url = `${API_BASE_URL}${endpoint}`;
 
     // Add authorization header if token exists
@@ -161,7 +156,6 @@ export const API = {
 
       return data;
     } catch (error) {
-      console.error('API Request failed:', error);
       throw error;
     }
   },
@@ -226,8 +220,8 @@ export const API = {
         await API.request('/api/auth/logout', {
           method: 'POST',
         });
-      } catch (error) {
-        console.error('Logout error:', error);
+      } catch {
+        // Silent fail - still clear local auth
       } finally {
         API.clearAuth();
       }
@@ -337,12 +331,10 @@ export const API = {
     // Run export immediately with optional runId and trigger
     // Returns full response with cached/inProgress/stale flags
     async run(id, options = {}) {
-      console.log('[API.exports.run] Starting request for export ID:', id, 'options:', options);
       const response = await API.request(`/api/exports/${id}/run`, {
         method: 'POST',
         body: JSON.stringify(options),
       });
-      console.log('[API.exports.run] Response received:', response);
 
       // Return full response with deduplication info
       // { success, cached, inProgress, stale, message, result }

@@ -242,7 +242,7 @@ async function handleLogin() {
     // and App.vue will show main content
   } catch (err) {
     // Error is already stored in authStore.error
-    console.error('Login failed:', err)
+    // Error handled by authStore
   }
 }
 
@@ -252,7 +252,7 @@ async function handle2FAVerify() {
     // If successful, authState will change to AUTHENTICATED
   } catch (err) {
     // Error is already stored in authStore.error
-    console.error('2FA verification failed:', err)
+    // Error handled by authStore
     twoFactorCode.value = '' // Clear code on error
   }
 }
