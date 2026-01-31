@@ -457,6 +457,100 @@ router.get('/inventories', async (req, res) => {
 });
 
 /**
+ * GET /api/baselinker/price-groups
+ * Get inventory price groups (for dynamic field generation)
+ */
+router.get('/price-groups', async (req, res) => {
+  try {
+    const client = await getBaseLinkerClient(req, res);
+    if (!client) return;
+
+    const priceGroups = await client.getInventoryPriceGroups();
+
+    res.json({
+      success: true,
+      count: priceGroups.length,
+      data: priceGroups,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch price groups', {
+      error: error.message,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/baselinker/warehouses
+ * Get inventory warehouses (for dynamic field generation)
+ */
+router.get('/warehouses', async (req, res) => {
+  try {
+    const client = await getBaseLinkerClient(req, res);
+    if (!client) return;
+
+    const warehouses = await client.getInventoryWarehouses();
+
+    res.json({
+      success: true,
+      count: warehouses.length,
+      data: warehouses,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch warehouses', {
+      error: error.message,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/baselinker/products/:inventoryId/prices
+ * Get product prices for all price groups
+ */
+router.get('/products/:inventoryId/prices', async (req, res) => {
+  try {
+    const client = await getBaseLinkerClient(req, res);
+    if (!client) return;
+
+    const inventoryId = parseInt(req.params.inventoryId, 10);
+    const page = parseInt(req.query.page, 10) || 1;
+
+    if (!inventoryId || isNaN(inventoryId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid inventory ID',
+      });
+    }
+
+    const prices = await client.getInventoryProductsPrices(inventoryId, page);
+
+    res.json({
+      success: true,
+      page,
+      data: prices,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch product prices', {
+      error: error.message,
+      companyId: req.company?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/baselinker/external-storages
  * Get list of external storages (shops, wholesalers)
  */

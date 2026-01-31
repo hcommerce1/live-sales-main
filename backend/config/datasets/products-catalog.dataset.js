@@ -133,15 +133,12 @@ module.exports = {
     // ========================================
     {
       id: 'prices_groups',
-      label: 'Ceny wg grup',
-      description: 'Ceny dla poszczególnych grup cenowych - wymaga enrichmentu',
-      fields: [
-        { key: 'price_group_1', label: 'Cena - grupa 1', type: 'number', enrichment: 'prices' },
-        { key: 'price_group_2', label: 'Cena - grupa 2', type: 'number', enrichment: 'prices' },
-        { key: 'price_group_3', label: 'Cena - grupa 3', type: 'number', enrichment: 'prices' }
-      ],
+      label: 'Ceny wg grup cenowych',
+      description: 'Dynamiczne kolumny cen - nazwy pobierane z BaseLinker',
+      fields: [],
       dynamic: true,
-      source: 'priceGroups'
+      source: 'priceGroups',
+      enrichment: 'prices'
     },
 
     // ========================================
@@ -162,14 +159,11 @@ module.exports = {
     {
       id: 'stock_warehouses',
       label: 'Stany wg magazynów',
-      description: 'Stany dla poszczególnych magazynów - wymaga enrichmentu',
-      fields: [
-        { key: 'stock_warehouse_1', label: 'Stan - magazyn 1', type: 'number', enrichment: 'stock' },
-        { key: 'stock_warehouse_2', label: 'Stan - magazyn 2', type: 'number', enrichment: 'stock' },
-        { key: 'stock_warehouse_3', label: 'Stan - magazyn 3', type: 'number', enrichment: 'stock' }
-      ],
+      description: 'Dynamiczne kolumny stanów - nazwy pobierane z BaseLinker',
+      fields: [],
       dynamic: true,
-      source: 'warehouses'
+      source: 'warehouses',
+      enrichment: 'stock'
     },
 
     // ========================================

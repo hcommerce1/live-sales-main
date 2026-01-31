@@ -189,19 +189,13 @@ class ProductsCatalogFetcher extends BaseFetcher {
       price_default: priceDefault,
       prices_json: Object.keys(prices).length > 0 ? JSON.stringify(prices) : null,
 
-      // Placeholder dla cen wg grup (enrichment)
-      price_group_1: null,
-      price_group_2: null,
-      price_group_3: null,
+      // Ceny wg grup - dynamicznie dodawane przez PricesEnricher
 
       // Stany podstawowe (z getInventoryProductsList)
       stock_total: stockTotal,
       stock_json: Object.keys(stock).length > 0 ? JSON.stringify(stock) : null,
 
-      // Placeholder dla stanów wg magazynów (enrichment)
-      stock_warehouse_1: null,
-      stock_warehouse_2: null,
-      stock_warehouse_3: null,
+      // Stany wg magazynów - dynamicznie dodawane przez StockEnricher
 
       // Lokalizacje (enrichment)
       locations_json: null,

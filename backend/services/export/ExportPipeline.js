@@ -251,6 +251,8 @@ class ExportPipeline {
           enrichedData,
           this.context.token,
           {
+            inventoryId: this.config.inventoryId,
+            storageId: this.config.storageId,
             statusMap: this.context.statusMap,
             courierMap: this.context.courierMap,
             extraFieldsMap: this.context.extraFieldsMap,

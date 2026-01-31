@@ -193,6 +193,47 @@ async function fetchDynamicFields(source, token, options = {}) {
         return [];
       }
 
+      case 'priceGroups': {
+        const priceGroups = await baselinkerService.getInventoryPriceGroups(token);
+        return priceGroups.map(group => ({
+          key: `price_group_${group.price_group_id}`,
+          label: `Cena: ${group.name || `Grupa ${group.price_group_id}`}`,
+          type: 'number',
+          dynamic: true,
+          source: 'priceGroups',
+          sourceId: group.price_group_id,
+          enrichment: 'prices',
+          metadata: {
+            priceGroupId: group.price_group_id,
+            currency: group.currency,
+            isDefault: group.is_default
+          }
+        }));
+      }
+
+      case 'warehouses': {
+        const warehouses = await baselinkerService.getInventoryWarehouses(token);
+        return warehouses.map(warehouse => ({
+          key: `stock_warehouse_${warehouse.warehouse_id}`,
+          label: `Stan: ${warehouse.name || `Magazyn ${warehouse.warehouse_id}`}`,
+          type: 'number',
+          dynamic: true,
+          source: 'warehouses',
+          sourceId: warehouse.warehouse_id,
+          enrichment: 'stock',
+          metadata: {
+            warehouseId: warehouse.warehouse_id,
+            warehouseType: warehouse.warehouse_type,
+            isDefault: warehouse.is_default
+          }
+        }));
+      }
+
+      case 'productFeatures': {
+        // TODO: Implement when needed - requires inventoryId
+        return [];
+      }
+
       default:
         logger.warn(`Unknown dynamic field source: ${source}`);
         return [];
@@ -216,7 +257,9 @@ async function fetchAllDynamicFields(token) {
   const result = {
     orderExtraFields: [],
     inventoryExtraFields: [],
-    returnExtraFields: []
+    returnExtraFields: [],
+    priceGroups: [],
+    warehouses: []
   };
 
   try {
@@ -225,7 +268,58 @@ async function fetchAllDynamicFields(token) {
     logger.warn('Failed to fetch order extra fields', { error: err.message });
   }
 
+  try {
+    result.priceGroups = await fetchDynamicFields('priceGroups', token);
+  } catch (err) {
+    logger.warn('Failed to fetch price groups', { error: err.message });
+  }
+
+  try {
+    result.warehouses = await fetchDynamicFields('warehouses', token);
+  } catch (err) {
+    logger.warn('Failed to fetch warehouses', { error: err.message });
+  }
+
   return result;
+}
+
+/**
+ * Pobiera mapy grup cenowych i magazynow
+ *
+ * @param {string} token - Token API BaseLinker
+ * @returns {Promise<object>} - { priceGroupsMap, warehousesMap }
+ */
+async function getPriceAndStockMaps(token) {
+  const priceGroupsMap = {};
+  const warehousesMap = {};
+
+  try {
+    const priceGroups = await baselinkerService.getInventoryPriceGroups(token);
+    for (const group of priceGroups) {
+      priceGroupsMap[group.price_group_id] = {
+        name: group.name,
+        currency: group.currency,
+        isDefault: group.is_default
+      };
+    }
+  } catch (err) {
+    logger.warn('Failed to get price groups map', { error: err.message });
+  }
+
+  try {
+    const warehouses = await baselinkerService.getInventoryWarehouses(token);
+    for (const warehouse of warehouses) {
+      warehousesMap[warehouse.warehouse_id] = {
+        name: warehouse.name,
+        type: warehouse.warehouse_type,
+        isDefault: warehouse.is_default
+      };
+    }
+  } catch (err) {
+    logger.warn('Failed to get warehouses map', { error: err.message });
+  }
+
+  return { priceGroupsMap, warehousesMap };
 }
 
 /**
@@ -305,5 +399,6 @@ module.exports = {
   fetchDynamicFields,
   fetchAllDynamicFields,
   getOrderStatusMap,
-  getOrderSourcesMap
+  getOrderSourcesMap,
+  getPriceAndStockMaps
 };

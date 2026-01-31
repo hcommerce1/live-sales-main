@@ -116,34 +116,26 @@ class StockEnricher extends BaseEnricher {
   }
 
   /**
-   * Spłaszcza dane stanów do pól stock_warehouse_*
+   * Spłaszcza dane stanów do pól stock_warehouse_{warehouse_id}
+   * Używa dynamicznych kluczy opartych na ID magazynu
    *
-   * @param {object} stockData - Dane stanów (warehouse_id -> quantity)
-   * @param {Array} warehouseIds - Lista preferowanych magazynów
-   * @returns {object} - Spłaszczone pola
+   * @param {object} stockData - Dane stanów z API (zawiera stock i opcjonalnie reservations, variants)
+   * @returns {object} - Spłaszczone pola z dynamicznymi kluczami
    */
-  flattenStock(stockData, warehouseIds = []) {
-    const result = {
-      stock_warehouse_1: null,
-      stock_warehouse_2: null,
-      stock_warehouse_3: null
-    };
+  flattenStock(stockData) {
+    const result = {};
 
     if (!stockData || typeof stockData !== 'object') {
       return result;
     }
 
-    // Jeśli podano konkretne magazyny, użyj ich
-    if (warehouseIds && warehouseIds.length > 0) {
-      for (let i = 0; i < Math.min(warehouseIds.length, 3); i++) {
-        const warehouseId = warehouseIds[i];
-        result[`stock_warehouse_${i + 1}`] = this.parseNumber(stockData[warehouseId]);
-      }
-    } else {
-      // Użyj pierwszych 3 magazynów z odpowiedzi
-      const entries = Object.entries(stockData);
-      for (let i = 0; i < Math.min(entries.length, 3); i++) {
-        result[`stock_warehouse_${i + 1}`] = this.parseNumber(entries[i][1]);
+    // Stany produktu głównego
+    const stock = stockData.stock || stockData;
+
+    if (typeof stock === 'object') {
+      for (const [warehouseId, quantity] of Object.entries(stock)) {
+        // Dynamiczny klucz oparty na ID magazynu (np. stock_warehouse_bl_40902)
+        result[`stock_warehouse_${warehouseId}`] = this.parseNumber(quantity);
       }
     }
 

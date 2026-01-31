@@ -268,6 +268,38 @@ class BaseLinkerClient {
   }
 
   /**
+   * Get inventory price groups
+   * @returns {Promise<Array>} - List of price groups [{price_group_id, name, currency, is_default}]
+   */
+  async getInventoryPriceGroups() {
+    const response = await this.makeRequest('getInventoryPriceGroups', {});
+    return response.price_groups || [];
+  }
+
+  /**
+   * Get inventory warehouses
+   * @returns {Promise<Array>} - List of warehouses [{warehouse_id, name, warehouse_type, is_default}]
+   */
+  async getInventoryWarehouses() {
+    const response = await this.makeRequest('getInventoryWarehouses', {});
+    return response.warehouses || [];
+  }
+
+  /**
+   * Get inventory products prices
+   * @param {number} inventoryId - Inventory ID
+   * @param {number} page - Page number (default 1)
+   * @returns {Promise<object>} - Products prices keyed by product_id
+   */
+  async getInventoryProductsPrices(inventoryId, page = 1) {
+    const response = await this.makeRequest('getInventoryProductsPrices', {
+      inventory_id: inventoryId,
+      page: page,
+    });
+    return response.products || {};
+  }
+
+  /**
    * Get order sources (shop, personal, marketplaces)
    */
   async getOrderSources() {

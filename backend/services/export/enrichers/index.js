@@ -11,6 +11,7 @@ const DocumentsEnricher = require('./documents.enricher');
 const ProductDetailsEnricher = require('./product-details.enricher');
 const StockEnricher = require('./stock.enricher');
 const PaymentsEnricher = require('./payments.enricher');
+const PricesEnricher = require('./prices.enricher');
 
 // Instancje enricherów - lazy initialization
 const enrichers = {
@@ -18,7 +19,8 @@ const enrichers = {
   documents: new DocumentsEnricher(),
   'product-details': new ProductDetailsEnricher(),
   stock: new StockEnricher(),
-  payments: new PaymentsEnricher()
+  payments: new PaymentsEnricher(),
+  prices: new PricesEnricher()
 };
 
 function get(enrichmentName) {

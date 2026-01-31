@@ -161,6 +161,46 @@ class BaselinkerService {
   }
 
   /**
+   * Get inventory price groups
+   * @param {string} userToken - User's BaseLinker API token
+   * @returns {Promise<Array>} - List of price groups
+   */
+  async getInventoryPriceGroups(userToken) {
+    const response = await this.makeRequest(userToken, 'getInventoryPriceGroups', {});
+    return response.price_groups || [];
+  }
+
+  /**
+   * Get inventory warehouses
+   * @param {string} userToken - User's BaseLinker API token
+   * @returns {Promise<Array>} - List of warehouses
+   */
+  async getInventoryWarehouses(userToken) {
+    const response = await this.makeRequest(userToken, 'getInventoryWarehouses', {});
+    return response.warehouses || [];
+  }
+
+  /**
+   * Get inventory products prices
+   * @param {string} userToken - User's BaseLinker API token
+   * @param {number} inventoryId - Inventory ID
+   * @param {number} page - Page number
+   * @returns {Promise<object>} - Products prices data
+   */
+  async getInventoryProductsPrices(userToken, inventoryId, page = 1) {
+    if (!inventoryId) {
+      throw new Error('inventoryId is required');
+    }
+    const parameters = {
+      inventory_id: inventoryId,
+      page: page
+    };
+
+    const response = await this.makeRequest(userToken, 'getInventoryProductsPrices', parameters);
+    return response.products || {};
+  }
+
+  /**
    * Get order details
    * @param {string} userToken - User's BaseLinker API token
    * @param {number} orderId - Order ID
