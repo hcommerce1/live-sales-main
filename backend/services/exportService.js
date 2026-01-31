@@ -18,7 +18,27 @@ const googleSheetsService = require('./googleSheetsService');
 const currencyService = require('./currencyService');
 const logger = require('../utils/logger');
 const { PrismaClient } = require('@prisma/client');
-const exportFields = require('../config/export-fields');
+// Export fields config removed - datasets will be defined later
+const exportFields = { datasets: {} };
+
+// New export pipeline system
+const ExportPipeline = require('./export/ExportPipeline');
+const { getDataset } = require('../config/datasets');
+
+// Datasets handled by new pipeline (vs. legacy fetch methods)
+const PIPELINE_DATASETS = [
+  'orders',
+  'order_items',
+  'returns',
+  'products_catalog',
+  'accounting_docs',
+  'warehouse_docs',
+  'products_external',
+  'purchase_orders',
+  'shipments',
+  'base_connect',
+  'basic_data'
+];
 
 const prisma = new PrismaClient();
 
@@ -719,48 +739,53 @@ class ExportService {
         createdBy: effectiveUserId
       };
 
-      // Upsert to database
-      const saved = await prisma.export.upsert({
-        where: { id: exportId },
-        create: {
-          id: exportId,
-          userId: effectiveUserId,
-          ...exportData
-        },
-        update: {
-          ...exportData,
-          updatedAt: new Date()
-        },
-        include: { sheets: true }
-      });
+      // Use transaction to ensure atomic save (prevents race conditions)
+      const saved = await prisma.$transaction(async (tx) => {
+        // Upsert export
+        const exportRecord = await tx.export.upsert({
+          where: { id: exportId },
+          create: {
+            id: exportId,
+            userId: effectiveUserId,
+            ...exportData
+          },
+          update: {
+            ...exportData,
+            updatedAt: new Date()
+          },
+          include: { sheets: true }
+        });
 
-      // Handle multiple sheets if provided
-      if (config.sheets_config || config.sheets) {
-        const sheetsData = config.sheets_config || config.sheets;
-        if (Array.isArray(sheetsData) && sheetsData.length > 0) {
-          // Delete existing sheets and recreate
-          await prisma.exportSheet.deleteMany({
-            where: { exportId }
-          });
+        // Handle multiple sheets if provided
+        if (config.sheets_config || config.sheets) {
+          const sheetsData = config.sheets_config || config.sheets;
+          if (Array.isArray(sheetsData) && sheetsData.length > 0) {
+            // Delete existing sheets and recreate (within transaction)
+            await tx.exportSheet.deleteMany({
+              where: { exportId }
+            });
 
-          await prisma.exportSheet.createMany({
-            data: sheetsData.map((s, idx) => {
-              const url = s.sheet_url || s.sheetUrl;
-              const identifiers = this.extractSheetIdentifiers(url);
-              return {
-                exportId,
-                companyId, // For unique constraint
-                sheetUrl: url,
-                spreadsheetId: identifiers.spreadsheetId || '',
-                gid: identifiers.gid || '0',
-                sheetName: s.sheet_name || s.sheetName || null,
-                writeMode: s.write_mode || s.writeMode || 'append',
-                sortOrder: idx
-              };
-            })
-          });
+            await tx.exportSheet.createMany({
+              data: sheetsData.map((s, idx) => {
+                const url = s.sheet_url || s.sheetUrl;
+                const identifiers = this.extractSheetIdentifiers(url);
+                return {
+                  exportId,
+                  companyId, // For unique constraint
+                  sheetUrl: url,
+                  spreadsheetId: identifiers.spreadsheetId || '',
+                  gid: identifiers.gid || '0',
+                  sheetName: s.sheet_name || s.sheetName || null,
+                  writeMode: s.write_mode || s.writeMode || 'append',
+                  sortOrder: idx
+                };
+              })
+            });
+          }
         }
-      }
+
+        return exportRecord;
+      });
 
       // Convert to config format and update memory cache
       const savedConfig = this.dbExportToConfig(saved);
@@ -982,63 +1007,116 @@ class ExportService {
       const client = await getClient(companyId);
       logger.info('BaseLinker client obtained successfully', { companyId });
 
-      // Split filters into API-side and application-side
-      const { apiFilters, appFilters } = splitFilters(config.filters, config.dataset);
+      // Check if this dataset should use the new pipeline
+      const usePipeline = PIPELINE_DATASETS.includes(config.dataset) && getDataset(config.dataset);
 
-      // Fetch data from BaseLinker
-      const fetchStart = Date.now();
-      let rawData = [];
+      let headers, data;
 
-      switch (config.dataset) {
-        case 'orders':
-          rawData = await this.fetchOrders(client, apiFilters, config.selected_fields || [], config.settings || {});
-          break;
-        case 'products':
-          rawData = await this.fetchProducts(client, apiFilters);
-          break;
-        case 'invoices':
-          rawData = await this.fetchInvoices(client, apiFilters);
-          break;
-        case 'order_products':
-          rawData = await this.fetchOrderProducts(client, apiFilters, config.selected_fields || [], config.settings || {});
-          break;
-        case 'receipts':
-          rawData = await this.fetchReceipts(client, apiFilters, config.selected_fields || [], config.settings || {});
-          break;
-        default:
-          throw new Error(`Unknown dataset type: ${config.dataset}`);
+      if (usePipeline) {
+        // =============================================
+        // NEW PIPELINE: FETCH → ENRICH → TRANSFORM
+        // =============================================
+        logger.info('Using new ExportPipeline for dataset', { dataset: config.dataset });
+
+        const pipelineConfig = {
+          datasetId: config.dataset,
+          selectedFields: config.selected_fields || [],
+          filters: config.filters || {},
+          customHeaders: config.settings?.customHeaders || {},
+          customFields: config.settings?.customFields || [],
+          currencyConversion: config.settings?.currencyConversion || null,
+          inventoryId: config.settings?.inventoryId || null,
+          storageId: config.settings?.storageId || null,
+          integrationId: config.settings?.integrationId || null,
+          dataType: config.settings?.dataType || null,
+          maxRecords: config.settings?.maxRecords || 10000
+        };
+
+        const pipelineContext = {
+          token: client.token,
+          statusMap: {},
+          courierMap: {},
+          extraFieldsMap: {}
+        };
+
+        const pipeline = new ExportPipeline(pipelineConfig, pipelineContext);
+        const pipelineResult = await pipeline.execute();
+
+        headers = pipelineResult.headers;
+        data = pipelineResult.rows;
+
+        metadata.phases.pipeline = pipelineResult.stats;
+        metadata.recordsBeforeFilter = pipelineResult.stats.primaryRecords;
+        metadata.recordsAfterFilter = pipelineResult.stats.transformedRecords;
+
+        logger.info('Pipeline export completed', {
+          exportId,
+          dataset: config.dataset,
+          records: data.length,
+          stats: pipelineResult.stats
+        });
+
+      } else {
+        // =============================================
+        // LEGACY: Old fetch methods for backward compatibility
+        // =============================================
+        logger.info('Using legacy fetch methods for dataset', { dataset: config.dataset });
+
+        // Split filters into API-side and application-side
+        const { apiFilters, appFilters } = splitFilters(config.filters, config.dataset);
+
+        // Fetch data from BaseLinker
+        const fetchStart = Date.now();
+        let rawData = [];
+
+        switch (config.dataset) {
+          case 'products':
+            rawData = await this.fetchProducts(client, apiFilters);
+            break;
+          case 'invoices':
+            rawData = await this.fetchInvoices(client, apiFilters);
+            break;
+          case 'receipts':
+            rawData = await this.fetchReceipts(client, apiFilters, config.selected_fields || [], config.settings || {});
+            break;
+          default:
+            throw new Error(`Unknown dataset type: ${config.dataset}. Available: ${PIPELINE_DATASETS.join(', ')}`);
+        }
+
+        metadata.phases.fetchFromBaseLinker = Date.now() - fetchStart;
+        metadata.recordsBeforeFilter = rawData.length;
+
+        logger.info('Fetched records from BaseLinker (legacy)', {
+          exportId,
+          count: rawData.length,
+          dataset: config.dataset
+        });
+
+        // Apply application-side filters
+        const filterStart = Date.now();
+        const filteredData = applyFilters(rawData, appFilters);
+        metadata.phases.applyFilters = Date.now() - filterStart;
+        metadata.recordsAfterFilter = filteredData.length;
+
+        logger.info('Applied filters', {
+          exportId,
+          beforeFilter: rawData.length,
+          afterFilter: filteredData.length
+        });
+
+        // Transform data according to selected fields
+        const transformStart = Date.now();
+        const result = this.transformData(
+          filteredData,
+          config.selected_fields || [],
+          config.dataset,
+          config.settings || {}
+        );
+        metadata.phases.transformData = Date.now() - transformStart;
+
+        headers = result.headers;
+        data = result.data;
       }
-
-      metadata.phases.fetchFromBaseLinker = Date.now() - fetchStart;
-      metadata.recordsBeforeFilter = rawData.length;
-
-      logger.info('Fetched records from BaseLinker', {
-        exportId,
-        count: rawData.length,
-        dataset: config.dataset
-      });
-
-      // Apply application-side filters
-      const filterStart = Date.now();
-      const filteredData = applyFilters(rawData, appFilters);
-      metadata.phases.applyFilters = Date.now() - filterStart;
-      metadata.recordsAfterFilter = filteredData.length;
-
-      logger.info('Applied filters', {
-        exportId,
-        beforeFilter: rawData.length,
-        afterFilter: filteredData.length
-      });
-
-      // Transform data according to selected fields
-      const transformStart = Date.now();
-      const { headers, data } = this.transformData(
-        filteredData,
-        config.selected_fields || [],
-        config.dataset,
-        config.settings || {}
-      );
-      metadata.phases.transformData = Date.now() - transformStart;
 
       if (data.length === 0) {
         logger.warn('No data to export', { exportId });

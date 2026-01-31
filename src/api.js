@@ -2,6 +2,9 @@
 
 const API_BASE_URL = window.location.origin;
 
+// Refresh token lock to prevent race conditions
+let refreshPromise = null;
+
 export const API = {
   /**
    * Get access token from localStorage
@@ -46,9 +49,33 @@ export const API = {
 
   /**
    * Refresh access token (uses httpOnly cookie)
+   * Uses lock to prevent multiple simultaneous refresh attempts (race condition fix)
    */
   async refreshAccessToken() {
+    // If refresh is already in progress, wait for it
+    if (refreshPromise) {
+      console.log('[API] Waiting for existing refresh...');
+      return refreshPromise;
+    }
+
+    // Start new refresh
+    refreshPromise = this._doRefresh();
+
     try {
+      const result = await refreshPromise;
+      return result;
+    } finally {
+      // Clear lock after completion (success or failure)
+      refreshPromise = null;
+    }
+  },
+
+  /**
+   * Internal refresh implementation
+   */
+  async _doRefresh() {
+    try {
+      console.log('[API] Refreshing token...');
       const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -61,10 +88,11 @@ export const API = {
 
       const data = await response.json();
       this.setAccessToken(data.accessToken);
+      console.log('[API] Token refreshed successfully');
       return data.accessToken;
     } catch (error) {
+      console.error('[API] Token refresh failed:', error.message);
       this.clearAuth();
-      // Don't redirect here - let the caller handle it
       throw error;
     }
   },
@@ -439,6 +467,18 @@ export const API = {
     async getInvoiceFile(invoiceId) {
       const response = await API.request(`/api/baselinker/invoice/${invoiceId}/file`);
       return response.data;
+    },
+
+    // Get external storages (shops, wholesalers)
+    async getExternalStorages() {
+      const response = await API.request('/api/baselinker/external-storages');
+      return response.data || [];
+    },
+
+    // Get Base Connect integrations (B2B)
+    async getConnectIntegrations() {
+      const response = await API.request('/api/baselinker/connect-integrations');
+      return response.data || {};
     },
   },
 

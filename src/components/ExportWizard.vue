@@ -98,7 +98,7 @@
             Wybierz katalog produktów
           </label>
           <select
-            v-model="config.filters.inventory_id"
+            v-model="config.settings.inventoryId"
             class="w-full md:w-80 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none bg-white"
           >
             <option :value="null" disabled>-- Wybierz katalog --</option>
@@ -109,6 +109,41 @@
           <p v-if="inventories.length === 0" class="text-sm text-amber-600 mt-2">
             Brak katalogów. Upewnij się, że masz skonfigurowaną integrację z BaseLinker.
           </p>
+        </div>
+
+        <!-- External storage selection for products_external dataset -->
+        <div v-if="requiresStorage" class="flex-shrink-0 mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+          <label class="block text-sm font-medium text-purple-800 mb-2">
+            Wybierz magazyn zewnętrzny
+          </label>
+          <select
+            v-model="config.settings.storageId"
+            class="w-full md:w-80 px-3 py-2 border border-purple-300 rounded-lg text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none bg-white"
+          >
+            <option :value="null" disabled>-- Wybierz magazyn --</option>
+            <option v-for="storage in externalStorages" :key="storage.storage_id" :value="storage.storage_id">
+              {{ storage.name }} ({{ storage.type }})
+            </option>
+          </select>
+          <p v-if="externalStorages.length === 0" class="text-sm text-purple-600 mt-2">
+            Brak zewnętrznych magazynów. Sprawdź konfigurację w BaseLinker.
+          </p>
+        </div>
+
+        <!-- Data type selection for basic_data dataset -->
+        <div v-if="requiresDataType" class="flex-shrink-0 mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <label class="block text-sm font-medium text-green-800 mb-2">
+            Wybierz typ danych
+          </label>
+          <select
+            v-model="config.settings.dataType"
+            class="w-full md:w-80 px-3 py-2 border border-green-300 rounded-lg text-sm focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none bg-white"
+          >
+            <option :value="null" disabled>-- Wybierz typ danych --</option>
+            <option v-for="dt in currentDatasetConfig.dataTypes" :key="dt.id" :value="dt.id">
+              {{ dt.label }}
+            </option>
+          </select>
         </div>
 
         <!-- Dynamic Variant Component -->
@@ -463,6 +498,7 @@ const emit = defineEmits(['save', 'cancel', 'save-draft'])
 // State
 const currentStep = ref(0)
 const isSaving = ref(false)
+const lastSaveTime = ref(0) // Debounce protection
 const isLoading = ref(true)
 const draggedIndex = ref(null)
 const duplicateSheetWarning = ref(false)
@@ -495,6 +531,8 @@ const fieldDefinitions = ref({
 const orderStatuses = ref([])
 const orderSources = ref({})
 const inventories = ref([]) // Katalogi produktów
+const externalStorages = ref([]) // Zewnętrzne magazyny
+const connectIntegrations = ref({}) // Integracje Base Connect
 
 // Configuration
 const config = ref({
@@ -521,7 +559,12 @@ const config = ref({
       enabled: false,
       targetCurrency: 'PLN',
       exchangeRateSource: 'today'
-    }
+    },
+    // Dataset-specific settings
+    inventoryId: null,
+    storageId: null,
+    integrationId: null,
+    dataType: null
   }
 })
 
@@ -544,6 +587,17 @@ const scheduleOptions = [
 
 const datasetDescriptions = {
   orders: 'Zamówienia z BaseLinker',
+  order_items: 'Pozycje zamówień (produkty)',
+  returns: 'Zwroty i reklamacje',
+  products_catalog: 'Produkty z katalogu BaseLinker',
+  accounting_docs: 'Faktury i paragony',
+  warehouse_docs: 'Dokumenty magazynowe (PZ, WZ, MM)',
+  products_external: 'Produkty z zewnętrznych magazynów',
+  purchase_orders: 'Zamówienia zakupu od dostawców',
+  shipments: 'Przesyłki kurierskie',
+  base_connect: 'Kontrahenci B2B',
+  basic_data: 'Dane słownikowe (statusy, źródła, magazyny)',
+  // Legacy mappings
   products: 'Produkty z magazynu',
   invoices: 'Faktury',
   order_products: 'Produkty w zamówieniach'
@@ -569,19 +623,51 @@ const currentDatasetFields = computed(() => {
   return ds?.fields || []
 })
 
+// Get current dataset configuration (requirements)
+const currentDatasetConfig = computed(() => {
+  const ds = fieldDefinitions.value?.datasets?.[config.value.dataset]
+  return {
+    requiresInventory: ds?.requiresInventory || false,
+    requiresStorage: ds?.requiresStorage || false,
+    requiresIntegration: ds?.requiresIntegration || false,
+    requiresDataType: ds?.requiresDataType || false,
+    dataTypes: ds?.dataTypes || []
+  }
+})
+
 // Check if current dataset requires inventory selection
-// Only 'products' dataset needs inventory - 'order_products' gets products from orders, not from catalog
 const requiresInventory = computed(() => {
-  return config.value.dataset === 'products'
+  return currentDatasetConfig.value.requiresInventory || config.value.dataset === 'products'
+})
+
+// Check if current dataset requires external storage selection
+const requiresStorage = computed(() => {
+  return currentDatasetConfig.value.requiresStorage
+})
+
+// Check if current dataset requires Base Connect integration selection
+const requiresIntegration = computed(() => {
+  return currentDatasetConfig.value.requiresIntegration
+})
+
+// Check if current dataset requires data type selection (for basic_data)
+const requiresDataType = computed(() => {
+  return currentDatasetConfig.value.requiresDataType
 })
 
 const canProceed = computed(() => {
   switch (currentStep.value) {
     case 0: // Dane
       const hasFields = config.value.dataset && config.value.selected_fields.length > 0
-      // If dataset requires inventory, check if one is selected
-      if (requiresInventory.value) {
-        return hasFields && config.value.filters?.inventory_id
+      // Check required parameters for dataset
+      if (requiresInventory.value && !config.value.settings?.inventoryId && !config.value.filters?.inventory_id) {
+        return false
+      }
+      if (requiresStorage.value && !config.value.settings?.storageId) {
+        return false
+      }
+      if (requiresDataType.value && !config.value.settings?.dataType) {
+        return false
       }
       return hasFields
     case 1: // Arkusz (was case 2)
@@ -914,8 +1000,12 @@ function cancelWizard() {
 }
 
 async function saveExport() {
+  // Debounce: prevent double-clicks within 500ms
+  const now = Date.now()
+  if (now - lastSaveTime.value < 500) return
   if (!canSave.value || isSaving.value) return
 
+  lastSaveTime.value = now
   isSaving.value = true
   try {
     const exportData = {
@@ -976,6 +1066,24 @@ async function loadInventories() {
     inventories.value = data || []
   } catch (error) {
     console.error('Failed to load inventories:', error)
+  }
+}
+
+async function loadExternalStorages() {
+  try {
+    const data = await API.baselinker.getExternalStorages()
+    externalStorages.value = data || []
+  } catch (error) {
+    console.error('Failed to load external storages:', error)
+  }
+}
+
+async function loadConnectIntegrations() {
+  try {
+    const data = await API.baselinker.getConnectIntegrations()
+    connectIntegrations.value = data || {}
+  } catch (error) {
+    console.error('Failed to load connect integrations:', error)
   }
 }
 
@@ -1055,6 +1163,8 @@ onMounted(async () => {
       loadOrderStatuses(),
       loadOrderSources(),
       loadInventories(),
+      loadExternalStorages(),
+      loadConnectIntegrations(),
       loadExistingExport()
     ])
   } finally {

@@ -107,6 +107,14 @@ const showToken = ref(false)
 const tokenSaved = ref(false)
 let tokenSaveTimeout = null
 const userEmail = ref('')
+const userDisplayName = computed(() => {
+    if (!userEmail.value) return 'Ładowanie...'
+    return userEmail.value.split('@')[0]
+})
+const userDisplayEmail = computed(() => {
+    if (!userEmail.value) return ''
+    return userEmail.value
+})
 
 // === Company, Team, Billing ===
 // Company state (single company per user)
@@ -742,7 +750,7 @@ async function handleWizardSave(exportConfig) {
 
         // Transform wizard config to API format
         const apiConfig = {
-            id: wizardEditingExportId.value || ('export-' + Date.now()),
+            id: wizardEditingExportId.value || ('export-' + crypto.randomUUID()),
             name: exportConfig.name,
             description: exportConfig.description || '',
             dataset: exportConfig.dataset,
@@ -1062,12 +1070,26 @@ async function loadBaselinkerToken() {
 }
 
 async function loadUserEmail() {
+    // Use auth store as source of truth (not localStorage directly)
+    // This prevents race conditions where localStorage is cleared but store still has data
+    if (authStore.user?.email) {
+        userEmail.value = authStore.user.email
+        return
+    }
+
+    // Fallback to localStorage only if store is empty
     try {
         const user = JSON.parse(localStorage.getItem('user') || '{}')
-        userEmail.value = user.email || 'demo@example.com'
+        if (user.email) {
+            userEmail.value = user.email
+        } else {
+            // No email found - user might not be properly authenticated
+            console.warn('No user email found in store or localStorage')
+            userEmail.value = ''
+        }
     } catch (error) {
         console.error('Error loading user email:', error)
-        userEmail.value = 'demo@example.com'
+        userEmail.value = ''
     }
 }
 
@@ -1770,6 +1792,14 @@ function formatDate(dateStr) {
 }
 
 // Watchers
+
+// Keep userEmail in sync with auth store (prevents stale data / race conditions)
+watch(() => authStore.user, (newUser) => {
+    if (newUser?.email) {
+        userEmail.value = newUser.email
+    }
+}, { immediate: true })
+
 watch(currentPage, (newPage) => {
     if (newPage === 'konfigurator') {
         nextTick(() => {
@@ -1957,8 +1987,8 @@ onBeforeUnmount(() => {
                         </svg>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <div class="text-sm font-medium truncate">{{ userEmail.split('@')[0] }}</div>
-                        <div class="text-xs text-gray-500">{{ userEmail }}</div>
+                        <div class="text-sm font-medium truncate">{{ userDisplayName }}</div>
+                        <div class="text-xs text-gray-500">{{ userDisplayEmail }}</div>
                     </div>
                 </div>
             </div>
