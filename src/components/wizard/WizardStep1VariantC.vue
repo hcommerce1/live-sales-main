@@ -1,8 +1,10 @@
 <template>
   <!-- Variant C: Accordion Groups with Search -->
-  <div class="h-full flex gap-6">
-    <!-- Left: Dataset + Search -->
-    <div class="w-80 flex-shrink-0 flex flex-col gap-4">
+  <div class="h-full flex flex-col">
+    <!-- Main content area -->
+    <div class="flex-1 flex gap-6 min-h-0">
+      <!-- Left: Dataset + Search -->
+      <div class="w-80 flex-shrink-0 flex flex-col gap-4">
       <!-- Dataset selection - collapsible after selection -->
       <div>
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Typ danych</label>
@@ -88,10 +90,10 @@
       </div>
     </div>
 
-    <!-- Right: Accordion fields -->
-    <div v-if="selectedDataset" class="flex-1 flex flex-col min-w-0">
-      <!-- Accordion groups -->
-      <div class="flex-1 overflow-y-auto space-y-2 pr-2">
+      <!-- Right: Accordion fields -->
+      <div v-if="selectedDataset" class="flex-1 flex flex-col min-w-0">
+        <!-- Accordion groups -->
+        <div class="flex-1 overflow-y-auto space-y-2 pr-2">
         <div v-for="group in filteredFieldGroups" :key="group.name" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
           <!-- Group header -->
           <button
@@ -139,43 +141,44 @@
             </label>
           </div>
         </div>
+        </div>
       </div>
+    </div>
 
-      <!-- Selected fields reorder - improved styling -->
-      <div v-if="selectedFields.length > 0" class="mt-4 flex-shrink-0 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <label class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3 block">Kolejność kolumn w arkuszu</label>
-        <div class="flex flex-wrap gap-2.5 p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 max-h-64 min-h-[150px] overflow-y-auto">
-          <template v-for="(fieldKey, index) in selectedFields" :key="fieldKey">
-            <!-- Drop indicator line before element -->
-            <div
-              v-if="dropTargetIndex === index"
-              class="w-1 h-10 bg-blue-500 rounded-full self-center animate-pulse"
-            ></div>
-            <div
-              class="flex items-center gap-2.5 pl-3.5 pr-2.5 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm cursor-move hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all"
-              :class="{ 'ring-2 ring-blue-500 border-blue-500': draggedIndex === index }"
-              draggable="true"
-              @dragstart="dragStart(index, $event)"
-              @dragend="dragEnd"
-              @dragover.prevent="handleDragOver(index)"
-              @dragleave="handleDragLeave"
-              @drop.stop="drop(index)"
-            >
-              <span class="text-sm text-gray-400 font-mono min-w-[1.5rem]">{{ index + 1 }}</span>
-              <span class="text-gray-700 dark:text-gray-200 font-medium">{{ getFieldLabel(fieldKey) }}</span>
-              <button type="button" class="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/30" @click="removeField(fieldKey)">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-          </template>
-          <!-- Drop indicator at end -->
+    <!-- Selected fields reorder - FULL WIDTH -->
+    <div v-if="selectedFields.length > 0" class="flex-shrink-0 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <label class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3 block">Kolejność kolumn w arkuszu</label>
+      <div class="flex flex-wrap gap-2.5 p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 max-h-48 overflow-y-auto">
+        <template v-for="(fieldKey, index) in selectedFields" :key="fieldKey">
+          <!-- Drop indicator line before element -->
           <div
-            v-if="dropTargetIndex === selectedFields.length"
+            v-if="dropTargetIndex === index"
             class="w-1 h-10 bg-blue-500 rounded-full self-center animate-pulse"
           ></div>
-        </div>
+          <div
+            class="flex items-center gap-2.5 pl-3.5 pr-2.5 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm cursor-move hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all"
+            :class="{ 'ring-2 ring-blue-500 border-blue-500': draggedIndex === index }"
+            draggable="true"
+            @dragstart="dragStart(index, $event)"
+            @dragend="dragEnd"
+            @dragover.prevent="handleDragOver(index)"
+            @dragleave="handleDragLeave"
+            @drop.stop="drop(index)"
+          >
+            <span class="text-sm text-gray-400 font-mono min-w-[1.5rem]">{{ index + 1 }}</span>
+            <span class="text-gray-700 dark:text-gray-200 font-medium">{{ getFieldLabel(fieldKey) }}</span>
+            <button type="button" class="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/30" @click="removeField(fieldKey)">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+        </template>
+        <!-- Drop indicator at end -->
+        <div
+          v-if="dropTargetIndex === selectedFields.length"
+          class="w-1 h-10 bg-blue-500 rounded-full self-center animate-pulse"
+        ></div>
       </div>
     </div>
 
