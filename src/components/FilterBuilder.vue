@@ -347,9 +347,17 @@ watch(() => props.modelValue, (newVal) => {
   border-radius: 8px;
 }
 
+:global(.dark) .main-logic {
+  background: #374151;
+}
+
 .logic-label {
   font-size: 0.9rem;
   color: #374151;
+}
+
+:global(.dark) .logic-label {
+  color: #e5e7eb;
 }
 
 .logic-toggle {
@@ -357,6 +365,10 @@ watch(() => props.modelValue, (newVal) => {
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   overflow: hidden;
+}
+
+:global(.dark) .logic-toggle {
+  border-color: #4b5563;
 }
 
 .logic-toggle button {
@@ -367,10 +379,20 @@ watch(() => props.modelValue, (newVal) => {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  color: #374151;
+}
+
+:global(.dark) .logic-toggle button {
+  background: #1f2937;
+  color: #e5e7eb;
 }
 
 .logic-toggle button:first-child {
   border-right: 1px solid #e5e7eb;
+}
+
+:global(.dark) .logic-toggle button:first-child {
+  border-right-color: #4b5563;
 }
 
 .logic-toggle button.active {
@@ -396,6 +418,11 @@ watch(() => props.modelValue, (newVal) => {
   padding: 1rem;
 }
 
+:global(.dark) .filter-group {
+  background: #1f2937;
+  border-color: #374151;
+}
+
 .group-header {
   display: flex;
   align-items: center;
@@ -405,10 +432,18 @@ watch(() => props.modelValue, (newVal) => {
   border-bottom: 1px solid #e5e7eb;
 }
 
+:global(.dark) .group-header {
+  border-bottom-color: #374151;
+}
+
 .group-title {
   font-weight: 600;
   font-size: 0.9rem;
   color: #374151;
+}
+
+:global(.dark) .group-title {
+  color: #f3f4f6;
 }
 
 .group-logic {
@@ -421,6 +456,10 @@ watch(() => props.modelValue, (newVal) => {
 .group-logic span {
   font-size: 0.8rem;
   color: #6b7280;
+}
+
+:global(.dark) .group-logic span {
+  color: #9ca3af;
 }
 
 .remove-group-btn {
@@ -459,6 +498,15 @@ watch(() => props.modelValue, (newVal) => {
   border-radius: 6px;
   font-size: 0.85rem;
   background: white;
+  color: #374151;
+}
+
+:global(.dark) .field-select,
+:global(.dark) .operator-select,
+:global(.dark) .value-input {
+  background: #374151;
+  border-color: #4b5563;
+  color: #f3f4f6;
 }
 
 .field-select {
@@ -481,11 +529,24 @@ watch(() => props.modelValue, (newVal) => {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
+:global(.dark) .field-select:focus,
+:global(.dark) .operator-select:focus,
+:global(.dark) .value-input:focus {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+}
+
 .field-select:disabled,
 .operator-select:disabled,
 .value-input:disabled {
   background: #f3f4f6;
   cursor: not-allowed;
+}
+
+:global(.dark) .field-select:disabled,
+:global(.dark) .operator-select:disabled,
+:global(.dark) .value-input:disabled {
+  background: #1f2937;
+  color: #6b7280;
 }
 
 .no-value-placeholder {
@@ -522,9 +583,20 @@ watch(() => props.modelValue, (newVal) => {
   transition: all 0.2s;
 }
 
+:global(.dark) .add-condition-btn {
+  background: #1f2937;
+  border-color: #4b5563;
+  color: #9ca3af;
+}
+
 .add-condition-btn:hover {
   border-color: #6366f1;
   color: #6366f1;
+}
+
+:global(.dark) .add-condition-btn:hover {
+  border-color: #818cf8;
+  color: #818cf8;
 }
 
 .add-group-btn {
@@ -539,10 +611,22 @@ watch(() => props.modelValue, (newVal) => {
   transition: all 0.2s;
 }
 
+:global(.dark) .add-group-btn {
+  background: #374151;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+
 .add-group-btn:hover {
   border-color: #6366f1;
   color: #6366f1;
   background: #eef2ff;
+}
+
+:global(.dark) .add-group-btn:hover {
+  border-color: #818cf8;
+  color: #818cf8;
+  background: #312e81;
 }
 
 .upgrade-notice {
@@ -554,5 +638,10 @@ watch(() => props.modelValue, (newVal) => {
   border-radius: 8px;
   font-size: 0.85rem;
   color: #92400e;
+}
+
+:global(.dark) .upgrade-notice {
+  background: #78350f;
+  color: #fef3c7;
 }
 </style>

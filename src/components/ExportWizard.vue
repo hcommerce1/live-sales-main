@@ -609,13 +609,18 @@ const maxSheets = 3
 // Computed
 const availableDatasets = computed(() => {
   const datasets = fieldDefinitions.value?.datasets || {}
-  return Object.entries(datasets).map(([key, ds]) => ({
+  const result = Object.entries(datasets).map(([key, ds]) => ({
     key,
     label: ds.label,
     available: !ds.locked,
     requiredPlan: ds.requiredPlan || 'basic',
     description: datasetDescriptions[key] || ''
   }))
+  console.log('[ExportWizard] availableDatasets computed:', {
+    count: result.length,
+    datasets: result.map(d => d.key)
+  })
+  return result
 })
 
 const currentDatasetFields = computed(() => {
@@ -1034,6 +1039,11 @@ async function saveExport() {
 async function loadFieldDefinitions() {
   try {
     const data = await API.exports.getFieldDefinitions()
+    console.log('[ExportWizard] Field definitions loaded:', {
+      datasetsCount: data?.datasets ? Object.keys(data.datasets).length : 0,
+      datasetKeys: data?.datasets ? Object.keys(data.datasets) : [],
+      fullData: data
+    })
     if (data) {
       fieldDefinitions.value = data
     }

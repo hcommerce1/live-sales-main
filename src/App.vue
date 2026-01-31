@@ -1952,10 +1952,19 @@ onBeforeUnmount(() => {
                             <text x="50" y="72" font-size="55" font-weight="bold" fill="white" text-anchor="middle" font-family="Arial, sans-serif">LS</text>
                         </svg>
                     </div>
-                    <div>
+                    <div class="flex-1">
                         <div class="font-bold text-base dark:text-white">Live Sales</div>
                         <div class="text-xs text-gray-500 dark:text-gray-400">No-Code dla e-commerce</div>
                     </div>
+                    <!-- Dark Mode Toggle -->
+                    <button @click="toggleDark()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Przełącz tryb ciemny/jasny">
+                        <svg v-if="isDark" class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/>
+                        </svg>
+                        <svg v-else class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                        </svg>
+                    </button>
                 </div>
 
             </div>
@@ -2009,15 +2018,6 @@ onBeforeUnmount(() => {
                         <div class="text-sm font-medium truncate dark:text-white">{{ userDisplayName }}</div>
                         <div class="text-xs text-gray-500 dark:text-gray-400">{{ userDisplayEmail }}</div>
                     </div>
-                    <!-- Dark Mode Toggle -->
-                    <button @click="toggleDark()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Przełącz tryb ciemny/jasny">
-                        <svg v-if="isDark" class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/>
-                        </svg>
-                        <svg v-else class="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
-                        </svg>
-                    </button>
                 </div>
             </div>
         </div>
@@ -2026,11 +2026,11 @@ onBeforeUnmount(() => {
         <div class="ml-0 md:ml-64 min-h-screen bg-gray-50 dark:bg-gray-900">
             <!-- Dashboard -->
             <div v-if="currentPage === 'dashboard'" class="p-4 md:p-8">
-                <h1 class="text-2xl md:text-3xl font-bold mb-2">Dashboard</h1>
-                <p class="text-gray-600 mb-6 md:mb-8">Przegląd integracji i synchronizacji</p>
+                <h1 class="text-2xl md:text-3xl font-bold mb-2 dark:text-white">Dashboard</h1>
+                <p class="text-gray-600 dark:text-gray-400 mb-6 md:mb-8">Przegląd integracji i synchronizacji</p>
 
                 <!-- Onboarding Checklist -->
-                <div v-if="showOnboardingChecklist" class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-4 md:p-6 mb-6 md:mb-8">
+                <div v-if="showOnboardingChecklist" class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-xl border border-blue-200 dark:border-blue-800 p-4 md:p-6 mb-6 md:mb-8">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
@@ -2039,12 +2039,12 @@ onBeforeUnmount(() => {
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold text-gray-900">Rozpocznij konfigurację</h3>
-                                <p class="text-sm text-gray-600">{{ onboardingProgress.done }}/{{ onboardingProgress.total }} kroków ukończonych</p>
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Rozpocznij konfigurację</h3>
+                                <p class="text-sm text-gray-600 dark:text-gray-300">{{ onboardingProgress.done }}/{{ onboardingProgress.total }} kroków ukończonych</p>
                             </div>
                         </div>
                         <div class="hidden md:block">
-                            <div class="w-32 h-2 bg-blue-200 rounded-full overflow-hidden">
+                            <div class="w-32 h-2 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden">
                                 <div class="h-full bg-blue-600 rounded-full transition-all duration-500" :style="{ width: onboardingProgress.percent + '%' }"></div>
                             </div>
                         </div>
@@ -2053,25 +2053,25 @@ onBeforeUnmount(() => {
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div v-for="item in onboardingChecklist" :key="item.id"
                              class="flex items-center gap-3 p-3 rounded-lg transition-colors"
-                             :class="item.done ? 'bg-green-50' : 'bg-white'">
+                             :class="item.done ? 'bg-green-50 dark:bg-green-900/30' : 'bg-white dark:bg-gray-800'">
                             <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                                 :class="item.done ? 'bg-green-500' : 'bg-gray-200'">
+                                 :class="item.done ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600'">
                                 <svg v-if="item.done" class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                 </svg>
-                                <span v-else class="text-xs font-medium text-gray-500">{{ onboardingChecklist.indexOf(item) + 1 }}</span>
+                                <span v-else class="text-xs font-medium text-gray-500 dark:text-gray-300">{{ onboardingChecklist.indexOf(item) + 1 }}</span>
                             </div>
-                            <span class="flex-1 text-sm" :class="item.done ? 'text-green-700 line-through' : 'text-gray-700'">
+                            <span class="flex-1 text-sm" :class="item.done ? 'text-green-700 dark:text-green-400 line-through' : 'text-gray-700 dark:text-gray-200'">
                                 {{ item.label }}
                             </span>
                             <button v-if="!item.done && item.action === 'config'"
                                     @click="currentPage = 'config'"
-                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                    class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium">
                                 Konfiguruj →
                             </button>
                             <button v-if="!item.done && item.action === 'create-export'"
                                     @click="createNewExport"
-                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                    class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium">
                                 Utwórz →
                             </button>
                         </div>
@@ -2079,8 +2079,8 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-                        <h3 class="text-base md:text-lg font-semibold mb-4">Szybkie akcje</h3>
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 md:p-6">
+                        <h3 class="text-base md:text-lg font-semibold mb-4 dark:text-white">Szybkie akcje</h3>
                         <div class="space-y-3">
                             <button @click="createNewExport" class="w-full bg-blue-600 text-white px-4 py-2.5 md:py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm md:text-base">
                                 <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2088,7 +2088,7 @@ onBeforeUnmount(() => {
                                 </svg>
                                 Nowy eksport
                             </button>
-                            <button @click="currentPage = 'exports'" class="w-full bg-gray-100 text-gray-700 px-4 py-2.5 md:py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center justify-center gap-2 text-sm md:text-base">
+                            <button @click="currentPage = 'exports'" class="w-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-2.5 md:py-3 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium flex items-center justify-center gap-2 text-sm md:text-base">
                                 <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                 </svg>
@@ -2097,16 +2097,16 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-                        <h3 class="text-base md:text-lg font-semibold mb-4">Statystyki</h3>
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 md:p-6">
+                        <h3 class="text-base md:text-lg font-semibold mb-4 dark:text-white">Statystyki</h3>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="text-center">
                                 <div class="text-2xl md:text-3xl font-bold text-blue-600">{{ activeExportsCount }}</div>
-                                <div class="text-xs md:text-sm text-gray-600 mt-1">Aktywne eksporty</div>
+                                <div class="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-1">Aktywne eksporty</div>
                             </div>
                             <div class="text-center">
-                                <div class="text-2xl md:text-3xl font-bold text-gray-600">{{ exportsList.length }}</div>
-                                <div class="text-xs md:text-sm text-gray-600 mt-1">Wszystkie eksporty</div>
+                                <div class="text-2xl md:text-3xl font-bold text-gray-600 dark:text-gray-300">{{ exportsList.length }}</div>
+                                <div class="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-1">Wszystkie eksporty</div>
                             </div>
                         </div>
                     </div>
@@ -2115,15 +2115,15 @@ onBeforeUnmount(() => {
                 <!-- Bottom row: Exports list + Integration status -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     <!-- Exports list -->
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-                        <h3 class="text-base md:text-lg font-semibold mb-4">Ostatnie eksporty</h3>
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 md:p-6">
+                        <h3 class="text-base md:text-lg font-semibold mb-4 dark:text-white">Ostatnie eksporty</h3>
                         <div class="space-y-2">
-                            <div v-for="exp in exportsList.slice(0, 3)" :key="exp.id" class="flex items-center justify-between p-2 md:p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                            <div v-for="exp in exportsList.slice(0, 3)" :key="exp.id" class="flex items-center justify-between p-2 md:p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                 <div class="flex-1 min-w-0">
-                                    <div class="text-xs md:text-sm font-medium truncate">{{ exp.name }}</div>
-                                    <div class="text-xs text-gray-500">{{ formatLastRun(exp.last_run) }}</div>
+                                    <div class="text-xs md:text-sm font-medium truncate dark:text-white">{{ exp.name }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ formatLastRun(exp.last_run) }}</div>
                                 </div>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ml-2" :class="exp.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ml-2" :class="exp.status === 'active' ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'">
                                     {{ exp.status === 'active' ? 'Aktywny' : 'Wstrzymany' }}
                                 </span>
                             </div>
@@ -2131,28 +2131,28 @@ onBeforeUnmount(() => {
                     </div>
 
                     <!-- Integration status -->
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-                        <h3 class="text-base md:text-lg font-semibold mb-4">Status integracji</h3>
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 md:p-6">
+                        <h3 class="text-base md:text-lg font-semibold mb-4 dark:text-white">Status integracji</h3>
                         <div class="space-y-3">
-                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                 <div class="flex items-center gap-2">
                                     <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                     </svg>
-                                    <span class="text-sm font-medium">BaseLinker</span>
+                                    <span class="text-sm font-medium dark:text-white">BaseLinker</span>
                                 </div>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="integrationsStore.baselinker.configured ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="integrationsStore.baselinker.configured ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-300'">
                                     {{ integrationsStore.baselinkerStatus.text }}
                                 </span>
                             </div>
-                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                 <div class="flex items-center gap-2">
                                     <svg class="w-5 h-5" :class="googleSheetsConfigured ? 'text-green-600' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                     </svg>
-                                    <span class="text-sm font-medium">Google Sheets</span>
+                                    <span class="text-sm font-medium dark:text-white">Google Sheets</span>
                                 </div>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="googleSheetsConfigured ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="googleSheetsConfigured ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-300'">
                                     {{ googleSheetsConfigured ? 'Skonfigurowane' : 'Brak eksportów' }}
                                 </span>
                             </div>
@@ -2165,8 +2165,8 @@ onBeforeUnmount(() => {
             <div v-if="currentPage === 'exports'" class="p-4 md:p-8">
                 <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 gap-4">
                     <div>
-                        <h1 class="text-2xl md:text-3xl font-bold mb-2">Automatyczne eksporty</h1>
-                        <p class="text-sm md:text-base text-gray-600">Zarządzaj konfiguracjami wydruków</p>
+                        <h1 class="text-2xl md:text-3xl font-bold mb-2 dark:text-white">Automatyczne eksporty</h1>
+                        <p class="text-sm md:text-base text-gray-600 dark:text-gray-400">Zarządzaj konfiguracjami wydruków</p>
                     </div>
                     <button @click="createNewExport" class="w-full md:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2179,32 +2179,32 @@ onBeforeUnmount(() => {
                 <!-- Przykładowe konfiguracje -->
                 <div v-if="visibleTemplates.length > 0 && !hideAllTemplates" class="mb-6 md:mb-8">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-gray-900">Przykładowe konfiguracje</h3>
-                        <button @click="toggleHideAllTemplates" class="text-sm text-gray-500 hover:text-gray-700">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Przykładowe konfiguracje</h3>
+                        <button @click="toggleHideAllTemplates" class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
                             Ukryj szablony
                         </button>
                     </div>
-                    <p class="text-sm text-gray-600 mb-4">Wybierz gotowy szablon i dostosuj go do swoich potrzeb. Wystarczy podpiąć arkusz Google Sheets.</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Wybierz gotowy szablon i dostosuj go do swoich potrzeb. Wystarczy podpiąć arkusz Google Sheets.</p>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div v-for="template in visibleTemplates" :key="template.id"
-                             class="bg-white rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-400 p-4 transition-colors cursor-pointer group"
+                             class="bg-white dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 p-4 transition-colors cursor-pointer group"
                              @click="useTemplate(template)">
                             <div class="flex items-start gap-3">
                                 <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                                     :class="template.dataset === 'orders' ? 'bg-blue-100' : 'bg-green-100'">
-                                    <svg class="w-5 h-5" :class="template.dataset === 'orders' ? 'text-blue-600' : 'text-green-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                     :class="template.dataset === 'orders' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-green-100 dark:bg-green-900/50'">
+                                    <svg class="w-5 h-5" :class="template.dataset === 'orders' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path v-if="template.dataset === 'orders'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
                                         <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
                                     </svg>
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <h4 class="font-medium text-gray-900 text-sm group-hover:text-blue-600 transition-colors">
+                                    <h4 class="font-medium text-gray-900 dark:text-white text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                         {{ template.name.replace('[PRZYKŁADOWY] ', '') }}
                                     </h4>
-                                    <p class="text-xs text-gray-500 mt-1">{{ template.description }}</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ template.description }}</p>
                                     <div class="flex items-center gap-2 mt-2">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                                              :class="template.dataset === 'orders' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'">
+                                              :class="template.dataset === 'orders' ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'bg-green-50 dark:bg-green-900/50 text-green-700 dark:text-green-400'">
                                             {{ template.dataset === 'orders' ? 'Zamówienia' : 'Produkty' }}
                                         </span>
                                         <span class="text-xs text-gray-400">{{ template.selectedFields.length }} pól</span>
@@ -2215,65 +2215,65 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
                     <table class="w-full min-w-[800px]">
-                        <thead class="bg-gray-50 border-b border-gray-200">
+                        <thead class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                             <tr>
-                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nazwa</th>
-                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Typ</th>
-                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ostatnie uruchomienie</th>
-                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Arkusz</th>
-                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Akcje</th>
+                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nazwa</th>
+                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Typ</th>
+                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ostatnie uruchomienie</th>
+                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Arkusz</th>
+                                <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Akcje</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200">
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                             <!-- Empty state -->
                             <tr v-if="exportsList.length === 0">
                                 <td colspan="6" class="px-6 py-12 text-center">
-                                    <div class="text-gray-500 mb-2">Brak eksportów</div>
-                                    <p class="text-sm text-gray-400">Utwórz pierwszy eksport lub wybierz szablon powyżej</p>
-                                    <button v-if="hideAllTemplates" @click="toggleHideAllTemplates" class="mt-3 text-sm text-blue-600 hover:text-blue-800">
+                                    <div class="text-gray-500 dark:text-gray-400 mb-2">Brak eksportów</div>
+                                    <p class="text-sm text-gray-400 dark:text-gray-500">Utwórz pierwszy eksport lub wybierz szablon powyżej</p>
+                                    <button v-if="hideAllTemplates" @click="toggleHideAllTemplates" class="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
                                         Pokaż przykładowe szablony
                                     </button>
                                 </td>
                             </tr>
-                            <tr v-for="exp in exportsList" :key="exp.id" class="hover:bg-gray-50">
+                            <tr v-for="exp in exportsList" :key="exp.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
                                 <td class="px-4 md:px-6 py-4">
-                                    <div class="font-medium text-sm">{{ exp.name }}</div>
-                                    <div class="text-xs text-gray-500">{{ exp.id }}</div>
+                                    <div class="font-medium text-sm dark:text-white">{{ exp.name }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ exp.id }}</div>
                                 </td>
                                 <td class="px-4 md:px-6 py-4">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="exp.type === 'orders' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="exp.type === 'orders' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-400' : 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-400'">
                                         {{ exp.type === 'orders' ? 'Zamówienia' : 'Produkty' }}
                                     </span>
                                 </td>
                                 <td class="px-4 md:px-6 py-4">
-                                    <button @click="toggleExportStatus(exp)" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors" :class="exp.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'">
+                                    <button @click="toggleExportStatus(exp)" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors" :class="exp.status === 'active' ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'">
                                         {{ exp.status === 'active' ? 'Aktywny' : 'Wstrzymany' }}
                                     </button>
                                 </td>
                                 <td class="px-4 md:px-6 py-4">
-                                    <span class="text-sm text-gray-600">{{ formatLastRun(exp.last_run) }}</span>
+                                    <span class="text-sm text-gray-600 dark:text-gray-400">{{ formatLastRun(exp.last_run) }}</span>
                                 </td>
                                 <td class="px-4 md:px-6 py-4">
-                                    <a v-if="exp.sheet_url" :href="exp.sheet_url" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1">
+                                    <a v-if="exp.sheet_url" :href="exp.sheet_url" target="_blank" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm flex items-center gap-1">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
                                         </svg>
                                         Otwórz
                                     </a>
-                                    <span v-else class="text-xs text-gray-400">Brak</span>
+                                    <span v-else class="text-xs text-gray-400 dark:text-gray-500">Brak</span>
                                 </td>
                                 <td class="px-4 md:px-6 py-4">
                                     <div class="flex items-center gap-2">
-                                        <button @click="editExportInWizard(exp.id)" class="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1">
+                                        <button @click="editExportInWizard(exp.id)" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium flex items-center gap-1">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                             </svg>
                                             Edytuj
                                         </button>
-                                        <button @click="confirmDelete(exp.id)" class="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1">
+                                        <button @click="confirmDelete(exp.id)" class="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm font-medium flex items-center gap-1">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                             </svg>

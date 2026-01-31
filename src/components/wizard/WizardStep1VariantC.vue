@@ -5,17 +5,17 @@
     <div class="w-80 flex-shrink-0 flex flex-col gap-4">
       <!-- Dataset selection - collapsible after selection -->
       <div>
-        <label class="text-sm font-medium text-gray-700 mb-2 block">Typ danych</label>
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Typ danych</label>
 
         <!-- Selected dataset badge (shown after selection) -->
-        <div v-if="selectedDataset && !showDatasetSelector" class="flex items-center gap-3 p-3 rounded-lg border border-blue-500 bg-blue-50">
+        <div v-if="selectedDataset && !showDatasetSelector" class="flex items-center gap-3 p-3 rounded-lg border border-blue-500 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-600">
           <div class="flex-1">
-            <div class="font-medium text-blue-900 text-sm">{{ getDatasetLabel(selectedDataset) }}</div>
-            <div class="text-xs text-blue-600">{{ getDatasetDescription(selectedDataset) }}</div>
+            <div class="font-medium text-blue-900 dark:text-blue-100 text-sm">{{ getDatasetLabel(selectedDataset) }}</div>
+            <div class="text-xs text-blue-600 dark:text-blue-400">{{ getDatasetDescription(selectedDataset) }}</div>
           </div>
           <button
             type="button"
-            class="text-xs px-2 py-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+            class="text-xs px-2 py-1 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
             @click="showChangeDatasetModal = true"
           >
             Zmien
@@ -29,9 +29,9 @@
             :key="dataset.key"
             class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all"
             :class="{
-              'border-blue-500 bg-blue-50': selectedDataset === dataset.key,
-              'border-gray-200 hover:border-gray-300': selectedDataset !== dataset.key && dataset.available,
-              'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed': !dataset.available
+              'border-blue-500 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-600': selectedDataset === dataset.key,
+              'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 dark:bg-gray-800': selectedDataset !== dataset.key && dataset.available,
+              'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-50 cursor-not-allowed': !dataset.available
             }"
           >
             <input
@@ -43,10 +43,10 @@
               @change="selectDataset(dataset)"
             />
             <div class="flex-1">
-              <div class="font-medium text-gray-900 text-sm">{{ dataset.label }}</div>
-              <div class="text-xs text-gray-500">{{ dataset.description }}</div>
+              <div class="font-medium text-gray-900 dark:text-white text-sm">{{ dataset.label }}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">{{ dataset.description }}</div>
             </div>
-            <span v-if="!dataset.available" class="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded">
+            <span v-if="!dataset.available" class="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 rounded">
               {{ dataset.requiredPlan.toUpperCase() }}
             </span>
           </label>
@@ -55,18 +55,18 @@
 
       <!-- Search -->
       <div v-if="selectedDataset">
-        <label class="text-sm font-medium text-gray-700 mb-2 block">Szukaj pola</label>
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Szukaj pola</label>
         <div class="relative">
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Wpisz nazwe pola..."
-            class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+            class="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 outline-none"
           />
           <svg class="w-5 h-5 absolute left-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
-          <button v-if="searchQuery" type="button" class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600" @click="searchQuery = ''">
+          <button v-if="searchQuery" type="button" class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" @click="searchQuery = ''">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
@@ -75,15 +75,15 @@
       </div>
 
       <!-- Quick stats -->
-      <div v-if="selectedDataset" class="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+      <div v-if="selectedDataset" class="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-xl border border-blue-100 dark:border-blue-800">
         <div class="text-center">
-          <div class="text-3xl font-bold text-blue-600">{{ selectedFields.length }}</div>
-          <div class="text-sm text-gray-600">pol wybranych</div>
-          <div class="text-xs text-gray-500 mt-1">z {{ fields.length }} dostepnych</div>
+          <div class="text-3xl font-bold text-blue-600 dark:text-blue-400">{{ selectedFields.length }}</div>
+          <div class="text-sm text-gray-600 dark:text-gray-300">pol wybranych</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">z {{ fields.length }} dostepnych</div>
         </div>
         <div class="flex gap-2 mt-3">
-          <button type="button" class="flex-1 text-xs py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50" @click="selectAll">Wszystkie</button>
-          <button type="button" class="flex-1 text-xs py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50" @click="clearAll">Wyczysc</button>
+          <button type="button" class="flex-1 text-xs py-1.5 bg-white dark:bg-gray-700 dark:text-white border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600" @click="selectAll">Wszystkie</button>
+          <button type="button" class="flex-1 text-xs py-1.5 bg-white dark:bg-gray-700 dark:text-white border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600" @click="clearAll">Wyczysc</button>
         </div>
       </div>
     </div>
@@ -92,11 +92,11 @@
     <div v-if="selectedDataset" class="flex-1 flex flex-col min-w-0">
       <!-- Accordion groups -->
       <div class="flex-1 overflow-y-auto space-y-2 pr-2">
-        <div v-for="group in filteredFieldGroups" :key="group.name" class="border border-gray-200 rounded-lg overflow-hidden bg-white">
+        <div v-for="group in filteredFieldGroups" :key="group.name" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
           <!-- Group header -->
           <button
             type="button"
-            class="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+            class="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
             @click="toggleGroup(group.name)"
           >
             <div class="flex items-center gap-3">
@@ -107,44 +107,44 @@
               >
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
               </svg>
-              <span class="font-medium text-gray-900">{{ group.name }}</span>
-              <span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full">{{ group.fields.length }}</span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ group.name }}</span>
+              <span class="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-full">{{ group.fields.length }}</span>
             </div>
-            <span class="text-sm text-blue-600 font-medium">
+            <span class="text-sm text-blue-600 dark:text-blue-400 font-medium">
               {{ getSelectedCountInGroup(group) }} wybrano
             </span>
           </button>
 
           <!-- Group content -->
-          <div v-if="openGroups.includes(group.name)" class="border-t border-gray-200">
+          <div v-if="openGroups.includes(group.name)" class="border-t border-gray-200 dark:border-gray-700">
             <label
               v-for="field in group.fields"
               :key="field.key"
-              class="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-all"
+              class="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-all"
               :class="{
                 'opacity-50 cursor-not-allowed': field.locked,
-                'bg-blue-50': selectedFields.includes(field.key) && !isFieldMatching(field),
-                'bg-amber-50/70 border-l-4 border-l-amber-400': isFieldMatching(field)
+                'bg-blue-50 dark:bg-blue-900/30': selectedFields.includes(field.key) && !isFieldMatching(field),
+                'bg-amber-50/70 dark:bg-amber-900/30 border-l-4 border-l-amber-400': isFieldMatching(field)
               }"
             >
               <input
                 type="checkbox"
                 :checked="selectedFields.includes(field.key)"
                 :disabled="field.locked"
-                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                class="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500"
                 @change="toggleField(field)"
               />
-              <span class="text-sm text-gray-700 flex-1">{{ field.label }}</span>
-              <span v-if="field.locked" class="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">PRO</span>
+              <span class="text-sm text-gray-700 dark:text-gray-200 flex-1">{{ field.label }}</span>
+              <span v-if="field.locked" class="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 rounded">PRO</span>
             </label>
           </div>
         </div>
       </div>
 
       <!-- Selected fields reorder - improved styling -->
-      <div v-if="selectedFields.length > 0" class="mt-4 flex-shrink-0 pt-4 border-t border-gray-200">
-        <label class="text-xs font-medium text-gray-500 mb-2 block">Kolejnosc kolumn w arkuszu</label>
-        <div class="flex flex-wrap gap-2 p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 max-h-32 overflow-y-auto">
+      <div v-if="selectedFields.length > 0" class="mt-4 flex-shrink-0 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">Kolejnosc kolumn w arkuszu</label>
+        <div class="flex flex-wrap gap-2 p-3 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 max-h-32 overflow-y-auto">
           <template v-for="(fieldKey, index) in selectedFields" :key="fieldKey">
             <!-- Drop indicator line before element -->
             <div
@@ -152,7 +152,7 @@
               class="w-0.5 h-8 bg-blue-500 rounded-full self-center animate-pulse"
             ></div>
             <div
-              class="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm shadow-sm cursor-move hover:shadow-md hover:border-blue-300 transition-all"
+              class="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm shadow-sm cursor-move hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all"
               :class="{ 'ring-2 ring-blue-500 border-blue-500': draggedIndex === index }"
               draggable="true"
               @dragstart="dragStart(index, $event)"
@@ -162,8 +162,8 @@
               @drop.stop="drop(index)"
             >
               <span class="text-xs text-gray-400 font-mono">{{ index + 1 }}</span>
-              <span class="text-gray-700 font-medium">{{ getFieldLabel(fieldKey) }}</span>
-              <button type="button" class="p-1 text-gray-400 hover:text-red-500 rounded hover:bg-red-50" @click="removeField(fieldKey)">
+              <span class="text-gray-700 dark:text-gray-200 font-medium">{{ getFieldLabel(fieldKey) }}</span>
+              <button type="button" class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/30" @click="removeField(fieldKey)">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -182,13 +182,13 @@
     <!-- Modal: Change dataset warning -->
     <div v-if="showChangeDatasetModal" class="fixed inset-0 z-50 flex items-center justify-center">
       <div class="absolute inset-0 bg-black/50" @click="showChangeDatasetModal = false"></div>
-      <div class="relative bg-white rounded-xl shadow-2xl p-6 max-w-lg mx-4">
-        <h3 class="text-lg font-semibold text-gray-900 mb-2">Zmiana typu danych</h3>
-        <p class="text-gray-600 mb-4">
+      <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-lg mx-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Zmiana typu danych</h3>
+        <p class="text-gray-600 dark:text-gray-300 mb-4">
           Jeden eksport = jeden typ danych.<br>
           Zmiana typu usunie wybrane pola.
         </p>
-        <p class="text-sm text-gray-500 mb-6">
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
           Jesli potrzebujesz innego typu danych, utworz nowy eksport.
         </p>
 
@@ -199,9 +199,9 @@
             :key="dataset.key"
             class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all"
             :class="{
-              'border-blue-500 bg-blue-50': pendingDataset === dataset.key,
-              'border-gray-200 hover:border-gray-300': pendingDataset !== dataset.key && dataset.available,
-              'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed': !dataset.available
+              'border-blue-500 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-600': pendingDataset === dataset.key,
+              'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 dark:bg-gray-700': pendingDataset !== dataset.key && dataset.available,
+              'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-50 cursor-not-allowed': !dataset.available
             }"
           >
             <input
@@ -213,7 +213,7 @@
               @change="pendingDataset = dataset.key"
             />
             <div class="flex-1">
-              <div class="font-medium text-gray-900 text-sm">{{ dataset.label }}</div>
+              <div class="font-medium text-gray-900 dark:text-white text-sm">{{ dataset.label }}</div>
             </div>
           </label>
         </div>
@@ -221,7 +221,7 @@
         <div class="flex gap-3">
           <button
             type="button"
-            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
             @click="showChangeDatasetModal = false"
           >
             Anuluj
